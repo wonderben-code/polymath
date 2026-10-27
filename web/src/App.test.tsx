@@ -10,7 +10,7 @@ interface ServerOptions {
 }
 
 function mockServer({ ready = true, metaConfigured = false, researchAvailable = false }: ServerOptions = {}) {
-  const mockFetch = vi.fn(async (input: RequestInfo | URL) => {
+  const mockFetch = vi.fn(async (input: RequestInfo | URL, _options?: RequestInit) => {
     const path = input.toString()
     if (path === '/api/v1/health') {
       return Response.json({ status: 'ok', service: 'polymath', version: '0.1.0' })
@@ -30,6 +30,13 @@ function mockServer({ ready = true, metaConfigured = false, researchAvailable = 
     }
     if (path === '/api/v1/session') return Response.json({ csrf_token: 'a'.repeat(64), expires_at: '2100-01-01T00:00:00Z' })
     if (path === '/api/v1/runs') return Response.json({ runs: [], next_cursor: null })
+    if (path.startsWith('/api/v1/knowledge/graph?')) return Response.json({
+      nodes: [], edges: [], truncated: false,
+      coverage: { scope: 'current_browser_session', findings_considered: 0 },
+    })
+    if (path.startsWith('/api/v1/knowledge?')) return Response.json({
+      items: [], truncated: false, coverage: { scope: 'current_browser_session' },
+    })
     throw new Error(`Unexpected request: ${path}`)
   })
   vi.stubGlobal('fetch', mockFetch)
@@ -48,8 +55,8 @@ describe('research workspace', () => {
     expect(await screen.findByText('No saved investigations in this browser session.')).toBeInTheDocument()
     expect(screen.getByText('No investigation started')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Explore connections' })).toBeDisabled()
-    expect(screen.getByRole('status')).toHaveTextContent('Live investigations are not available yet')
-    expect(requests).toHaveBeenCalledTimes(5)
+    expect(screen.getByText(/Live investigations are not available yet/)).toBeInTheDocument()
+    expect(requests.mock.calls.some(([, options]) => options?.method === 'POST')).toBe(false)
   })
 
   it('switches research modes and preserves each draft without launching an investigation', async () => {
@@ -76,7 +83,7 @@ describe('research workspace', () => {
     expect(screen.getByRole('textbox')).toHaveValue('Error-correcting codes')
     await user.click(screen.getByRole('button', { name: /02Ask/ }))
     expect(screen.getByRole('textbox')).toHaveValue('Why do systems sleep?')
-    expect(requests).toHaveBeenCalledTimes(5)
+    expect(requests.mock.calls.some(([, options]) => options?.method === 'POST')).toBe(false)
   })
 
   it('distinguishes a database readiness failure from an unreachable application', async () => {
@@ -112,7 +119,7 @@ describe('research workspace', () => {
     await user.click(launch)
     fireEvent.submit(screen.getByRole('textbox').closest('form')!)
     expect(launch).toBeDisabled()
-    expect(requests).toHaveBeenCalledTimes(5)
+    expect(requests.mock.calls.some(([, options]) => options?.method === 'POST')).toBe(false)
   })
 
   it('does not present malformed capability data as a working service', async () => {

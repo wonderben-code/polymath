@@ -4,6 +4,7 @@ import { loadSystemStatus } from './api'
 import type { SystemStatus } from './api'
 import { ResearchRunView } from './research'
 import { useResearchWorkspace } from './research/useResearchWorkspace'
+import { KnowledgeBrowser } from './knowledge'
 
 type Mode = 'explore' | 'ask' | 'surprise'
 
@@ -228,6 +229,8 @@ export function App() {
           {workspace.selectedId && !workspace.activeRun && <p className="history-note" role="status">Loading the saved investigation…</p>}
           {workspace.detailError && <div className="research-detail-error" role="alert"><p>{workspace.detailError}</p>{workspace.selectedId && <button type="button" className="text-button" onClick={() => workspace.selectRun(workspace.selectedId!)}>Reload investigation</button>}</div>}
           {workspace.activeRun && <ResearchRunView run={workspace.activeRun} events={workspace.events} result={workspace.result} connection={workspace.connection} onCancel={workspace.canCancel ? () => void workspace.cancel() : undefined} cancelling={workspace.cancelling} />}
+
+          <KnowledgeBrowser enabled={workspace.phase === 'ready'} onOpenRun={workspace.selectRun} refreshToken={workspace.activeRun?.result_id} />
 
           <section className="approach-section" id="approach" aria-labelledby="approach-title">
             <div className="approach-heading"><span className="eyebrow">HOW WE INVESTIGATE</span><h2 id="approach-title">Follow the evidence.<br /> <em>Keep the questions open.</em></h2></div>

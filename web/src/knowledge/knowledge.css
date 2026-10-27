@@ -1,0 +1,55 @@
+.knowledge-browser { margin: 30px 0 44px; padding: 30px 32px; border: 1px solid var(--line); background: #faf9f5; min-width: 0; }
+.knowledge-heading h2 { font-family: Georgia, serif; font-size: clamp(26px, 3vw, 35px); line-height: 1.2; font-weight: 400; letter-spacing: -.6px; margin: 12px 0; }
+.knowledge-heading p { max-width: 700px; font-size: 12px; line-height: 1.8; color: var(--muted); }
+.knowledge-search { margin: 25px 0 18px; }
+.knowledge-search > div { display: flex; gap: 10px; }
+.knowledge-search input { min-width: 0; flex: 1; width: 100%; padding: 12px 14px; background: #fffefa; color: var(--ink); font: inherit; font-size: 12px; border: 1px solid #b9c7b6; border-radius: 3px; }
+.knowledge-search input:focus-visible { outline: 3px solid #438674; outline-offset: 3px; }
+.knowledge-search button, .knowledge-open { flex: 0 0 auto; padding: 11px 15px; border: 1px solid #9bb09a; border-radius: 3px; background: #eaf0e5; color: var(--ink); font-size: 11px; }
+.knowledge-search button:disabled { color: #788472; background: #efefe7; }
+.knowledge-message { margin: 18px 0 0; font-size: 12px; line-height: 1.8; color: var(--muted); }
+.knowledge-message p { margin: 0 0 12px; }
+.knowledge-message button { border: 0; background: none; color: var(--accent); padding: 0; text-decoration: underline; text-underline-offset: 3px; font-size: 12px; }
+.knowledge-coverage { color: var(--muted); font-size: 10px; margin: 22px 0; }
+.knowledge-limit { background: #f1ecdf; color: #78603c; border-left: 2px solid #b6a782; padding: 12px 15px; font-size: 11px; line-height: 1.7; }
+.knowledge-search-results, .knowledge-graph-section { border-top: 1px solid var(--line); margin-top: 23px; padding-top: 23px; }
+.knowledge-browser h3 { font-size: 13px; font-weight: 600; margin: 0 0 16px; }
+.knowledge-search-results ul { list-style: none; padding: 0; margin: 0; }
+.knowledge-search-results li { display: flex; gap: 25px; align-items: center; justify-content: space-between; padding: 15px 0; border-top: 1px solid #e5e7de; }
+.knowledge-search-results li > div { min-width: 0; }
+.knowledge-search-results li:first-child { border-top: 0; }
+.knowledge-record-kind { font-size: 9px; color: var(--muted); }
+.knowledge-search-results h4 { font-family: Georgia, serif; font-size: 18px; line-height: 1.4; font-weight: 400; margin: 7px 0; overflow-wrap: anywhere; }
+.knowledge-search-results p { font-size: 11px; line-height: 1.75; color: var(--muted); margin: 0; overflow-wrap: anywhere; }
+.knowledge-search-results li > button { flex: 0 0 auto; font-size: 10px; color: var(--accent); padding: 9px 0; background: none; border: 0; text-decoration: underline; text-underline-offset: 3px; }
+.knowledge-map-note { font-size: 10px; line-height: 1.8; color: var(--muted); margin: 0 0 15px; }
+.knowledge-map-layout { display: grid; grid-template-columns: minmax(0, 2fr) minmax(160px, .8fr); border: 1px solid var(--line); }
+.knowledge-map { min-width: 0; overflow-x: auto; background: #eeeee5; padding: 8px; }
+.knowledge-map svg { display: block; width: 100%; min-width: 900px; height: auto; }
+.knowledge-map-column { fill: #71816b; font-size: 13px; letter-spacing: .05em; }
+.knowledge-edge { stroke: #a3b29b; stroke-width: 1; }
+.knowledge-edge.edge-selected_field { stroke-dasharray: 4 4; }
+.knowledge-map-node { cursor: pointer; outline: none; }
+.knowledge-map-node circle { stroke: #537d65; stroke-width: 1.5; fill: #f6f6ee; }
+.knowledge-map-node.node-finding circle { fill: #8da286; }
+.knowledge-map-node.node-source circle { fill: #d8e2d0; }
+.knowledge-map-node text { fill: #3e5c4c; font-size: 12px; }
+.knowledge-map-node:hover circle, .knowledge-map-node[aria-pressed='true'] circle, .knowledge-map-node:focus-visible circle { stroke: #1d674e; stroke-width: 3; fill: #c9dfc6; }
+.knowledge-map-node:focus-visible text { font-weight: 700; }
+.knowledge-node-detail, .knowledge-select-note { min-width: 0; margin: 0; padding: 22px 19px; border-left: 1px solid var(--line); }
+.knowledge-node-detail h4 { font-family: Georgia, serif; font-size: 21px; line-height: 1.4; font-weight: 400; margin: 12px 0; overflow-wrap: anywhere; }
+.knowledge-node-detail p, .knowledge-select-note { color: var(--muted); font-size: 11px; line-height: 1.8; }
+.knowledge-node-detail .knowledge-source-id { overflow-wrap: anywhere; font-size: 10px; }
+.knowledge-node-detail h5 { font-size: 11px; margin: 21px 0 9px; font-weight: 600; }
+.knowledge-related { list-style: none; padding: 0; margin: 0 0 18px; }
+.knowledge-related li { margin: 10px 0; }
+.knowledge-related span { display: block; color: var(--muted); font-size: 9px; }
+.knowledge-related button { padding: 5px 0; border: 0; background: none; color: var(--accent); text-align: left; font-size: 11px; line-height: 1.6; text-decoration: underline; text-underline-offset: 3px; overflow-wrap: anywhere; }
+.knowledge-node-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); gap: 8px; list-style: none; padding: 0; margin: 14px 0 0; }
+.knowledge-node-list li { min-width: 0; }
+.knowledge-node-list button { width: 100%; min-height: 48px; text-align: left; background: none; border: 1px solid var(--line); border-radius: 3px; padding: 10px 12px; color: var(--ink); font-size: 11px; line-height: 1.6; overflow-wrap: anywhere; }
+.knowledge-node-list button span { display: block; font-size: 9px; color: var(--muted); margin-bottom: 3px; }
+.knowledge-node-list button[aria-pressed='true'] { border-color: #7e9c7c; background: #edf2e7; }
+.knowledge-sr-only { position: absolute; height: 1px; width: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
+@media (max-width: 760px) { .knowledge-browser { padding: 23px 20px; } .knowledge-map-layout { grid-template-columns: 1fr; } .knowledge-node-detail, .knowledge-select-note { border-left: 0; border-top: 1px solid var(--line); } .knowledge-search-results li { align-items: flex-start; flex-direction: column; gap: 4px; } }
+@media (max-width: 450px) { .knowledge-browser { padding: 21px 15px; } .knowledge-search > div { flex-direction: column; } .knowledge-search button { align-self: flex-start; } }
