@@ -1,96 +1,115 @@
-# Polymath: Product Spec
+# Polymath: What We're Building
 
-*Author: Ekram Alam. Concept first written 14 Oct 2026 (as "Infinitography Agent") and extended into a platform 20 Oct 2026. This repo, created 27 Oct 2026, is where it gets built.*
+*Author: Ekram Alam. Concept first written 14 Oct 2026 and extended into a platform 20 Oct 2026. Built in this repo from 27 Oct 2026.*
 
-## 1. Problem
+> This document covers **WHAT** Polymath is and what it lets people do. **HOW** it's built (architecture, models, tooling, infrastructure) is deliberately left open, to be designed separately and recorded in `docs/ARCHITECTURE.md` once decided.
 
-Science has split into thousands of specialisms that no longer read each other. Many of the most valuable discoveries open to us today are not new facts. They are **connections between facts that already exist**, sitting in different silos and written in different vocabularies. Whole new fields have been born this way: biophysics, computational neuroscience, econophysics, bioinformatics. Each began when someone noticed two communities solving the same problem.
+---
 
-No human can read widely enough to find these connections systematically. A long-running agent can.
+## 1. The problem
 
-## 2. Product in one sentence
+Science has split into thousands of specialisms that no longer read each other. Many of the most valuable discoveries open to us today are not new facts. They are **connections between facts that already exist**, sitting in different fields and written in different vocabularies. A result in condensed-matter physics may already answer a question in biology, and neither community knows.
 
-**Give Polymath a concept or a question. It reads across every field, finds work that is structurally the same problem in different words, stress-tests each connection, and returns verified, evidence-backed bridges and answers, with the option to formalise and publish them.**
+Whole new fields have been born exactly this way (biophysics, computational neuroscience, econophysics, bioinformatics), each when someone noticed two communities solving the same problem. No human can read widely enough to find these connections systematically.
 
-## 3. Core concepts
+## 2. What Polymath is
 
-| Term | Meaning |
-|---|---|
-| **Paper** | A normalised record from arXiv, OpenAlex, Semantic Scholar etc. (title, abstract, authors, year, URL, field) |
-| **Structural signature** | A vocabulary-free description of a paper: the abstract *objects* involved, their *relations*, the *dynamics*, the *mathematical form*, and the *open problem*. This is the key trick. Two papers from different fields with similar signatures are candidates for being the same problem. |
-| **Bridge** | A validated connection between work in field A and work in field B: papers on both sides, an argument, an explicit A↔B mapping, the open question it may resolve, evidence, the critic's verdict, novelty, and confidence |
-| **Meta-bridge** | A bridge between bridges (level 2+). It's the same engine run over the bridge graph. |
-| **Convergence graph** | Every paper, signature, bridge and meta-bridge, persisted. It grows with every run and it's the core asset. |
-| **Epistemic label** | Every claim in an answer is **Known** (stated in the literature, cited), **Postulated** (follows from a verified bridge but isn't written anywhere yet), or **Speculative** (low confidence or an unverified chain) |
+**Polymath is an AI research partner that reads across every field at once, finds where different fields are working on the same problem in different words, checks those connections hard, and helps you turn the real ones into knowledge: answers, conjectures and published papers.**
 
-## 4. Features (the full set: "build it all")
+It behaves like a brilliant, tireless human polymath, not a script. It decides where to look, follows surprising leads, digs deeper where the signal is strong, drops dead ends, argues with itself, and tells you honestly how confident it is.
 
-### F1. Explore: concept → bridges *(core)*
-- Input: a concept, e.g. "self-organised criticality".
-- The agent picks the fields most likely to hold the same structure under different names, and translates the concept into each field's vocabulary.
-- It retrieves papers per field, builds a structural signature for each, and pairs signatures **across** fields by similarity.
-- For each top candidate pair: it hypothesises the bridge, a **critic agent** tries to break it, a **novelty check** looks for prior work that already links the two, and every claim is grounded in quoted evidence.
-- Output: ranked bridges (0–1 confidence), each with papers, argument, mapping table, open question, evidence quotes, critic verdict and novelty.
+## 3. What it lets people do
 
-### F2. Ask: "what is the truth about X?" *(core)*
-- Input: a natural-language question.
-- The agent breaks it into concepts, reuses bridges from the graph, and runs Explore where coverage is thin. It then writes an answer made of labelled claims (Known / Postulated / Speculative), each linked to its sources and bridges, plus an honest caveats section.
-- This is the "search engine for the unknown".
+### 3.1 Explore a concept → discover bridges
+Give it any concept ("self-organised criticality", "error-correcting codes", "explore vs exploit"). Polymath goes looking across the whole of science for places where the same underlying structure shows up under other names, and comes back with **bridges**.
 
-### F3. Live run view *(core, and key to the demo)*
-- Every step streams to the browser as it happens: fields chosen, queries, papers found, signatures, candidates, hypotheses, critic attacks, final ranking.
-- It shows that this really is a *long-running agent*, which the judges explicitly asked for.
+Each bridge shows:
+- the two (or more) fields it connects, and the specific papers on each side
+- a plain-English explanation of *why* these are the same problem in disguise
+- a side-by-side **mapping**: what in field A corresponds to what in field B
+- the **open question** this connection might help answer
+- **evidence**: exact quotes from the papers, linked to the source
+- the **strongest objection** to the connection and whether the bridge survives it
+- whether the connection is **new**, partly known, or already known
+- a **confidence** score
 
-### F4. Meta-convergence *(stretch for the hackathon, core after it)*
-- Run the engine over bridges: build signatures of bridges, pair them, and hypothesise level-2 bridges (patterns across the patterns).
-- It can repeat to level 3+. This is the automated birth of fields.
+### 3.2 Ask "what is the truth about X?" → a search engine for the unknown
+Ask a question nobody has fully answered ("Why is sleep necessary?", "What really limits how fast cities grow?"). Ordinary search returns what has already been written. Polymath puts together an answer from connections across fields, including **things that follow from the literature but haven't been written anywhere yet**.
 
-### F5. Growing knowledge base *(core in a basic form)*
-- Connectors for arXiv, OpenAlex and Semantic Scholar, with more to come (bioRxiv/medRxiv, PubMed, Zenodo, GitHub).
-- Everything gets persisted. A scheduled job ingests new papers and re-runs convergence, so the graph gets richer on its own.
+Every statement in the answer is clearly marked:
+- **Known**: stated in the literature, with the source
+- **Postulated**: follows from a verified connection but isn't yet stated anywhere
+- **Speculative**: an interesting possibility with weaker support
 
-### F6. Formalise: thesis → maths *(visible stub for the hackathon)*
-- For bridges with mathematical content, Muse Spark writes a Lean 4 statement of the conjecture the bridge implies, plus a proof attempt.
-- If a Lean toolchain is available, a compile → read errors → repair loop runs.
-- Statuses: **proved / disproved / open / unchecked**, and all of them are shown. Even a formalised-but-open conjecture is a contribution.
+### 3.3 Watch it think
+While it works, you can watch the research happen live: which fields it's searching, which papers it's reading, which hunches it's forming, which ones it throws out, and why. You don't just get a result. You can see how it got there.
 
-### F7. Write and publish *(core)*
-- One click gives a **plain-English summary** (short sentences, no jargon) or a **formal paper** (abstract, background, the bridge, evidence, limitations, references).
-- **Approve gate:** publishing to Zenodo needs an explicit human approval. It defaults to Zenodo *sandbox* until it's switched to live.
+### 3.4 Go up the ladder: connections between connections
+Once Polymath has found bridges, it can look for **patterns across the bridges themselves** (meta-connections), then patterns across those, and so on. This is how new fields could be discovered automatically.
 
-### F8. For everyone *(core)*
-- A public web app, a JSON API, and a CLI. It's open-source, and open findings are the default.
+### 3.5 A knowledge base that keeps growing
+Everything Polymath reads and finds is kept. It stays connected to the places where research is published (arXiv, OpenAlex, Semantic Scholar, and more over time), so it keeps learning as new papers appear, and re-checks whether new work connects to what it has already found. Users can browse everything it has discovered as a map of fields and the bridges between them.
 
-## 5. User flows
+### 3.6 Turn a hunch into mathematics
+Where a connection has mathematical content, Polymath can turn it into a **precise mathematical conjecture**, try to **prove or disprove** it, and report the result honestly: proved, disproved, or stated-but-open. Even a clearly stated open conjecture is a contribution.
 
-**Flow A: Explore (the demo's opening)**
-Land on the homepage → type a concept → press Explore → the live run view streams the agent's work (about 2–6 minutes) → ranked bridge cards appear → open one: papers side by side, mapping table, evidence, critic verdict → "Formalise" → "Write summary" or "Write paper" → "Approve & publish" → DOI.
+### 3.7 Write it up and publish it
+With one click, any bridge or answer becomes either:
+- an **easy plain-English summary**, or
+- a **formal research paper** (abstract, background, the connection, evidence, limitations, references).
+
+It can then be **published to Zenodo with a permanent DOI**, but only after the user explicitly approves. Nothing is ever published without a human saying yes.
+
+### 3.8 For everyone
+Open to anyone through the website, with an API so researchers and developers can point Polymath at their own field. The tool is open, and findings are open by default.
+
+## 4. Product principles
+1. **True, not just plausible.** No connection is shown without real evidence and a serious attempt to break it. Weak connections are labelled as weak.
+2. **Checkable in minutes.** Every claim links to the exact passage and source.
+3. **Intelligent, not scripted.** The system reasons about where to look and what to believe, the way a great researcher would.
+4. **Honest.** If nothing strong turns up, it says so.
+5. **Humans decide what gets published.**
+
+## 5. Suggested initial user flow *(draft, to be reviewed)*
+
+**Flow A: Explore (the main demo)**
+1. The user lands on the homepage, which has one search box with two modes: **Explore a concept** / **Ask a question**.
+2. They type a concept and press Explore.
+3. The **live research view** opens and shows the work as it happens: fields being searched, papers being read, hunches forming, objections raised, leads dropped.
+4. A few minutes later, **ranked bridge cards** appear.
+5. Opening a bridge shows the papers side by side, the mapping, the evidence quotes, the strongest objection and verdict, novelty and confidence.
+6. Optional: **Formalise**, to turn it into a mathematical conjecture and attempt a proof.
+7. **Write**: plain summary or formal paper, previewed in the app.
+8. **Approve & publish**, which gives a DOI.
 
 **Flow B: Ask**
-Type "What is the truth about why sleep is necessary?" → the run streams → you get an answer with colour-coded claims (Known / Postulated / Speculative) → each claim links to its bridges and papers.
+1. The user asks "What is the truth about X?"
+2. The live research view shows Polymath checking what it already knows and exploring where it needs to.
+3. An answer appears with each statement colour-coded Known / Postulated / Speculative, each linked to its bridges and papers, plus an honest "what we don't know" section.
+4. Write / publish options, as in Flow A.
 
-**Flow C: Graph**
-"Graph" tab → everything Polymath has found so far → bridges, meta-bridges and the fields they connect.
+**Flow C: Map**
+1. The user opens the map of everything Polymath has found: fields, bridges, and bridges between bridges.
+2. Clicking any bridge opens its card. Clicking "go up a level" looks for connections between the selected bridges.
 
-## 6. Quality bar
-- **True, not just plausible.** No bridge is shown without evidence quotes and a critic verdict. Low-confidence bridges are labelled as such, never dressed up.
-- **Checkable in minutes.** Every claim links to a passage and a source URL.
-- **Honest.** When nothing strong turns up, Polymath says so.
+## 6. Hackathon constraints (fixed)
+- The intelligence must run on **Meta's AI** (Muse Spark via the Meta Model API), with creative use of Meta tooling worth 25% of the score.
+- It must be **live on a public URL** that judges can try.
+- It must have a **working, impressive demo** and a demo video.
+- Budget: **$150 in Meta API credits**.
+- Deadline: **Thu 5 Nov 2026, 09:00 Bangkok** (Wed 4 Nov, 9:00 PM ET).
 
-## 7. Demo (25% of judging)
-- Three **seed concepts**, picked in advance, where a real cross-field bridge is already suspected, so the video shows a genuine "huh" moment. (Pick during Phase 0, see BUILD_PLAN.md.)
-- A video of 3 minutes or less: problem (20s) → live Explore run (60s) → bridge card deep-dive (40s) → Ask with labelled claims (30s) → formalise + write + approve (30s) → close.
-- A live URL that judges can try themselves.
-
-## 8. Definition of done (submission, Thu 5 Nov, 9:00 Bangkok time = Wed 4 Nov, 9:00 PM ET)
-- [ ] Public GitHub repo with runnable code, README and Apache 2.0 licence
-- [ ] Live URL running on Muse Spark
-- [ ] Explore, Ask, live run view, Write and approve-gated publish all working end to end
-- [ ] Formalise produces at least one Lean statement from a real bridge
+## 7. What "done" looks like for the hackathon
+- [ ] Explore works end to end on the live URL, with evidence and objections
+- [ ] Ask works, with Known / Postulated / Speculative labels
+- [ ] The live research view shows the agent thinking
+- [ ] Write (summary + paper) and approve-gated publishing work
+- [ ] Formalise produces at least one mathematical conjecture from a real bridge
 - [ ] At least one bridge a domain expert would call non-obvious and defensible
-- [ ] Demo video
-- [ ] Submission written and filed on the Cerebral Valley portal
+- [ ] Public repo, demo video, submission filed
 
-## 9. Out of scope (on purpose)
+**Stretch:** connections between connections (3.4), and the always-growing knowledge base running on its own (3.5).
+
+## 8. Out of scope
 - The author's unpublished theoretical research and any unrelated ventures are never used, described or referenced here. Polymath works on the open literature only.
-- User accounts, payments, and multi-tenant scale. Those come after the hackathon.
+- Accounts, payments and scale. Those come after the hackathon.

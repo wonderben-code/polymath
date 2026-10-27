@@ -12,12 +12,12 @@ Organisers: Meta and Cerebral Valley. Virtual. Indie Developer track (individual
 | Mon 9 / Tue 10 Nov | Mon 9 Nov | Closing ceremony and winners |
 
 ## Judging criteria
-| Criterion | Weight | Polymath's answer |
+| Criterion | Weight | What it means for Polymath |
 |---|---|---|
 | Impact | 30% | Speeds up cross-disciplinary discovery for every researcher. Open tool, open findings |
-| Use of Meta AI tooling | 25% | Muse Spark as a multi-role agent (reader, hypothesiser, critic, judge, writer), with tool calling, long-context compaction and figure reading. See ARCHITECTURE.md §8 |
-| Technical depth & execution | 20% | Structural signatures, cross-field pairing, adversarial critique, verified quote grounding, novelty checks, convergence graph, Lean formalisation |
-| Demo | 25% | Live URL with a streamed agent run, plus a video of 3 minutes or less |
+| Use of Meta AI tooling | 25% | Go well beyond a basic API call. *How* gets decided in Milestone 1 |
+| Technical depth & execution | 20% | Sound, refined engineering, and connections that are genuinely true, not just plausible |
+| Demo | 25% | Live URL where you can watch the agent think, plus a video of 3 minutes or less |
 
 ## Prizes (Indie track)
 $150k / $100k / $75k / $50k / $25k, plus up to $50k in bonus prizes (community vote, most viral, …).
