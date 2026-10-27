@@ -59,7 +59,7 @@ class MemoryTools(Protocol):
 @dataclass(frozen=True)
 class ResearchLimits:
     max_model_calls: int = 12
-    max_actions: int = 10
+    max_actions: int = 12
     max_repairs: int = 2
     max_output_tokens: int = 1200
     max_context_characters: int = 90_000

@@ -108,6 +108,12 @@ Use relational tables and explicit relationships initially; neither a graph data
 - **Publish:** prepare and preview an exact document and metadata; require an authorized human approval bound to their hashes; then create/upload/publish through Zenodo. Changed content invalidates approval. Test in the sandbox before a separately approved production publication.
 - **Public API:** the web UI and external clients use the same versioned research, status, cancellation, event, and result endpoints. Publish API documentation. Paid research access is quota controlled; do not expose unlimited anonymous model calls.
 
+### Implemented memory and higher-level research boundary
+
+Memory scope derives from the current run’s active browser session, never model arguments. Search yields earlier completed finding references; opening a finding yields its immutable assessment and references to actually quoted source versions. A separate action reads original source text and persists its read link in the new run. Saved model prose cannot serve as a source. Conflicting versions under one source identifier are rejected.
+
+Map follow-ups pin 2–4 owned completed bridge versions during enqueue, preserving order, IDs, and hashes in append-only records. The worker fingerprint binds those references for restart. A positive higher-level bridge must revisit every parent and cite at least one of each parent’s original quoted source versions. Controller and storage validate this separately. Earlier-only parents prevent cycles; combining parents does not establish independence or greater certainty. The graph labels parent relationships as investigations based on earlier work, separately from direct source evidence. The implementation is fixture/browser verified; real Meta quality and public deployment remain separate gates.
+
 ## 7. Durable jobs and live activity
 
 Use explicit states: queued, running, waiting_retry, cancel_requested, cancelled, succeeded, failed, and interrupted. Jobs use transactional claims and expiring leases with heartbeats; checkpoints carry a version/fencing token so an expired worker cannot overwrite its replacement. Deduplicate tool outputs and events where possible.

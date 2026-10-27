@@ -53,3 +53,15 @@
 .knowledge-sr-only { position: absolute; height: 1px; width: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
 @media (max-width: 760px) { .knowledge-browser { padding: 23px 20px; } .knowledge-map-layout { grid-template-columns: 1fr; } .knowledge-node-detail, .knowledge-select-note { border-left: 0; border-top: 1px solid var(--line); } .knowledge-search-results li { align-items: flex-start; flex-direction: column; gap: 4px; } }
 @media (max-width: 450px) { .knowledge-browser { padding: 21px 15px; } .knowledge-search > div { flex-direction: column; } .knowledge-search button { align-self: flex-start; } }
+.knowledge-edge.edge-investigated_from { stroke: #8a708f; stroke-width: 1.7; stroke-dasharray: 7 3 2 3; }
+.knowledge-bridge-selection { min-width: 0; margin: 28px 0 0; padding: 20px; border: 1px solid #c1cab6; }
+.knowledge-bridge-selection legend { max-width: 100%; padding: 0 8px; font-family: Georgia, serif; font-size: 19px; overflow-wrap: anywhere; }
+.knowledge-bridge-selection > p { margin: 0 0 15px; color: var(--muted); font-size: 11px; line-height: 1.8; }
+.knowledge-bridge-choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(250px, 100%), 1fr)); gap: 9px; }
+.knowledge-bridge-choices label { display: flex; align-items: flex-start; gap: 10px; margin: 0; min-width: 0; padding: 11px; border: 1px solid var(--line); font-size: 11px; font-weight: 400; line-height: 1.7; overflow-wrap: anywhere; }
+.knowledge-bridge-choices label:has(input:checked) { background: #edf2e7; border-color: #7e9c7c; }
+.knowledge-bridge-choices input { flex: 0 0 auto; margin: 3px 0 0; accent-color: #3c7258; }
+.knowledge-bridge-actions { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-top: 15px; }
+.knowledge-bridge-actions p { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.8; }
+.knowledge-bridge-actions button { flex: 0 0 auto; border: 1px solid #9bb09a; border-radius: 3px; padding: 11px 15px; background: #eaf0e5; color: var(--ink); font-size: 11px; }
+.knowledge-bridge-actions button:disabled { color: #788472; background: #efefe7; }

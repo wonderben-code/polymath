@@ -277,6 +277,7 @@ class EvidenceStore:
                 source_map[document.source_id] = (version, retrieval)
                 refs.append({"version_id": str(version.id), "retrieval_id": str(retrieval.id)})
             quote_rows = self._validate_quotes(result, source_map)
+            self._validate_parent_evidence(session, run, result, quote_rows)
             payload = result.model_dump(mode="json")
             payload["sources"] = []
             envelope = {"result": payload, "source_artifacts": refs}
@@ -354,6 +355,81 @@ class EvidenceStore:
         }
         if bound != actual:
             raise EvidenceError("memory_read_provenance_mismatch")
+
+    @staticmethod
+    def _validate_parent_evidence(
+        session: Session, run, result: ResearchResult, quote_rows
+    ) -> None:
+        """A higher-level bridge must revisit every pinned premise's original evidence.
+
+        This checks provenance and traceability. It does not establish that a
+        quoted paper supports the proposed inference or increase its certainty.
+        """
+        from polymath.access_models import ResearchRunAccess
+        from polymath.lineage_models import ResearchRunParent
+        from polymath.models import ResearchRun
+
+        selected = session.scalars(
+            select(ResearchRunParent)
+            .where(ResearchRunParent.run_id == run.id)
+            .order_by(ResearchRunParent.ordinal)
+        ).all()
+        if not selected:
+            return
+        if (
+            run.mode != "explore"
+            or not 2 <= len(selected) <= 4
+            or any(row.ordinal != ordinal for ordinal, row in enumerate(selected))
+        ):
+            raise EvidenceError("invalid_parent_basis")
+        owner = session.scalar(
+            select(ResearchRunAccess.session_hash).where(ResearchRunAccess.run_id == run.id)
+        )
+        selected_keys = {
+            (str(row.parent_result_id), str(row.parent_run_id), row.content_sha256)
+            for row in selected
+        }
+        identifiers = [row.parent_result_id for row in selected]
+        actual = session.scalars(
+            select(EvidenceResult)
+            .join(ResearchRunAccess, ResearchRunAccess.run_id == EvidenceResult.run_id)
+            .join(ResearchRun, ResearchRun.id == EvidenceResult.run_id)
+            .where(
+                EvidenceResult.id.in_(identifiers),
+                ResearchRunAccess.session_hash == owner,
+                ResearchRun.status == "succeeded",
+                EvidenceResult.run_id != run.id,
+                EvidenceResult.created_at < run.created_at,
+                EvidenceResult.status == "bridge",
+            )
+        ).all()
+        actual_keys = {(str(row.id), str(row.run_id), row.content_sha256) for row in actual}
+        if owner is None or actual_keys != selected_keys:
+            raise EvidenceError("invalid_parent_basis")
+        if result.status != "bridge":
+            # Honest empty, failed, and bounded outcomes may stop before all
+            # selected premises have been read. Their selection is still kept.
+            return
+        read_keys = {
+            (item.result_id, item.run_id, item.content_sha256) for item in result.memory_reads
+        }
+        if not selected_keys.issubset(read_keys):
+            raise EvidenceError("parent_findings_not_observed")
+        # SourceVersion has a unique (source_id, content hash, content kind)
+        # identity. Comparing its ID binds the exact version and prevents a
+        # different abstract/full-text version from masquerading as a premise.
+        versions = {version.id for _, version, _ in quote_rows}
+        covered = set(
+            session.scalars(
+                select(EvidenceQuote.result_id)
+                .where(
+                    EvidenceQuote.result_id.in_(identifiers), EvidenceQuote.version_id.in_(versions)
+                )
+                .distinct()
+            ).all()
+        )
+        if covered != set(identifiers):
+            raise EvidenceError("parent_original_evidence_missing")
 
     @staticmethod
     def _validate_result_shape(result: ResearchResult) -> None:

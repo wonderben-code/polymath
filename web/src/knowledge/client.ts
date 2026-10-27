@@ -19,13 +19,14 @@ export interface KnowledgeNode {
   result_id: string | null
   source_id: string | null
   content_kind: 'abstract' | 'full_text' | null
+  finding_outcome?: 'bridge' | 'answer' | null
 }
 
 export interface KnowledgeEdge {
   id: string
   source: string
   target: string
-  kind: 'maps_to' | 'supported_by' | 'selected_field'
+  kind: 'maps_to' | 'supported_by' | 'selected_field' | 'investigated_from'
 }
 
 export interface KnowledgeData {
@@ -126,19 +127,23 @@ export async function loadKnowledge(query: string, signal: AbortSignal): Promise
   const nodes: KnowledgeNode[] = collection(graph.nodes, 200).map((item) => {
     const node = record(item)
     if (node.kind !== 'field' && node.kind !== 'source' && node.kind !== 'finding') throw new KnowledgeError('invalid_response')
+    const outcome = node.finding_outcome === undefined ? null : node.finding_outcome
+    if (outcome !== null && (node.kind !== 'finding' || outcome !== 'bridge' && outcome !== 'answer')) throw new KnowledgeError('invalid_response')
     return {
       id: text(node.id, 300), kind: node.kind, label: text(node.label, 4000),
       run_id: identity(node.run_id, true), result_id: identity(node.result_id, true),
       source_id: nullableText(node.source_id, 200), content_kind: kind(node.content_kind),
+      finding_outcome: outcome,
     }
   })
   const nodeIds = new Set(nodes.map((node) => node.id))
   const edges: KnowledgeEdge[] = collection(graph.edges, 500).map((item) => {
     const edge = record(item)
-    if (edge.kind !== 'maps_to' && edge.kind !== 'supported_by' && edge.kind !== 'selected_field') throw new KnowledgeError('invalid_response')
+    if (edge.kind !== 'maps_to' && edge.kind !== 'supported_by' && edge.kind !== 'selected_field' && edge.kind !== 'investigated_from') throw new KnowledgeError('invalid_response')
     const source = text(edge.source, 300)
     const target = text(edge.target, 300)
     if (!nodeIds.has(source) || !nodeIds.has(target)) throw new KnowledgeError('invalid_response')
+    if (edge.kind === 'investigated_from' && (source === target || nodes.find((node) => node.id === source)?.kind !== 'finding' || nodes.find((node) => node.id === target)?.kind !== 'finding')) throw new KnowledgeError('invalid_response')
     return { id: text(edge.id, 650), source, target, kind: edge.kind }
   })
   unique(items)

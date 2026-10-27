@@ -31,6 +31,7 @@ from sqlalchemy.orm import Session
 
 from polymath.access_models import BrowserSession, ResearchRunAccess
 from polymath.jobs import JobNotFound, JobRepository, _event
+from polymath.lineage import LineageError, bind_parents, validate_parent_ids
 from polymath.models import ResearchEvent, ResearchRun
 
 COOKIE_NAME = "polymath_session"
@@ -66,6 +67,7 @@ class CreateRun(BaseModel):
 
     mode: Literal["explore", "ask", "surprise"]
     goal: str = Field(max_length=4000)
+    parent_result_ids: list[str] = Field(default_factory=list, max_length=4)
 
     @model_validator(mode="after")
     def validate_goal(self) -> CreateRun:
@@ -74,6 +76,7 @@ class CreateRun(BaseModel):
             raise ValueError("A research goal is required")
         if any(ord(character) < 32 and character not in "\n\t\r" for character in self.goal):
             raise ValueError("Unsupported characters in research goal")
+        validate_parent_ids(self.parent_result_ids, self.mode)
         return self
 
 
@@ -272,8 +275,11 @@ def create_run_router(
                 session.add(run)
                 session.flush()
                 session.add(ResearchRunAccess(run_id=run.id, session_hash=owner.token_hash))
+                bind_parents(session, run, owner.token_hash, body.parent_result_ids)
                 _event(session, run, "created", "queued", "Investigation queued")
                 return _summary(run)
+        except LineageError:
+            raise _PrivateHTTPException(404, "research_basis_not_found") from None
         except SQLAlchemyError:
             raise _storage_error() from None
 

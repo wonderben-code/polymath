@@ -1,7 +1,14 @@
 from alembic import context
 from sqlalchemy import create_engine, pool
 
-from polymath import access_models, budget_models, evidence_models, memory_models, models  # noqa: F401
+from polymath import (  # noqa: F401
+    access_models,
+    budget_models,
+    evidence_models,
+    lineage_models,
+    memory_models,
+    models,
+)
 from polymath.config import Settings
 from polymath.database import Base
 

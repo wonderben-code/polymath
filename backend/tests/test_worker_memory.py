@@ -4,6 +4,8 @@ import asyncio
 import json
 import threading
 import uuid
+from contextlib import suppress
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -19,9 +21,9 @@ from polymath.evidence import EvidenceStore
 from polymath.jobs import JobRepository
 from polymath.memory import ResearchMemory
 from polymath.memory_models import ResearchMemoryRead
-from polymath.research.controller import ResearchLimits
 from polymath.research.meta import ModelReply
 from polymath.research.models import SearchResults
+from polymath.worker import ExecutionStopped, _RecordedMemory
 
 database = database_fixture
 pytestmark = pytest.mark.integration
@@ -186,10 +188,12 @@ async def test_committed_memory_read_response_loss_resumes_without_duplicate_mod
     database, monkeypatch, failure
 ):
     _, parent, run = prepare(database)
-    committed, release, finished = threading.Event(), threading.Event(), threading.Event()
+    entered, committed = threading.Event(), threading.Event()
+    release, finished = threading.Event(), threading.Event()
     original = ResearchMemory.read_finding
 
     def commit_then_lose_response(memory, result_id):
+        entered.set()
         try:
             found = original(memory, result_id)
             committed.set()
@@ -197,28 +201,54 @@ async def test_committed_memory_read_response_loss_resumes_without_duplicate_mod
                 raise OSError("synthetic lost database response after commit")
             # Bound the thread even if an assertion fails; cancellation cannot
             # stop a database thread that has already committed its receipt.
-            if not release.wait(timeout=5):
+            if not release.wait(timeout=15):
                 raise TimeoutError("synthetic read response was not released")
             return found
         finally:
             finished.set()
 
     monkeypatch.setattr(ResearchMemory, "read_finding", commit_then_lose_response)
+    recorded_read = _RecordedMemory.read_finding
+
+    async def timeout_only_after_commit(memory, result_id):
+        read_task = asyncio.create_task(recorded_read(memory, result_id))
+        try:
+            if not await asyncio.to_thread(committed.wait, 10):
+                raise TimeoutError("synthetic finding read did not reach its commit")
+            # Set a short deadline only after this exact read has committed.
+            # A global short tool deadline could instead expire the preceding
+            # memory search or heartbeat/checkpoint work under a loaded runner.
+            return await asyncio.wait_for(read_task, timeout=0.05)
+        finally:
+            if not read_task.done():
+                read_task.cancel()
+                with suppress(asyncio.CancelledError, ExecutionStopped):
+                    await read_task
+
+    if failure == "tool_timeout":
+        monkeypatch.setattr(_RecordedMemory, "read_finding", timeout_only_after_commit)
     model = MemoryFixture()
     worker = setup_worker(database, model, tools_factory=lambda _: ChallengeTools())
-    worker.limits = ResearchLimits(tool_timeout_seconds=0.5)
+    worker.policy = replace(worker.policy, lease_seconds=30, heartbeat_seconds=1)
     task = asyncio.create_task(worker.run_once("memory-lost-read-response"))
     try:
-        assert await asyncio.to_thread(committed.wait, 5)
-        outcome = await asyncio.wait_for(task, timeout=5)
+        reached_commit = await asyncio.to_thread(committed.wait, 15)
+        assert reached_commit, (
+            "Finding read never committed: "
+            f"entered={entered.is_set()}, worker_done={task.done()}, "
+            f"status={JobRepository(database).get(run.id).status}, "
+            f"observation_kinds={[item.get('kind', item.get('error')) for item in model.seen]}"
+        )
+        outcome = await asyncio.wait_for(task, timeout=8)
         assert outcome.status == "interrupted"
     finally:
         release.set()
-        assert await asyncio.to_thread(finished.wait, 5)
         if not task.done():
             task.cancel()
             with pytest.raises(asyncio.CancelledError):
                 await task
+        if entered.is_set():
+            assert await asyncio.to_thread(finished.wait, 8)
 
     snapshot = JobRepository(database).get(run.id)
     assert snapshot.status == "interrupted"
@@ -235,6 +265,7 @@ async def test_committed_memory_read_response_loss_resumes_without_duplicate_mod
     assert usage.in_flight == 0
 
     monkeypatch.setattr(ResearchMemory, "read_finding", original)
+    monkeypatch.setattr(_RecordedMemory, "read_finding", recorded_read)
     JobRepository(database).resume_interrupted(run.id, expected_token=snapshot.lease_token)
     resumed = MemoryFixture()
     worker.model_factory = lambda _: resumed

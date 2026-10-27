@@ -75,7 +75,7 @@ Settings load from the process and optionally `.env` in the working directory. `
 
 The worker defaults disabled, has no production Meta factory, and its module entry point refuses paid execution. It now executes all three research modes with separate conclusion contracts. Ask returns cited/classified claims; Surprise Me first lets the model choose fields. Tests inject synthetic models/tools/prices; no paid requests occur. Do not substitute fixed fixture reservations for verified model token/context/pricing limits.
 
-Replay protocol is now `polymath-worker-memory-v3`. Its checkpoint fingerprint includes the mode and contract version. Earlier findings are model context, never primary evidence: memory-source actions retrieve exact original source versions and establish a durable read link in the new run. Memory search replay uses an immutable observation and an opaque session-scope fingerprint; finding/source bodies are reloaded by immutable identifiers. Interrupted jobs from the earlier Explore-only protocol stop safely instead of silently making new paid requests; completed historical findings remain readable. Worker cleanup stops heartbeats before terminal transitions so a heartbeat cannot cancel its own shutdown/interruption record.
+Replay protocol is now `polymath-worker-lineage-v4`. Its checkpoint fingerprint includes the mode, contract version, and ordered parent IDs/run IDs/content hashes. Earlier findings are model context, never primary evidence: memory-source actions retrieve exact original source versions and establish a durable read link in the new run. Memory search replay uses an immutable observation and an opaque session-scope fingerprint; finding/source bodies are reloaded by immutable identifiers. Interrupted jobs from earlier research protocols stop safely instead of silently making new paid requests; completed historical findings remain readable. Worker cleanup stops heartbeats before terminal transitions so a heartbeat cannot cancel its own shutdown/interruption record.
 
 ## Session-owned research API
 
@@ -84,7 +84,7 @@ The application now mounts the following routes, while **new research submission
 | Route | Behavior |
 |---|---|
 | `GET /api/v1/session` | Bootstrap a seven-day HttpOnly browser cookie; return a separate CSRF token; only a cookie hash is stored |
-| `POST /api/v1/runs` | Validate mode/goal, session, CSRF, origin, availability, and queue quotas; create ownership/job/event atomically only if explicitly available |
+| `POST /api/v1/runs` | Validate mode/goal, optional immutable parent selection, session, CSRF, origin, availability, and queue quotas; create ownership/job/event atomically only if explicitly available |
 | `GET /api/v1/runs` | Cursor-paginated history belonging to the current browser session |
 | `GET /api/v1/runs/{id}` | Owned public status; no checkpoint, raw model state, or lease details |
 | `POST /api/v1/runs/{id}/cancel` | CSRF-protected cancellation of an owned job |
@@ -102,13 +102,15 @@ The evidence service stores immutable source versions and separate retrieval met
 
 Ask stores claim IDs on quote records. Known/Postulated/Speculative are model classifications, not guaranteed truth; postulated claims require explicit derivation and distinct source URLs, speculative claims require caveats, and every claim needs exact source quotations. Ask must answer the submitted question. Surprise bridges must use the latest recorded field selection. The migration to answer evidence preserves historical findings and refuses an incompatible downgrade when answer artifacts exist rather than deleting them.
 
-The map/search is private to the current browser session. Shared source versions never reveal another session's finding or retrieval metadata. Source bodies are excluded from graph/search payloads. Edges describe recorded mappings, selected directions, or persisted quote associations; they do not establish scientific correctness. Views are capped, disclose truncation, and link back to actual owned investigations. This is browsing over stored research, not scheduled ingestion or model-driven higher-level discovery.
+The map/search is private to the current browser session. Shared source versions never reveal another session's finding or retrieval metadata. Source bodies are excluded from graph/search payloads. Edges describe recorded mappings, selected directions, or persisted quote associations; they do not establish scientific correctness. Views are capped, disclose truncation, and link back to actual owned investigations. Select 2–4 bridge findings to investigate a shared structure. The same Explore job receives separate structured parent IDs, never saved prose concatenated into the goal. Parent selection is immutable, session-owned, and restricted to completed bridges older than the new job. The model must read each selected finding and quote its original source version before a positive higher-level result can be saved. A curved `investigated_from` edge records this research basis; `supported_by` still points directly to original sources. Parents are included in filtered graph views within the same bounded node/edge limits. Scheduled ingestion remains unimplemented.
+
+For a higher-level API request, add `"parent_result_ids": ["<first-result-uuid>", "<second-result-uuid>"]` to an Explore mode/goal body. The array accepts 2–4 distinct canonical UUID strings. Invalid/missing/foreign/uncompleted/answer selections cannot enqueue a job; CSRF, availability and quota rules still apply. Four disjoint parents require eleven actions. The default action ceiling is twelve, while the twelve-model-call cap and budget controls remain unchanged. Large contexts or failed repairs may stop honestly at their existing limits.
 
 ## Literature tools
 
 The [literature package](../backend/src/polymath/literature/README.md) implements fixed-host OpenAlex/arXiv searches and abstract snapshots. It does not fetch arbitrary paper URLs or claim to have read full text. Retrieved abstracts retain their identity, time, extraction method, and hash; reads require prior discovery in the same tool instance. First readable snapshots are frozen within an investigation. DOI-based deduplication reduces counting one paper twice, but is not complete identity resolution.
 
-`SearchResults` includes typed provider-failure diagnostics. The controller forwards partial coverage to the model; an all-provider outage is an error, not evidence of no relevant literature. Safe authenticated OpenAlex access, live provider checks, full-text extraction, and persistent source versions remain incomplete. All current literature tests use synthetic HTTP fixtures without paid/model requests.
+`SearchResults` includes typed provider-failure diagnostics. The controller forwards partial coverage to the model; an all-provider outage is an error, not evidence of no relevant literature. Safe authenticated OpenAlex access, live provider checks, and full-text extraction remain incomplete; immutable source persistence is implemented. All current literature tests use synthetic HTTP fixtures without paid/model requests.
 
 ## Meta integration prerequisites
 

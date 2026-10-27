@@ -21,6 +21,7 @@ from polymath.budget import BudgetError, BudgetService
 from polymath.dispatch import DispatchCoordinator, DispatchError
 from polymath.evidence import EvidenceStore
 from polymath.jobs import JobLease, JobRepository, LeaseLost, RunSnapshot
+from polymath.lineage import get_parent_refs
 from polymath.memory import MemoryError as ResearchMemoryError
 from polymath.memory import ResearchMemory
 from polymath.research.controller import LiteratureTools, ResearchController, ResearchLimits
@@ -167,7 +168,7 @@ class _RecordedModel:
         request_id = f"model-{self.step:04d}"
         request_hash = _digest(
             {
-                "protocol": "polymath-worker-memory-v3",
+                "protocol": "polymath-worker-lineage-v4",
                 "model_identity": self.policy.model_identity,
                 "endpoint": META_COMPLETIONS_URL,
                 "stream": False,
@@ -524,7 +525,7 @@ class ResearchWorker:
                 await asyncio.to_thread(
                     self.jobs.append_event,
                     lease,
-                    event_key=f"controller:v3:{item.sequence}",
+                    event_key=f"controller:v4:{item.sequence}",
                     kind=item.kind,
                     summary=item.summary,
                 )
@@ -541,10 +542,12 @@ class ResearchWorker:
 
         try:
             snapshot = await context.checkpoint()
+            parents = await asyncio.to_thread(get_parent_refs, self.engine, lease)
             fingerprint = _digest(
                 {
-                    "protocol": "polymath-worker-memory-v3",
+                    "protocol": "polymath-worker-lineage-v4",
                     "mode": snapshot.mode,
+                    "parents": [parent.model_dump(mode="json") for parent in parents],
                     "policy": asdict(self.policy),
                     "limits": asdict(self.limits),
                 }
@@ -578,7 +581,11 @@ class ResearchWorker:
                 on_event=public_event,
                 memory=_RecordedMemory(context, ResearchMemory(self.engine, lease)),
             )
-            result = await controller.investigate(snapshot.goal, mode=snapshot.mode)
+            result = await controller.investigate(
+                snapshot.goal,
+                mode=snapshot.mode,
+                parent_result_ids=tuple(parent.result_id for parent in parents),
+            )
             await context.check_owner()
             current = await asyncio.to_thread(self.jobs.get, lease.run_id)
             if current.external_request_in_flight:

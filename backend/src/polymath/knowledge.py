@@ -15,7 +15,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy import Engine, cast, func, or_, select
 from sqlalchemy.dialects.postgresql import JSONPATH
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 
 from polymath.access_models import ResearchRunAccess
 from polymath.evidence_models import (
@@ -25,6 +25,7 @@ from polymath.evidence_models import (
     SourceRetrieval,
     SourceVersion,
 )
+from polymath.lineage_models import ResearchRunParent
 from polymath.run_api import (
     _authenticated,
     _private_response,
@@ -236,6 +237,28 @@ def _graph(session: Session, owner_hash: str, query: str) -> dict:
     nodes: dict[str, dict] = {}
     edges: dict[str, dict] = {}
     ids = [row.id for row in candidates[:MAX_CANDIDATES]]
+    parent_findings: dict[uuid.UUID, list[EvidenceResult]] = {}
+    if ids:
+        parent_result = aliased(EvidenceResult)
+        parent_access = aliased(ResearchRunAccess)
+        parents = session.execute(
+            select(ResearchRunParent.run_id, parent_result)
+            .join(parent_result, parent_result.id == ResearchRunParent.parent_result_id)
+            .join(parent_access, parent_access.run_id == parent_result.run_id)
+            .where(
+                ResearchRunParent.run_id.in_([row.run_id for row in candidates[:MAX_CANDIDATES]]),
+                parent_access.session_hash == owner_hash,
+                parent_result.run_id == ResearchRunParent.parent_run_id,
+                parent_result.content_sha256 == ResearchRunParent.content_sha256,
+                parent_result.status == "bridge",
+            )
+            .order_by(ResearchRunParent.run_id, ResearchRunParent.ordinal)
+            .limit(MAX_CANDIDATES * 4 + 1)
+        ).all()
+        if len(parents) > MAX_CANDIDATES * 4:
+            truncated = True
+        for child_run_id, parent in parents[: MAX_CANDIDATES * 4]:
+            parent_findings.setdefault(child_run_id, []).append(parent)
     quoted: dict[uuid.UUID, list] = {}
     if ids:
         # Result ownership was checked above. Composite FKs bind each quoted
@@ -272,9 +295,35 @@ def _graph(session: Session, owner_hash: str, query: str) -> dict:
             "result_id": item["result_id"],
             "source_id": None,
             "content_kind": None,
+            "finding_outcome": finding["outcome"],
         }
         proposed_nodes = {node["id"]: node}
         proposed_edges = {}
+
+        # Parent links record the selected research basis, never independent
+        # scientific support. The child still has its own direct quote links.
+        for parent in parent_findings.get(row.run_id, []):
+            parent_item = _finding_item(parent)
+            if parent_item is None:
+                continue
+            parent_id = parent_item["id"]
+            proposed_nodes[parent_id] = {
+                "id": parent_id,
+                "kind": "finding",
+                "label": parent_item["title"],
+                "run_id": parent_item["run_id"],
+                "result_id": parent_item["result_id"],
+                "source_id": None,
+                "content_kind": None,
+                "finding_outcome": "bridge",
+            }
+            edge_id = f"investigated_from:{node['id']}:{parent_id}"
+            proposed_edges[edge_id] = {
+                "id": edge_id,
+                "source": node["id"],
+                "target": parent_id,
+                "kind": "investigated_from",
+            }
 
         if finding["outcome"] == "bridge":
             _add_field(

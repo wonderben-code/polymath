@@ -141,11 +141,13 @@ export function useResearchWorkspace(enabled: boolean, researchAvailable: boolea
   }, [enabled, refreshVersion, clearPrivateState, remember])
 
   const selectRun = useCallback((runId: string) => {
-    if (phase !== 'ready' || !runs.some((run) => run.id === runId)) return
+    // Map records and memory can refer to older runs outside the loaded history
+    // page. The server checks ownership before returning that research record.
+    if (phase !== 'ready' || !/^[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}$/i.test(runId)) return
     selected.current = runId
     setSelectedId(runId)
     setDetailVersion((version) => version + 1)
-  }, [phase, runs])
+  }, [phase])
 
   useEffect(() => {
     if (!enabled || phase !== 'ready' || !selectedId) return
@@ -340,7 +342,7 @@ export function useResearchWorkspace(enabled: boolean, researchAvailable: boolea
     }
   }, [phase, csrf, activeRun, invalidate, remember])
 
-  const submit = useCallback(async (mode: OwnedRun['mode'], goal: string) => {
+  const submit = useCallback(async (mode: OwnedRun['mode'], goal: string, parentResultIds: readonly string[] = []) => {
     if (!enabled || !researchAvailable || phase !== 'ready' || !csrf || mutation.current) return
     const controller = new AbortController()
     const current = generation.current
@@ -348,7 +350,7 @@ export function useResearchWorkspace(enabled: boolean, researchAvailable: boolea
     setSubmitting(true)
     setError('')
     try {
-      const response = await createResearchRun(mode, goal, csrf, controller.signal)
+      const response = await createResearchRun(mode, goal, csrf, controller.signal, parentResultIds)
       if (controller.signal.aborted || current !== generation.current) return
       const run = remember(response)
       setRuns((items) => updated(items, run))
@@ -365,11 +367,17 @@ export function useResearchWorkspace(enabled: boolean, researchAvailable: boolea
     }
   }, [enabled, researchAvailable, phase, csrf, invalidate, remember])
 
+  const investigateBridges = useCallback((parentResultIds: readonly string[]) => submit(
+    'explore',
+    'Investigate a shared structure across these saved bridges, test it against the original literature, and report limitations.',
+    parentResultIds,
+  ), [submit])
+
   return {
     phase, runs, nextCursor, loadingMore, error, detailError, selectedId, activeRun, events, result,
     connection, submitting, cancelling: cancellingId === activeRun?.id,
     canCancel: !submitting && (!cancellingId || cancellingId === activeRun?.id),
     canSubmit: enabled && researchAvailable && phase === 'ready' && !!csrf && !submitting && !cancellingId,
-    refresh, selectRun, loadMore, cancel, submit,
+    refresh, selectRun, loadMore, cancel, submit, investigateBridges,
   }
 }
