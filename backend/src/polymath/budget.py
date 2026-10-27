@@ -278,57 +278,72 @@ class BudgetService:
         call_key: str,
         estimated_microdollars: int,
     ) -> Reservation:
+        with Session(self.engine) as session, session.begin():
+            return self.reserve_in_session(
+                session,
+                account_id,
+                run_id,
+                call_key=call_key,
+                estimated_microdollars=estimated_microdollars,
+            )
+
+    def reserve_in_session(
+        self,
+        session: Session,
+        account_id: str,
+        run_id: uuid.UUID,
+        *,
+        call_key: str,
+        estimated_microdollars: int,
+    ) -> Reservation:
+        """Reserve inside an existing transaction; caller owns commit/rollback."""
         account_id = _key(account_id, "account_id")
         _run_id(run_id)
         call_key = _key(call_key, "call_key")
         _integer(estimated_microdollars, "estimated_microdollars", minimum=1)
-        with Session(self.engine) as session, session.begin():
-            account = self._account(session, account_id)
-            now = self._now()
-            prior = session.scalar(
-                select(BudgetReservation).where(
-                    BudgetReservation.account_id == account_id,
-                    BudgetReservation.call_key == call_key,
-                )
+        account = self._account(session, account_id)
+        now = self._now()
+        prior = session.scalar(
+            select(BudgetReservation).where(
+                BudgetReservation.account_id == account_id,
+                BudgetReservation.call_key == call_key,
             )
-            if prior:
-                if prior.run_id != run_id or prior.estimated_microdollars != estimated_microdollars:
-                    raise BudgetError("reservation_idempotency_conflict")
-                return _reservation(prior)
-            self._authorized(account)
-            limit = session.get(BudgetRunLimit, (account_id, run_id))
-            if limit is None:
-                raise BudgetError("run_budget_not_configured")
-            usage = self._usage(session, account, now.date())
-            run_committed, run_calls = self._run_usage(session, account_id, run_id)
-            if (
-                usage.committed_microdollars + estimated_microdollars
-                > account.hard_cap_microdollars
-            ):
-                raise BudgetError("global_budget_exceeded")
-            if (
-                usage.daily_committed_microdollars + estimated_microdollars
-                > account.daily_cap_microdollars
-            ):
-                raise BudgetError("daily_budget_exceeded")
-            if run_committed + estimated_microdollars > limit.cap_microdollars:
-                raise BudgetError("run_budget_exceeded")
-            if run_calls >= limit.max_calls:
-                raise BudgetError("run_call_limit")
-            if usage.in_flight >= account.max_in_flight:
-                raise BudgetError("concurrency_limit")
-            row = BudgetReservation(
-                account_id=account_id,
-                run_id=run_id,
-                call_key=call_key,
-                estimated_microdollars=estimated_microdollars,
-                status="reserved",
-                reserved_day=now.date(),
-                created_at=now,
-            )
-            session.add(row)
-            session.flush()
-            return _reservation(row, newly_reserved=True)
+        )
+        if prior:
+            if prior.run_id != run_id or prior.estimated_microdollars != estimated_microdollars:
+                raise BudgetError("reservation_idempotency_conflict")
+            return _reservation(prior)
+        self._authorized(account)
+        limit = session.get(BudgetRunLimit, (account_id, run_id))
+        if limit is None:
+            raise BudgetError("run_budget_not_configured")
+        usage = self._usage(session, account, now.date())
+        run_committed, run_calls = self._run_usage(session, account_id, run_id)
+        if usage.committed_microdollars + estimated_microdollars > account.hard_cap_microdollars:
+            raise BudgetError("global_budget_exceeded")
+        if (
+            usage.daily_committed_microdollars + estimated_microdollars
+            > account.daily_cap_microdollars
+        ):
+            raise BudgetError("daily_budget_exceeded")
+        if run_committed + estimated_microdollars > limit.cap_microdollars:
+            raise BudgetError("run_budget_exceeded")
+        if run_calls >= limit.max_calls:
+            raise BudgetError("run_call_limit")
+        if usage.in_flight >= account.max_in_flight:
+            raise BudgetError("concurrency_limit")
+        row = BudgetReservation(
+            account_id=account_id,
+            run_id=run_id,
+            call_key=call_key,
+            estimated_microdollars=estimated_microdollars,
+            status="reserved",
+            reserved_day=now.date(),
+            created_at=now,
+        )
+        session.add(row)
+        session.flush()
+        return _reservation(row, newly_reserved=True)
 
     @staticmethod
     def _locate(session: Session, reservation_id: uuid.UUID) -> BudgetReservation:
@@ -342,31 +357,38 @@ class BudgetService:
     def claim_dispatch(self, reservation_id: uuid.UUID) -> bool:
         """True exactly once. An idempotent reserve retry never permits another call."""
         with Session(self.engine) as session, session.begin():
-            row = self._locate(session, reservation_id)
-            account = self._account(session, row.account_id)
-            session.refresh(row)
-            if row.status != "reserved":
-                return False
-            self._authorized(account)
-            row.status = "in_flight"
-            row.dispatched_at = self._now()
-            # A queued reservation may cross midnight before its actual call.
-            # Its eventual settled charge belongs to the dispatch day.
-            row.reserved_day = row.dispatched_at.date()
-            return True
+            return self.claim_dispatch_in_session(session, reservation_id)
+
+    def claim_dispatch_in_session(self, session: Session, reservation_id: uuid.UUID) -> bool:
+        """Claim inside an existing transaction; caller owns commit/rollback."""
+        row = self._locate(session, reservation_id)
+        account = self._account(session, row.account_id)
+        session.refresh(row)
+        if row.status != "reserved":
+            return False
+        self._authorized(account)
+        row.status = "in_flight"
+        row.dispatched_at = self._now()
+        row.reserved_day = row.dispatched_at.date()
+        return True
 
     def mark_unknown(self, reservation_id: uuid.UUID, *, reason: str) -> Reservation:
+        with Session(self.engine) as session, session.begin():
+            return self.mark_unknown_in_session(session, reservation_id, reason=reason)
+
+    def mark_unknown_in_session(
+        self, session: Session, reservation_id: uuid.UUID, *, reason: str
+    ) -> Reservation:
         if reason not in {"timeout", "transport_error", "worker_lost", "usage_unavailable"}:
             raise ValueError("Unknown outcome requires a supported reason code")
-        with Session(self.engine) as session, session.begin():
-            row = self._locate(session, reservation_id)
-            self._account(session, row.account_id)
-            session.refresh(row)
-            if row.status == "settled":
-                raise BudgetError("reservation_already_settled")
-            row.status = "unknown"
-            row.unknown_reason = reason
-            return _reservation(row)
+        row = self._locate(session, reservation_id)
+        self._account(session, row.account_id)
+        session.refresh(row)
+        if row.status == "settled":
+            raise BudgetError("reservation_already_settled")
+        row.status = "unknown"
+        row.unknown_reason = reason
+        return _reservation(row)
 
     def settle(
         self,
@@ -420,6 +442,29 @@ class BudgetService:
         completion_tokens: int | None,
         reconciliation: bool,
     ) -> Reservation:
+        with Session(self.engine) as session, session.begin():
+            return self.settle_in_session(
+                session,
+                reservation_id,
+                actual_microdollars=actual_microdollars,
+                settlement_key=settlement_key,
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                reconciliation=reconciliation,
+            )
+
+    def settle_in_session(
+        self,
+        session: Session,
+        reservation_id: uuid.UUID,
+        *,
+        actual_microdollars: int,
+        settlement_key: str,
+        prompt_tokens: int | None = None,
+        completion_tokens: int | None = None,
+        reconciliation: bool = False,
+    ) -> Reservation:
+        """Settle inside a caller-owned transaction, including account serialization."""
         _integer(actual_microdollars, "actual_microdollars")
         _key(settlement_key, "settlement_key", maximum=200)
         if (prompt_tokens is None) != (completion_tokens is None):
@@ -427,48 +472,47 @@ class BudgetService:
         if prompt_tokens is not None:
             _integer(prompt_tokens, "prompt_tokens", maximum=2**63 - 1)
             _integer(completion_tokens, "completion_tokens", maximum=2**63 - 1)
-        with Session(self.engine) as session, session.begin():
-            row = self._locate(session, reservation_id)
-            account = self._account(session, row.account_id)
-            session.refresh(row)
-            now = self._now()
-            if row.status == "settled":
-                if (
-                    row.actual_microdollars != actual_microdollars
-                    or row.settlement_key != settlement_key
-                    or row.prompt_tokens != prompt_tokens
-                    or row.completion_tokens != completion_tokens
-                ):
-                    raise BudgetError("settlement_idempotency_conflict")
-                return _reservation(row)
-            if (reconciliation and row.status != "unknown") or (
-                not reconciliation and row.status != "in_flight"
-            ):
-                raise BudgetError("invalid_settlement_state")
-            row.actual_microdollars = actual_microdollars
-            row.settlement_key = settlement_key
-            row.prompt_tokens = prompt_tokens
-            row.completion_tokens = completion_tokens
-            row.status = "settled"
-            row.settled_at = now
-            row.settled_day = now.date()
-            session.flush()
-            usage = self._usage(session, account, now.date())
-            original_day = self._usage(session, account, row.reserved_day)
-            run_committed, _ = self._run_usage(session, row.account_id, row.run_id)
-            run_limit = session.get(BudgetRunLimit, (row.account_id, row.run_id))
+        row = self._locate(session, reservation_id)
+        account = self._account(session, row.account_id)
+        session.refresh(row)
+        now = self._now()
+        if row.status == "settled":
             if (
-                usage.committed_microdollars > account.hard_cap_microdollars
-                or usage.daily_committed_microdollars > account.daily_cap_microdollars
-                or original_day.daily_committed_microdollars > account.daily_cap_microdollars
-                or run_committed > run_limit.cap_microdollars
+                row.actual_microdollars != actual_microdollars
+                or row.settlement_key != settlement_key
+                or row.prompt_tokens != prompt_tokens
+                or row.completion_tokens != completion_tokens
             ):
-                account.frozen = True
-                account.frozen_reason = "actual_cost_exceeded_cap"
-            elif actual_microdollars > row.estimated_microdollars:
-                account.frozen = True
-                account.frozen_reason = "actual_cost_exceeded_reservation"
+                raise BudgetError("settlement_idempotency_conflict")
             return _reservation(row)
+        if (reconciliation and row.status != "unknown") or (
+            not reconciliation and row.status != "in_flight"
+        ):
+            raise BudgetError("invalid_settlement_state")
+        row.actual_microdollars = actual_microdollars
+        row.settlement_key = settlement_key
+        row.prompt_tokens = prompt_tokens
+        row.completion_tokens = completion_tokens
+        row.status = "settled"
+        row.settled_at = now
+        row.settled_day = now.date()
+        session.flush()
+        usage = self._usage(session, account, now.date())
+        original_day = self._usage(session, account, row.reserved_day)
+        run_committed, _ = self._run_usage(session, row.account_id, row.run_id)
+        run_limit = session.get(BudgetRunLimit, (row.account_id, row.run_id))
+        if (
+            usage.committed_microdollars > account.hard_cap_microdollars
+            or usage.daily_committed_microdollars > account.daily_cap_microdollars
+            or original_day.daily_committed_microdollars > account.daily_cap_microdollars
+            or run_committed > run_limit.cap_microdollars
+        ):
+            account.frozen = True
+            account.frozen_reason = "actual_cost_exceeded_cap"
+        elif actual_microdollars > row.estimated_microdollars:
+            account.frozen = True
+            account.frozen_reason = "actual_cost_exceeded_reservation"
+        return _reservation(row)
 
     def usage(self, account_id: str) -> BudgetUsage:
         with Session(self.engine) as session, session.begin():

@@ -40,7 +40,7 @@ def jobs(monkeypatch: pytest.MonkeyPatch):
     config = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
     engine = create_engine(scoped, hide_parameters=True)
     try:
-        command.upgrade(config, "0002_durable_jobs")
+        command.upgrade(config, "head")
         yield JobRepository(engine), engine, config
     finally:
         engine.dispose()

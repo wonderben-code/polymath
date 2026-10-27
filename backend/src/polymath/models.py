@@ -97,6 +97,13 @@ class ResearchExternalRequest(Base):
             "status IN ('prepared', 'observed', 'reconciled')",
             name="ck_research_external_requests_status",
         ),
+        CheckConstraint(
+            "(reservation_id IS NULL AND dispatch_lease_token IS NULL AND request_hash IS NULL) OR "
+            "(reservation_id IS NOT NULL AND dispatch_lease_token IS NOT NULL "
+            "AND dispatch_lease_token >= 0 AND request_hash IS NOT NULL)",
+            name="ck_research_external_requests_dispatch_binding",
+        ),
+        UniqueConstraint("reservation_id", name="uq_research_external_requests_reservation"),
     )
 
     run_id: Mapped[uuid.UUID] = mapped_column(
@@ -106,6 +113,13 @@ class ResearchExternalRequest(Base):
     status: Mapped[str] = mapped_column(String(32))
     observation: Mapped[dict | None] = mapped_column(JSONB)
     reconciliation: Mapped[dict | None] = mapped_column(JSONB)
+    reservation_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("budget_reservations.id")
+    )
+    dispatch_lease_token: Mapped[int | None] = mapped_column(BigInteger)
+    request_hash: Mapped[str | None] = mapped_column(String(64))
+    late_observation: Mapped[dict | None] = mapped_column(JSONB)
+    late_usage: Mapped[dict | None] = mapped_column(JSONB)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

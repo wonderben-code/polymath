@@ -363,6 +363,8 @@ class JobRepository:
             request = session.get(ResearchExternalRequest, (run.id, request_id))
             if request is None or request.status != "prepared":
                 raise StateConflict("No prepared external request was recorded")
+            if request.reservation_id is not None:
+                raise StateConflict("Budget-bound requests require coordinated completion")
             run.external_request_in_flight = False
             request.observation = data
             request.status = "observed"
@@ -540,6 +542,8 @@ class JobRepository:
             request = session.get(ResearchExternalRequest, (run.id, request_id))
             if request is None or request.status != "prepared":
                 raise StateConflict("No prepared external request was recorded")
+            if request.reservation_id is not None:
+                raise StateConflict("Budget-bound requests require coordinated reconciliation")
             run.external_request_in_flight = False
             request.reconciliation = {"outcome": outcome, "summary": summary}
             request.status = "reconciled"
