@@ -1,0 +1,60 @@
+name: Application checks
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine@sha256:266d3c257594e195b309ae9d1805e54c788f1d7b375f56bf6c367aac6c917e7b
+        env:
+          POSTGRES_USER: polymath
+          POSTGRES_PASSWORD: polymath
+          POSTGRES_DB: polymath_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U polymath -d polymath_test"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      TEST_DATABASE_URL: postgresql+psycopg://polymath:polymath@127.0.0.1:5432/polymath_test
+      UV_CACHE_DIR: /tmp/polymath-uv-cache
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned uv
+        run: python -m pip install uv==0.12.23
+      - name: Install locked backend dependencies
+        run: uv sync --project backend --locked
+      - name: Lint and format
+        run: |
+          uv run --project backend ruff check backend
+          uv run --project backend ruff format --check backend
+      - name: Backend and PostgreSQL tests
+        run: uv run --project backend pytest backend/tests
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+        working-directory: web
+      - run: npm run typecheck
+        working-directory: web
+      - run: npm test -- --run
+        working-directory: web
+      - run: npm run build
+        working-directory: web

@@ -4,13 +4,13 @@ Last updated: 27 October 2026 (Bangkok). This file records verified outcomes; [B
 
 ## Current position
 
-**Stage: architecture and development baseline saved; application implementation has not started.**
+**Stage: application foundation implemented and locally validated (A3). Live research is not enabled.**
 
 Scope: the complete product, including Surprise Me, the knowledge base, map, and connections between connections. Meta intelligence controls research. See [ARCHITECTURE.md](ARCHITECTURE.md).
 
 **First engineering objective:** A1–A5 in the build plan: establish real Meta access and capabilities, create the application foundation, and complete one bounded research investigation with real sources, a structural mapping, an objection, and an evidence-backed conclusion or honest rejection.
 
-**Next independent task:** A3, application scaffolding and repeatable local/CI checks. Meta-dependent live work remains blocked until access is verified. No fixture result counts as a completed live investigation.
+**Next work:** finish the minimal research-controller milestone (A4), verify actual Meta capabilities (A1/A2), and then run the first real investigation (A5). Durable jobs and transactional spending controls (B2/B3) are required before exposing research publicly. No fixture result counts as a completed live investigation.
 
 ## Milestone status
 
@@ -18,7 +18,7 @@ Scope: the complete product, including Surprise Me, the knowledge base, map, and
 |---|---|---|
 | Repository and planning documents | Complete | Existing specification plus architecture, roadmap, task plan, and tracker in this change |
 | Cloud tooling | Partially verified | Git read access worked; OpenTimestamps 0.7.2 installed; all four local proofs parsed and matched commit-hash payloads; install script reran successfully |
-| A — Real Meta research path | Blocked for live checks; local work available | Key/access/capabilities unverified; no application or live model test yet |
+| A — Real Meta research path | A3 complete; live checks blocked | React/FastAPI/PostgreSQL foundation, tests, CI definition, and local container stack implemented; model authentication/capabilities still unverified |
 | B — Durable research and controls | Not started | Jobs, evidence storage, activity, security, budgets |
 | C — Explore | Not started | Complete real-source browser investigation |
 | D — Public deployment and API | Not started | Host selection, public URL, quota controls, persistence/recovery |
@@ -31,7 +31,7 @@ Scope: the complete product, including Surprise Me, the knowledge base, map, and
 
 | ID | Requirement | Current evidence | Action / unblocked work |
 |---|---|---|---|
-| X1 | Meta API authentication and runtime network access | During onboarding, `MODEL_API_KEY` was absent and HTTPS to `api.meta.ai` received a proxy CONNECT 403. Draft requirements were saved; runtime propagation and publication are unverified. | Owner supplies the key securely in environment settings and saves relevant access changes; engineering rechecks actual access. Never enter the key in chat or Git. A3 and fixture-based work can proceed. |
+| X1 | Meta API authentication | Latest unauthenticated `GET https://api.meta.ai/v1/models` reached the service and returned HTTP 401; the earlier proxy block has changed. `MODEL_API_KEY` and `META_MODEL` remain absent. | Owner supplies the key securely in environment settings; engineering verifies authenticated access and available models. Never enter the key in chat or Git. Independent development continues. |
 | X2 | Verified model behavior, pricing, and account spending cap | Model names/prices in HACKATHON.md are unverified notes; no paid call executed. | Engineer verifies official documentation and actual API behavior; owner confirms account cap/credits before bounded live tests. |
 | X3 | Deployment account and hosting allowance | No host or infrastructure budget selected. | Evaluate host requirements/cost early; obtain authorization before provisioning paid resources. Local implementation continues. |
 | X4 | Zenodo publisher identity, credentials, and artifact approval | Not configured or tested. | Set up sandbox first; secure production credentials and explicit approval of an exact artifact before production publication. Other research features continue independently. |
@@ -52,5 +52,8 @@ Track: real source identity, quote integrity, claim support, mapping assumptions
 | 27 Oct 2026 | Saved cloud install/start instructions plus API hostname/key requirements | Draft persistence confirmed; runtime application and environment publication not established |
 | 27 Oct 2026 | Owner confirmed Meta-driven intelligence and full feature scope, including Surprise Me; approved saving the development direction | Architecture and build baseline recorded; earlier reduced-scope/after-v1 labels superseded |
 | 27 Oct 2026 | Validated 8 Markdown documents, 25 local links, balanced code fences, and 40 unique task IDs; Git whitespace check passed; timestamp workflow/proofs unchanged | Documentation baseline checked; no application tests exist or were claimed |
+| 27 Oct 2026 | A3: 14 backend unit tests and 1 real PostgreSQL integration test passed; frontend 6 tests and production build passed; container ran as UID 10001 with database/migrations ready and unknown API paths returning 404 | Foundation works locally; no live investigation or public deployment claimed. CI is defined but hosted outcome not yet verified. |
+| 27 Oct 2026 | Container build initially failed certificate validation; mounted the injected cloud proxy CA for package-install steps and rebuilt successfully with verification enabled | Trust problem corrected without disabling verification; CA is not committed or retained in image layers |
+| 27 Oct 2026 | Unauthenticated Meta models request returned HTTP 401; key/model variables absent. Literature and developer-doc requests were proxy-blocked; additive domain requirements saved | Meta network reachability improved; authentication/model/pricing checks still pending. Draft persistence does not establish runtime access to the additional destinations. |
 
 For subsequent implementation, append the task IDs, commit, exact meaningful checks and outcomes, deployed evidence where applicable, and remaining limitations. Keep planned, passed, failed, blocked, skipped, and unrun results distinct.

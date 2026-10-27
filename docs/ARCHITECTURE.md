@@ -1,6 +1,6 @@
 # Polymath: Architecture
 
-Status: implementation baseline agreed in the project conversation, 27 October 2026. No application implementation exists yet. See [SPEC.md](SPEC.md) for product requirements, [BUILD_PLAN.md](BUILD_PLAN.md) for tasks, and [PROGRESS.md](PROGRESS.md) for verified progress.
+Status: implementation baseline agreed in the project conversation, 27 October 2026. The application foundation is implemented; live research is not enabled. See [SPEC.md](SPEC.md) for product requirements, [BUILD_PLAN.md](BUILD_PLAN.md) for tasks, [PROGRESS.md](PROGRESS.md) for verified progress, and [DEVELOPMENT.md](DEVELOPMENT.md) for setup.
 
 ## 1. Goal and decisions
 

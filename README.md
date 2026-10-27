@@ -26,6 +26,7 @@ Created 27 October 2026. Every push to `main` is Bitcoin-timestamped through Ope
 | [docs/ROADMAP.md](docs/ROADMAP.md) | Full-product milestones and release targets to the 5 Nov deadline |
 | [docs/BUILD_PLAN.md](docs/BUILD_PLAN.md) | Development tasks, dependencies, and acceptance gates |
 | [docs/PROGRESS.md](docs/PROGRESS.md) | Verified progress, blockers, evidence log, and the next task |
+| [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Local development, tests, PostgreSQL migrations, and container startup |
 | [docs/HACKATHON.md](docs/HACKATHON.md) | Dates, judging, setup checklist, IP notes |
 | [CLAUDE.md](CLAUDE.md) | Instructions for any coding agent picking this up |
 
@@ -35,7 +36,8 @@ The implementation baseline is recorded in `docs/ARCHITECTURE.md`. The target is
 - [x] Repo created, Bitcoin timestamping live
 - [x] What we're building, defined
 - [x] Architecture, full-product roadmap, development plan, and progress tracker recorded
-- [ ] A: real Meta-powered investigation and application foundation
+- [x] A3: application foundation, PostgreSQL migrations, health checks, and automated checks
+- [ ] A1–A2, A5: verified Meta capabilities and first real-source investigation
 - [ ] B–C: durable research, evidence, spending controls, and Explore
 - [ ] D: public URL and controlled public API
 - [ ] E: Ask and Surprise Me
@@ -43,7 +45,7 @@ The implementation baseline is recorded in `docs/ARCHITECTURE.md`. The target is
 - [ ] G: Formalise, Write, and approval-gated Publish
 - [ ] H: complete-product validation, polish, and submission
 
-No application has been implemented yet. First: verify Meta access and capabilities, scaffold the application, and complete one real-source investigation. See the [progress tracker](docs/PROGRESS.md) for access blockers and independent work that can proceed.
+The application foundation is implemented: a responsive research workspace, FastAPI backend, PostgreSQL schema/migrations, locked dependencies, and a locally tested container stack. Live investigations remain unavailable while Meta access and execution/spending controls are completed. See the [development guide](docs/DEVELOPMENT.md) to run it and the [progress tracker](docs/PROGRESS.md) for verified outcomes and remaining work.
 
 ## Licence
-Apache 2.0 (to be added with the first code commit).
+Apache 2.0. See [LICENSE](LICENSE).

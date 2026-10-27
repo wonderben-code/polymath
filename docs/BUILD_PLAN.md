@@ -2,7 +2,7 @@
 
 Implementation baseline: 27 October 2026. Product scope is in [SPEC.md](SPEC.md); technical decisions are in [ARCHITECTURE.md](ARCHITECTURE.md); target dates are in [ROADMAP.md](ROADMAP.md); current status and blockers are in [PROGRESS.md](PROGRESS.md).
 
-All tasks below are initially uncompleted. Check a task only when its acceptance evidence exists; add the relevant commit, test command/result, or deployed check to the progress log. A mocked integration is not a live integration. Keep implementation commits small and update this plan and the progress tracker with each completed slice.
+Checkboxes record implementation acceptance, with verification evidence in the progress log. Check a task only when its acceptance evidence exists; add the relevant commit, test command/result, or deployed check to the progress log. A mocked integration is not a live integration. Keep implementation commits small and update this plan and the progress tracker with each completed slice.
 
 ## A. Establish the real Meta research path
 
@@ -10,7 +10,7 @@ Dependencies: none for local scaffolding; live tests require usable Meta access 
 
 - [ ] **A1 — Confirm runtime access.** Recheck binding presence without printing values; retry HTTPS after settings propagate. Verify the account cap with the owner and keep live calls bounded. Record failures precisely.
 - [ ] **A2 — Verify model capabilities.** Establish available Meta model, actual endpoint, tool calling/action protocol, structured output, streaming, context/output limits, usage reporting, errors, and current pricing. Record observed support separately from documentation claims.
-- [ ] **A3 — Establish the application skeleton.** Create backend/frontend projects, pinned dependencies and lockfiles, PostgreSQL development configuration, migrations, health checks, configuration validation, and fixture-based CI. Add the planned Apache 2.0 license with the first code commit; preserve timestamp automation.
+- [x] **A3 — Establish the application skeleton.** React/TypeScript and FastAPI projects, dependency locks, PostgreSQL development configuration, packaged Alembic migrations, health/readiness/capability checks, validated settings, application CI, and Apache 2.0 license implemented. Verified locally with backend/frontend tests, real PostgreSQL migration/persistence checks, and non-root container startup. Hosted CI execution is a separate check after pushing. Timestamp automation preserved.
 - [ ] **A4 — Implement the model adapter and minimal controller.** Validate actions, bound correction/retry attempts, record tool observations and usage, and let the Meta model choose subsequent actions.
 - [ ] **A5 — Complete the first real investigation.** Search and read real literature on one seed concept; record a mapping and objection; return a supported conclusion or honest rejection. Preserve source evidence and actual cost. Capture a trace demonstrating that a tool observation affects the next action.
 

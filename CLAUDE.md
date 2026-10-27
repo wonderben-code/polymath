@@ -10,7 +10,7 @@ You're picking up **Polymath**, built for the Meta Global AI Developer Hackathon
 5. `docs/BUILD_PLAN.md` and `docs/PROGRESS.md`: task-level acceptance gates, current evidence, blockers, and next work
 
 ## Current state
-The owner approved recording the full-product development direction on 27 October 2026. The architecture is in `docs/ARCHITECTURE.md`, executable tasks in `docs/BUILD_PLAN.md`, and verified progress in `docs/PROGRESS.md`. Application implementation has not started. Begin with tasks A1–A5: verify the real Meta integration, establish the application foundation, and complete one bounded investigation using real sources. Continue independent scaffolding while access prerequisites are resolved.
+The owner approved recording the full-product development direction on 27 October 2026 and authorized implementation and incremental pushes. The architecture is in `docs/ARCHITECTURE.md`, executable tasks in `docs/BUILD_PLAN.md`, and verified progress in `docs/PROGRESS.md`. The application foundation (A3) is implemented. Read `docs/DEVELOPMENT.md` for actual setup and check commands. Live research remains unavailable. Continue A1–A5 toward a real Meta-led investigation, then the durable execution and spending controls in B. Use the progress tracker to distinguish completed implementation from unverified live integrations.
 
 The full specified product is the delivery target: Explore, Ask, Surprise Me, live research, connections between connections, a growing knowledge base, a map, Formalise, Write, approval-gated Publish, and a public API. Earlier after-v1/stretch labels for these features are superseded. Sequence them around the shared engine; do not silently omit functionality or substitute simulated integrations.
 

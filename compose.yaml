@@ -1,0 +1,51 @@
+name: polymath
+
+services:
+  db:
+    image: postgres:17-alpine@sha256:266d3c257594e195b309ae9d1805e54c788f1d7b375f56bf6c367aac6c917e7b
+    environment:
+      POSTGRES_USER: polymath
+      POSTGRES_PASSWORD: polymath
+      POSTGRES_DB: polymath
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U polymath -d polymath"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  migrate:
+    profiles: [app]
+    build: .
+    image: polymath:local
+    command: ["/app/backend/.venv/bin/alembic", "-c", "/app/backend/alembic.ini", "upgrade", "head"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://polymath:polymath@db:5432/polymath
+    depends_on:
+      db:
+        condition: service_healthy
+
+  app:
+    profiles: [app]
+    build: .
+    image: polymath:local
+    environment:
+      DATABASE_URL: postgresql+psycopg://polymath:polymath@db:5432/polymath
+      STATIC_DIR: /app/web/dist
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "/app/backend/.venv/bin/python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/readiness', timeout=3)"]
+      interval: 5s
+      timeout: 4s
+      retries: 12
+      start_period: 10s
+
+volumes:
+  postgres_data:
