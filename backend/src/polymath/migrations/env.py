@@ -1,7 +1,7 @@
 from alembic import context
 from sqlalchemy import create_engine, pool
 
-from polymath import budget_models, models  # noqa: F401
+from polymath import access_models, budget_models, evidence_models, models  # noqa: F401
 from polymath.config import Settings
 from polymath.database import Base
 

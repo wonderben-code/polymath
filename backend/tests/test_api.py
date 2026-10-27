@@ -26,6 +26,18 @@ def test_health_does_not_require_database_or_model() -> None:
         assert client.get("/api/v1/research").status_code == 404
 
 
+def test_credentials_alone_never_enable_research_submission() -> None:
+    application = create_app(
+        Settings(
+            MODEL_API_KEY="synthetic-test-placeholder", META_MODEL="fixture-model", _env_file=None
+        )
+    )
+    with TestClient(application) as client:
+        capabilities = client.get("/api/v1/capabilities").json()
+    assert capabilities["meta_configured"] is True
+    assert capabilities["research_available"] is False
+
+
 def test_unavailable_database_has_sanitized_readiness(monkeypatch: pytest.MonkeyPatch) -> None:
     application = create_app(Settings(_env_file=None))
 
@@ -82,6 +94,7 @@ def test_built_frontend_serves_assets_and_never_masks_unknown_api(tmp_path: Path
         assert "Polymath application" in client.get("/investigations/example").text
         assert "built asset" in client.get("/assets/app.js").text
         assert client.get("/api/v1/nonexistent").status_code == 404
+        assert client.get("/api/v1/nonexistent").headers["Cache-Control"] == "no-store"
         assert client.get("/api").status_code == 404
         assert client.get("/api/v1/health").json()["status"] == "ok"
 

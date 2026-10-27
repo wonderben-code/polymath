@@ -1,13 +1,13 @@
 """HTTP application: honest health/capability checks and optional built web assets."""
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 from alembic.config import Config
 from alembic.runtime.migration import MigrationContext
 from alembic.script import ScriptDirectory
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
@@ -16,6 +16,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from polymath import __version__
 from polymath.config import Settings, get_settings
 from polymath.database import build_engine
+from polymath.run_api import create_run_router
 
 
 def migration_heads() -> set[str]:
@@ -24,7 +25,11 @@ def migration_heads() -> set[str]:
     return set(ScriptDirectory.from_config(config).get_heads())
 
 
-def create_app(settings: Settings | None = None) -> FastAPI:
+def create_app(
+    settings: Settings | None = None,
+    *,
+    research_availability: Callable[[], bool] | None = None,
+) -> FastAPI:
     settings = settings or get_settings()
 
     @asynccontextmanager
@@ -35,6 +40,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application = FastAPI(title="Polymath API", version=__version__, lifespan=lifespan)
     application.state.settings = settings
     application.state.engine = build_engine(settings)
+    application.include_router(
+        create_run_router(application.state.engine, availability=research_availability)
+    )
+
+    @application.middleware("http")
+    async def private_api_responses(request: Request, call_next):
+        response = await call_next(request)
+        if request.url.path.startswith("/api/v1/"):
+            response.headers["Cache-Control"] = "no-store"
+        return response
 
     @application.get("/api/v1/health")
     def health() -> dict[str, str]:
@@ -61,9 +76,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @application.get("/api/v1/capabilities")
     def capabilities() -> dict[str, str | bool]:
+        # This policy is injected by trusted application assembly, never inferred
+        # from a key or a client request. The exported production app defaults off.
+        try:
+            available = research_availability is not None and research_availability() is True
+        except Exception:
+            available = False
         return {
-            "research_available": False,
-            "reason": "research_not_implemented",
+            "research_available": available,
+            "reason": "available" if available else "research_not_implemented",
             "meta_configured": settings.meta_configured,
         }
 
