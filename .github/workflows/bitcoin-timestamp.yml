@@ -1,0 +1,57 @@
+name: Bitcoin Timestamp
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: bitcoin-timestamp-main
+  cancel-in-progress: false
+
+jobs:
+  timestamp:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install OpenTimestamps
+        run: pip install opentimestamps-client
+
+      - name: Get commit hash
+        id: commit
+        run: echo "hash=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Create timestamp
+        run: |
+          mkdir -p timestamps
+          echo "${{ steps.commit.outputs.hash }}" > commit-hash.txt
+          ots stamp commit-hash.txt
+          mv commit-hash.txt.ots "timestamps/${{ steps.commit.outputs.hash }}.ots"
+          rm -f commit-hash.txt
+
+      - name: Commit timestamp
+        run: |
+          set -euo pipefail
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add timestamps/
+          if git diff --cached --quiet; then
+            echo "Nothing to commit."
+            exit 0
+          fi
+          git commit -m "Bitcoin timestamp for ${{ steps.commit.outputs.hash }}"
+          # Retry with rebase: a concurrent push to main would otherwise reject this
+          # as non-fast-forward and the stamp would be silently lost.
+          for attempt in 1 2 3 4 5; do
+            if git push; then exit 0; fi
+            echo "Push rejected (attempt $attempt) — rebasing and retrying."
+            git pull --rebase origin main
+          done
+          echo "Could not push after 5 attempts." >&2
+          exit 1
