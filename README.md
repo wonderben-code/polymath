@@ -16,27 +16,34 @@ Created 27 October 2026. Every push to `main` is Bitcoin-timestamped through Ope
 - **Keep growing.** A knowledge base that keeps reading new research.
 - **Turn hunches into maths.** Conjectures, with proof attempts.
 - **Write and publish.** Plain summary or formal paper → approve → DOI on Zenodo.
-- **Surprise me** *(after v1)*. Polymath picks the fields itself and goes hunting for convergences, and you watch it think.
+- **Surprise me**. Polymath picks the fields itself and goes hunting for convergences, and you watch it think.
 
 ## Docs
 | Doc | What's in it |
 |---|---|
 | [docs/SPEC.md](docs/SPEC.md) | **What** we're building: features, principles, suggested user flow, definition of done |
-| [docs/ROADMAP.md](docs/ROADMAP.md) | Milestones to the 5 Nov deadline, demo plan, cut list, what comes after |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | **How**: Meta-driven research, evidence, storage, execution, deployment, and budget protection |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | Full-product milestones and release targets to the 5 Nov deadline |
+| [docs/BUILD_PLAN.md](docs/BUILD_PLAN.md) | Development tasks, dependencies, and acceptance gates |
+| [docs/PROGRESS.md](docs/PROGRESS.md) | Verified progress, blockers, evidence log, and the next task |
 | [docs/HACKATHON.md](docs/HACKATHON.md) | Dates, judging, setup checklist, IP notes |
 | [CLAUDE.md](CLAUDE.md) | Instructions for any coding agent picking this up |
 
-The **how** (architecture) gets decided in Milestone 1 and will be written to `docs/ARCHITECTURE.md`.
+The implementation baseline is recorded in `docs/ARCHITECTURE.md`. The target is the complete specified product, including Surprise Me and the growing knowledge base. Meta intelligence drives the research decisions; the application supplies tools, persistent evidence, and controls.
 
 ## Status
 - [x] Repo created, Bitcoin timestamping live
 - [x] What we're building, defined
-- [ ] Milestone 0: setup
-- [ ] Milestone 1: design the how
-- [ ] Milestone 2: Explore works
-- [ ] Milestone 3: live on a URL
-- [ ] Milestone 4: Ask, Write, Publish, Formalise
-- [ ] Milestone 5: quality, demo, submission
+- [x] Architecture, full-product roadmap, development plan, and progress tracker recorded
+- [ ] A: real Meta-powered investigation and application foundation
+- [ ] B–C: durable research, evidence, spending controls, and Explore
+- [ ] D: public URL and controlled public API
+- [ ] E: Ask and Surprise Me
+- [ ] F: growing knowledge base, map, and connections between connections
+- [ ] G: Formalise, Write, and approval-gated Publish
+- [ ] H: complete-product validation, polish, and submission
+
+No application has been implemented yet. First: verify Meta access and capabilities, scaffold the application, and complete one real-source investigation. See the [progress tracker](docs/PROGRESS.md) for access blockers and independent work that can proceed.
 
 ## Licence
 Apache 2.0 (to be added with the first code commit).

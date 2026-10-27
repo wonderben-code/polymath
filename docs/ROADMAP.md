@@ -1,42 +1,66 @@
-# Polymath: Roadmap
+# Polymath: Product roadmap
 
-**Deadline: Thu 5 Nov 2026, 09:00 Bangkok (Wed 4 Nov, 9:00 PM ET). Target: submit by Wed 4 Nov, 21:00 Bangkok.**
+Baseline updated 27 October 2026 after the owner's full-scope direction. **Deadline: Thu 5 Nov 2026, 09:00 Bangkok (Wed 4 Nov, 9:00 PM ET). Target submission: Wed 4 Nov, 21:00 Bangkok.** Official submission details still need verification.
 
-These milestones describe **outcomes** (what works by when), not implementation. The HOW gets designed in Milestone 1.
+This is the product-outcome roadmap. [ARCHITECTURE.md](ARCHITECTURE.md) explains the design; [BUILD_PLAN.md](BUILD_PLAN.md) provides tasks and acceptance gates; [PROGRESS.md](PROGRESS.md) records actual progress and blockers. Dates below are targets, not completion claims.
 
-| # | Milestone | Target date (Bangkok) | Done when |
+## Release scope
+
+Deliver a complete Meta-powered research product: Explore, Ask, Surprise Me, the live research view, connections between connections, a growing knowledge base, a map, Formalise, Write, approval-gated Zenodo publication, and a public API. This supersedes earlier after-v1/stretch labels. Research decisions must be model-driven and grounded in recorded evidence.
+
+## Milestones
+
+| Milestone | Target (Bangkok) | User-visible outcome and acceptance | Build tasks |
 |---|---|---|---|
-| 0 | **Setup** | Tue 27 Oct | Discord joined, credits claimed, Meta API key working from the dev machine, $150 spend limit set, problem statement and submission requirements written into `docs/HACKATHON.md`, three seed concepts chosen |
-| 1 | **Design the HOW** | Tue 27 – Wed 28 Oct | Architecture decided with a strong reasoning model and written to `docs/ARCHITECTURE.md`: how the intelligence works, how Meta tooling is used, how truth is enforced, how it's deployed, how the budget is protected. Build plan with tasks written to `docs/BUILD_PLAN.md` |
-| 2 | **Explore works** | Thu 29 – Fri 30 Oct | Give it a concept → get real bridges with verified evidence, objections and confidence (locally) |
-| 3 | **Live on a URL** | Sat 31 Oct | Anyone can run Explore on the public URL and watch the live research view |
-| 4 | **Ask, Write, Publish, Formalise** | Sun 1 – Mon 2 Nov | "What is the truth about X?" answers with labels; summary and paper write-ups; approve → DOI; at least one mathematical conjecture produced |
-| 5 | **Quality + demo** | Tue 3 – Wed 4 Nov | Seed concepts produce at least one bridge an expert would call non-obvious and defensible; the homepage shows great examples instantly; repo public; demo video recorded; submission filed |
+| Architecture and tracking | 27 Oct | Design, full scope, task plan, evidence tracker, and prerequisites recorded | Planning baseline |
+| Real intelligence and foundation | 27–28 Oct | Meta chooses research actions, reads real sources, and reaches a supported conclusion or honest rejection; actual capabilities and usage recorded | A |
+| Reliable Explore | 28–30 Oct | Concept → live investigation → inspectable bridge, evidence, mapping, objection, and limitations; cancellation, persistence, and budget controls verified | B–C |
+| Public application and API | Deploy skeleton by 29 Oct; complete Explore by 31 Oct | Real public URL, controlled research access, documented API, persistence, reconnect, and restart checks | D |
+| Ask and Surprise Me | 30 Oct–1 Nov | Evidence-linked answers and genuinely model-selected cross-field investigations work through the deployed UI | E |
+| Knowledge and higher-level discovery | 31 Oct–2 Nov | Searchable growing memory, navigable map, connections between connections, scheduled ingestion, and reassessment of findings | F |
+| Formalise, Write, Publish | 1–2 Nov | Conjecture/check workflow, source-backed documents, exact-artifact preview/approval, sandbox-tested publication, and explicitly approved production DOI | G |
+| Quality, release, submission | 3–4 Nov | Every feature journey verified on the release; representative scientific audit; polished site; video/materials complete; submission confirmed | H |
 
-## Seed concept candidates (pick three in Milestone 0)
-- Self-organised criticality (physics ↔ neuroscience ↔ finance ↔ ecology)
-- Error-correcting codes (information theory ↔ genetics ↔ quantum matter)
-- Phase transitions in learning (statistical physics ↔ machine learning ↔ developmental biology)
-- Explore vs exploit (ecology ↔ reinforcement learning ↔ economics)
+These workstreams share infrastructure and overlap; completion still requires each acceptance gate. Deploy early and extend the same working system rather than building disconnected demonstrations. Review the schedule daily against evidence and unresolved access requirements.
 
-## Demo video (3 minutes or less, draft)
-Problem (20s) → live Explore run (60s) → bridge deep-dive (40s) → Ask with labelled answer (30s) → formalise + write + approve (30s) → close.
+## First engineering milestone
 
-## If time runs short, cut in this order
-1. Connections between connections (meta-level)
-2. The self-growing knowledge base running on a schedule
-3. Proof attempts (keep the conjecture statement only)
-4. The map view (a list of bridges is enough)
-5. Live publishing (keep a test/sandbox publish)
+1. Verify the Meta API binding, model availability, actual tool/action behavior, pricing, usage reporting, and account spending cap.
+2. Establish React/TypeScript, FastAPI, PostgreSQL, dependency locks, migrations, and CI.
+3. Run one bounded Meta-led investigation with real search, retrieved passages, a structural mapping, and an attempt to undermine the proposed connection.
+4. Record the result, provenance, adaptive actions, and cost. A useful rejection is valid; an invented discovery is not.
 
-**Never cut:** Explore with evidence and objections, the live research view, the public URL, the demo video.
+Application scaffolding and recorded-fixture checks can proceed while credentials/network access are resolved. A blocked live check remains blocked, not complete.
 
-## Next feature after v1: Surprise me
-Once Explore works end to end, add **Surprise me** (SPEC §3.8). Polymath picks fields itself, hunts for convergences and meta-convergences between them, and the UI shows it thinking: fields lighting up, reasoning shown, bridges forming. If v1 lands before Mon 2 Nov, pull it into the hackathon build, because it makes a brilliant opening for the demo video.
+## Evaluation concepts
 
-## After the hackathon
-- Make it truer: stronger objection-testing, full-text evidence, calibrated confidence, expert review
-- Real formal mathematics: proved / disproved / open as first-class results
-- Always on: continuous reading of new research, and the meta-connection ladder running on its own
-- More sources: biology and medicine preprints, PubMed, economics, code, figures and diagrams
-- For everyone: accounts, a public API, community verification and credit for the people who verify bridges
+Initial proposed seeds:
+
+- Self-organised criticality: physics, neuroscience, finance, ecology.
+- Error-correcting codes: information theory, genetics, quantum matter.
+- Phase transitions in learning: statistical physics, machine learning, developmental biology.
+
+Keep explore vs exploit as an additional candidate. Include a weak/misleading input, counterevidence that should change a conclusion, and source/model failures. Evaluate mapping validity and support rather than requiring the system to claim novelty on every run.
+
+## Scope and schedule control
+
+No core feature is silently removed to meet a date. If access, scientific quality, or engineering capacity threatens the complete release, record the gap, continue useful independent work, and bring an explicit decision to the owner. A saved example, sandbox deposit, generated proof sketch, or local-only service must retain its actual label.
+
+Defer only work already outside the first-release requirement: general user accounts and payments, large-scale infrastructure, and broad expansion into additional source domains. Operational authorization for publication and spending controls remain required. More sophisticated research and formal-verification capabilities can deepen after release without relabelling unverified results today.
+
+## Submission story and demonstration
+
+Verify the official video limit and submission fields before final editing. Aim to show the complete product concisely:
+
+- Open with the problem and a genuine Surprise Me investigation.
+- Follow one bridge into source passages, the structural mapping, and its strongest objection.
+- Show Ask's claim labels and the map/higher-level connection path.
+- Show a new source entering memory and the reassessment mechanism using an accurately labelled recorded example if needed for timing.
+- Show Formalise, a generated document, and the exact approval/publication path.
+- Close with the public URL, explicit use of Meta intelligence, and limitations.
+
+Saved results and recordings can explain long-running behavior, but cannot replace deployed functionality or be represented as a live investigation. Maintain a release checklist and confirm the submitted artifact, commit, URL, and timestamp.
+
+## After the release
+
+Improve evidence assessment and confidence calibration through expert feedback; deepen formal proof tooling; expand source coverage; improve discovery quality, costs, and throughput; then consider accounts and community verification. The first release already includes the full product workflows above.

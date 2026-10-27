@@ -2,6 +2,8 @@
 
 Organisers: Meta and Cerebral Valley. Virtual. Indie Developer track (individuals or teams of up to 4). Entrant: Ekram Alam (accepted 20 Oct 2026).
 
+Implementation and verification status: [PROGRESS.md](PROGRESS.md). The full-product plan is in [ROADMAP.md](ROADMAP.md) and [BUILD_PLAN.md](BUILD_PLAN.md). Unchecked account and rules items below remain unconfirmed; planning does not mark them complete.
+
 ## Dates
 | Bangkok (UTC+7) | ET | Event |
 |---|---|---|
@@ -43,6 +45,9 @@ $150 in Meta Model API credits (claim via form), **Muse Code** (Meta's agentic c
 - What SAM 3 and Glimmer offer, and whether either is useful here: `________________`
 
 ## Meta Model API quick reference
+
+**Unverified setup notes:** the endpoint, exact model IDs, capabilities, and prices below must be checked against current official documentation and actual account access in build task A2. No successful model call has been recorded. Never treat these notes as a verified API contract or enable unbounded spending from them.
+
 - Base URL: `https://api.meta.ai/v1` (OpenAI-compatible)
 - Auth: `Authorization: Bearer $MODEL_API_KEY`
 - Model: `muse-spark-1.1` (check whether `muse-spark-1.2` is available)

@@ -6,9 +6,15 @@ You're picking up **Polymath**, built for the Meta Global AI Developer Hackathon
 1. `docs/SPEC.md`: **WHAT** we're building. The product, what it lets users do, principles, the suggested flow, the definition of done
 2. `docs/ROADMAP.md`: milestones and dates
 3. `docs/HACKATHON.md`: deadlines, judging, setup status, things to confirm
+4. `docs/ARCHITECTURE.md`: agreed implementation baseline and unresolved technical prerequisites
+5. `docs/BUILD_PLAN.md` and `docs/PROGRESS.md`: task-level acceptance gates, current evidence, blockers, and next work
 
 ## Current state
-WHAT is defined. **HOW is not decided yet.** Milestone 1 is to design the architecture: how the intelligence works, how Meta tooling is used, how truth is enforced, deployment, and budget protection. Propose it to Eks, and once he agrees, write it to `docs/ARCHITECTURE.md` and a task-level `docs/BUILD_PLAN.md`. Don't start coding before that.
+The owner approved recording the full-product development direction on 27 October 2026. The architecture is in `docs/ARCHITECTURE.md`, executable tasks in `docs/BUILD_PLAN.md`, and verified progress in `docs/PROGRESS.md`. Application implementation has not started. Begin with tasks A1–A5: verify the real Meta integration, establish the application foundation, and complete one bounded investigation using real sources. Continue independent scaffolding while access prerequisites are resolved.
+
+The full specified product is the delivery target: Explore, Ask, Surprise Me, live research, connections between connections, a growing knowledge base, a map, Formalise, Write, approval-gated Publish, and a public API. Earlier after-v1/stretch labels for these features are superseded. Sequence them around the shared engine; do not silently omit functionality or substitute simulated integrations.
+
+Meta intelligence chooses research directions and adapts to evidence. Application code enforces tool contracts, evidence integrity, durable execution, permissions, and budgets. Preferred model: Muse Spark; verify availability and capabilities, using another capable Meta model if needed. Do not silently use a non-Meta model. Changes to product scope or major architecture decisions should be explained to Eks before replacing this baseline.
 
 ## Fixed constraints
 - The intelligence runs on **Meta's AI** (Muse Spark via the Meta Model API). Creative, non-trivial use of Meta tooling is 25% of the judging.
@@ -23,6 +29,8 @@ WHAT is defined. **HOW is not decided yet.** Milestone 1 is to design the archit
 - **Do not modify or break** `.github/workflows/bitcoin-timestamp.yml` or `timestamps/`. Every push to `main` is Bitcoin-stamped automatically.
 - **Scope boundary:** Polymath works on the open literature only. Never add, describe or reference the owner's unpublished theoretical research or any unrelated venture, in code, docs, commits, prompts or demo content.
 - Commit in small, meaningful steps, and keep `README.md` status current.
+- Update task checkboxes and `docs/PROGRESS.md` with meaningful verification evidence. Planned, fixture-tested, live-tested, deployed, and submitted are different states.
+- Use the existing checkout; tasks already run in isolated environments. Do not create Git worktrees unless requested.
 
 ## Working with Eks
 He isn't hands-on with code. Explain things in plain English, show results, and ask him about product direction and taste, not implementation details.

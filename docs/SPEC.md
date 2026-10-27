@@ -2,7 +2,9 @@
 
 *Author: Ekram Alam. Concept first written 14 Oct 2026 and extended into a platform 20 Oct 2026. Built in this repo from 27 Oct 2026.*
 
-> This document covers **WHAT** Polymath is and what it lets people do. **HOW** it's built (architecture, models, tooling, infrastructure) is deliberately left open, to be designed separately and recorded in `docs/ARCHITECTURE.md` once decided.
+*Scope update, 27 Oct 2026: the owner confirmed the complete feature set below as the delivery target, including Surprise Me, the growing knowledge base, map, and connections between connections. This supersedes earlier after-v1/stretch labels. See `ROADMAP.md`, `ARCHITECTURE.md`, and `BUILD_PLAN.md` for delivery sequencing.*
+
+> This document covers **WHAT** Polymath is and what it lets people do. **HOW** it's built is recorded in `docs/ARCHITECTURE.md`, with task-level implementation in `docs/BUILD_PLAN.md`.
 
 ---
 
@@ -60,7 +62,7 @@ With one click, any bridge or answer becomes either:
 
 It can then be **published to Zenodo with a permanent DOI**, but only after the user explicitly approves. Nothing is ever published without a human saying yes.
 
-### 3.8 Surprise me *(after v1 is running)*
+### 3.8 Surprise me
 No idea where to start? Press **Surprise me**. Polymath picks fields of science itself, sometimes at random and sometimes deliberately distant from each other, and goes hunting for convergences between them. When it finds some, it climbs to meta-convergences. It's pure serendipity: discoveries you'd never have thought to look for.
 
 The experience is the point. You watch it **think out loud**: the fields lighting up as it picks them ("let's try mycology… and orbital mechanics"), the reasoning behind each choice, the search sweeping across both, and bridges appearing between them as it finds them, followed by bridges between those bridges. It's a visual show of discovery, which makes it a great homepage hero and demo moment.
@@ -93,7 +95,7 @@ Open to anyone through the website, with an API so researchers and developers ca
 3. An answer appears with each statement colour-coded Known / Postulated / Speculative, each linked to its bridges and papers, plus an honest "what we don't know" section.
 4. Write / publish options, as in Flow A.
 
-**Flow D: Surprise me (after v1)**
+**Flow D: Surprise me**
 1. The user presses **Surprise me** on the homepage.
 2. Polymath picks fields on its own and explains why, with the fields visibly lighting up.
 3. The live view shows it searching across the chosen fields and forming bridges, then climbing to bridges between bridges.
@@ -114,13 +116,17 @@ Open to anyone through the website, with an API so researchers and developers ca
 - [ ] Explore works end to end on the live URL, with evidence and objections
 - [ ] Ask works, with Known / Postulated / Speculative labels
 - [ ] The live research view shows the agent thinking
+- [ ] Surprise Me chooses fields and investigates real connections end to end
+- [ ] Connections between connections are investigated with traceable underlying evidence
+- [ ] The knowledge base ingests new literature and can reassess existing findings
+- [ ] The map lets users navigate fields, papers, bridges, and higher-level links
+- [ ] The public API supports controlled research jobs and saved results
 - [ ] Write (summary + paper) and approve-gated publishing work
 - [ ] Formalise produces at least one mathematical conjecture from a real bridge
 - [ ] At least one bridge a domain expert would call non-obvious and defensible
 - [ ] Public repo, demo video, submission filed
 
-**Stretch:** connections between connections (3.4), and the always-growing knowledge base running on its own (3.5).
-**After v1:** Surprise me (3.8). If v1 lands early, it's a strong demo moment worth pulling forward.
+All features above belong to the release target. Implementation is sequenced around one shared research engine. A feature is complete only when its real user journey works and is verified; fixture-only behavior or a saved demonstration is not a substitute.
 
 ## 8. Out of scope
 - The author's unpublished theoretical research and any unrelated ventures are never used, described or referenced here. Polymath works on the open literature only.
