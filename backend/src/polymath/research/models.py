@@ -10,10 +10,29 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints, TypeAdapte
 
 Text = Annotated[str, StringConstraints(strict=True, strip_whitespace=True, min_length=1)]
 SourceId = Annotated[str, StringConstraints(strict=True, min_length=1, max_length=200)]
+ClaimId = Annotated[str, StringConstraints(strict=True, pattern=r"^[A-Za-z][A-Za-z0-9_-]{0,63}$")]
+ResearchMode = Literal["explore", "ask", "surprise"]
 
 
 class StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+
+def _validate_public_text(value: object) -> None:
+    """Reject output that cannot be safely stored/rendered before it leaves a repair loop."""
+    if isinstance(value, str):
+        try:
+            value.encode("utf-8")
+        except UnicodeError:
+            raise ValueError("research output must contain valid Unicode text") from None
+        if any(ord(character) < 32 and character not in "\n\t\r" for character in value):
+            raise ValueError("research output cannot contain unsupported control characters")
+    elif isinstance(value, dict):
+        for item in value.values():
+            _validate_public_text(item)
+    elif isinstance(value, (list, tuple)):
+        for item in value:
+            _validate_public_text(item)
 
 
 class SourceReference(StrictModel):
@@ -68,6 +87,28 @@ class ReadAction(StrictModel):
     source_id: SourceId
 
 
+class FieldSelection(StrictModel):
+    """A concise public research direction chosen by the model, never a fixed pair."""
+
+    fields: Annotated[
+        tuple[Annotated[Text, Field(max_length=100)], ...], Field(min_length=2, max_length=4)
+    ]
+    rationale: Annotated[Text, Field(max_length=1000)]
+
+    @model_validator(mode="after")
+    def distinct_fields(self) -> FieldSelection:
+        _validate_public_text(self.model_dump())
+        if len({" ".join(name.split()).casefold() for name in self.fields}) != len(self.fields):
+            raise ValueError("selected fields must be distinct")
+        if any(any(ord(character) < 32 for character in name) for name in self.fields):
+            raise ValueError("selected fields cannot contain control characters")
+        return self
+
+
+class SelectFieldsAction(FieldSelection):
+    kind: Literal["select_fields"]
+
+
 class Mapping(StrictModel):
     left: Annotated[Text, Field(max_length=1000)]
     right: Annotated[Text, Field(max_length=1000)]
@@ -96,7 +137,10 @@ class BridgeFinding(StrictModel):
 
     @model_validator(mode="after")
     def distinct_fields(self) -> BridgeFinding:
-        if self.field_left.casefold() == self.field_right.casefold():
+        if (
+            " ".join(self.field_left.split()).casefold()
+            == " ".join(self.field_right.split()).casefold()
+        ):
             raise ValueError("bridge fields must be distinct")
         return self
 
@@ -106,15 +150,67 @@ class InsufficientFinding(StrictModel):
     reason: Annotated[Text, Field(max_length=3000)]
 
 
-Finding = Annotated[BridgeFinding | InsufficientFinding, Field(discriminator="outcome")]
+class ClaimQuote(StrictModel):
+    source_id: SourceId
+    quote: Annotated[str, Field(min_length=10, max_length=4000)]
+    supports: Annotated[Text, Field(max_length=1500)]
+
+
+class AnswerClaim(StrictModel):
+    id: ClaimId
+    text: Annotated[Text, Field(max_length=2000)]
+    label: Literal["known", "postulated", "speculative"]
+    evidence: Annotated[list[ClaimQuote], Field(min_length=1, max_length=8)]
+    derivation: Annotated[Text, Field(max_length=2000)] | None = None
+    caveats: Annotated[list[Annotated[Text, Field(max_length=1000)]], Field(max_length=6)] = []
+
+    @model_validator(mode="after")
+    def explain_inference_and_uncertainty(self) -> AnswerClaim:
+        if self.label == "postulated" and self.derivation is None:
+            raise ValueError("postulated claims require an explicit derivation")
+        if self.label == "speculative" and not self.caveats:
+            raise ValueError("speculative claims require an explicit caveat")
+        return self
+
+
+class AnswerFinding(StrictModel):
+    outcome: Literal["answer"]
+    question: Annotated[Text, Field(max_length=4000)]
+    summary: Annotated[Text, Field(max_length=3000)]
+    claims: Annotated[list[AnswerClaim], Field(min_length=1, max_length=8)]
+    limitations: Annotated[
+        list[Annotated[Text, Field(max_length=1000)]], Field(min_length=1, max_length=8)
+    ]
+    unanswered_questions: Annotated[
+        list[Annotated[Text, Field(max_length=1000)]], Field(max_length=8)
+    ] = []
+
+    @model_validator(mode="after")
+    def distinct_claim_ids(self) -> AnswerFinding:
+        _validate_public_text(self.model_dump())
+        if len({claim.id for claim in self.claims}) != len(self.claims):
+            raise ValueError("answer claim IDs must be unique")
+        return self
+
+
+Finding = Annotated[
+    BridgeFinding | AnswerFinding | InsufficientFinding, Field(discriminator="outcome")
+]
 
 
 class ConcludeAction(StrictModel):
     kind: Literal["conclude"]
     conclusion: Finding
 
+    @model_validator(mode="after")
+    def validate_public_conclusion(self) -> ConcludeAction:
+        _validate_public_text(self.conclusion.model_dump())
+        return self
 
-Action = Annotated[SearchAction | ReadAction | ConcludeAction, Field(discriminator="kind")]
+
+Action = Annotated[
+    SearchAction | ReadAction | SelectFieldsAction | ConcludeAction, Field(discriminator="kind")
+]
 ACTION_ADAPTER = TypeAdapter(Action)
 
 
@@ -122,7 +218,8 @@ class VerifiedQuote(StrictModel):
     """Exact substring match; this does not verify scientific interpretation."""
 
     source_id: SourceId
-    side: Literal["left", "right"]
+    side: Literal["left", "right", "answer"]
+    claim_id: ClaimId | None = None
     quote: str
     supports: str
     start: int
@@ -145,8 +242,10 @@ class Usage(StrictModel):
 
 
 class ResearchResult(StrictModel):
-    status: Literal["bridge", "insufficient_evidence", "limit_reached", "failed"]
-    finding: BridgeFinding | InsufficientFinding | None = None
+    status: Literal["bridge", "answer", "insufficient_evidence", "limit_reached", "failed"]
+    mode: ResearchMode = "explore"
+    finding: BridgeFinding | AnswerFinding | InsufficientFinding | None = None
+    field_selections: Annotated[tuple[FieldSelection, ...], Field(max_length=3)] = ()
     quotes: tuple[VerifiedQuote, ...] = ()
     sources: tuple[SourceDocument, ...] = ()
     events: tuple[ResearchEvent, ...] = ()

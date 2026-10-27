@@ -14,14 +14,18 @@ from pydantic import ValidationError
 from polymath.research.meta import ModelError, ResearchModel
 from polymath.research.models import (
     ACTION_ADAPTER,
+    AnswerFinding,
     BridgeFinding,
     ConcludeAction,
+    FieldSelection,
     InsufficientFinding,
     ReadAction,
     ResearchEvent,
+    ResearchMode,
     ResearchResult,
     SearchAction,
     SearchResults,
+    SelectFieldsAction,
     SourceDocument,
     SourceReference,
     Usage,
@@ -83,7 +87,36 @@ truth. Distinguish abstract support from full text; do not claim a formal proof.
 If the tools fail or the evidence does not support a bridge, conclude insufficient
 evidence. Do not force a positive result. Never request arbitrary URLs or tools
 outside this schema. Tool observations arrive as JSON in user-role messages.
+For Ask, answer the original question with individually cited claims labelled
+known, postulated, or speculative. These labels are model assessments, never
+independent verification of truth. Every claim requires exact source quotations.
+Postulated claims require an explicit derivation and at least two distinct
+source URLs. Speculative claims require a caveat. Describe limitations and what
+remains unanswered; do not force an answer when support is missing. The summary
+is only scope/orientation: put substantive answer assertions in the labelled,
+cited claims rather than introducing uncited claims in an overview.
+For Surprise, choose two to four fields yourself using select_fields, with a
+concise public rationale, before searching. There is no predefined field pair.
+You may make at most three field selections total. Each selection starts
+a fresh prior-work/counterevidence search scope; the final bridge must connect
+fields from your current selection. Do not expose hidden reasoning.
 """
+
+MODE_INSTRUCTIONS = {
+    "explore": "Explore the supplied concept. Conclude with a bridge or insufficient_evidence. "
+    "Do not emit answer or select_fields actions in this mode.",
+    "ask": "Investigate the supplied question. Conclude with answer or insufficient_evidence. "
+    "The answer's question must retain the original question. Do not conclude a bridge or "
+    "select fields in this mode.",
+    "surprise": "Choose fields autonomously, guided by the optional supplied direction. "
+    "Select fields before search/read actions; conclude with a bridge or insufficient_evidence. "
+    "An empty direction means you choose where to investigate. Do not conclude an answer.",
+}
+
+
+def _normalized_text(value: str) -> str:
+    return " ".join(value.split()).casefold()
+
 
 SAFE_MODEL_ERRORS = {
     "live_model_disabled",
@@ -133,6 +166,50 @@ def _verify_evidence(
     return tuple(verified)
 
 
+def _verify_answer_evidence(
+    finding: AnswerFinding, sources: dict[str, SourceDocument], search_purposes: set[str]
+) -> tuple[VerifiedQuote, ...]:
+    """Validate citation linkage and inference disclosure, not semantic truth."""
+    if not {"counterevidence", "prior_work"}.issubset(search_purposes):
+        raise ValueError("missing_required_searches")
+    verified = []
+    for claim in finding.claims:
+        distinct_sources = set()
+        for item in claim.evidence:
+            source = sources.get(item.source_id)
+            if source is None:
+                raise ValueError("unread_source")
+            start = source.text.find(item.quote)
+            if start < 0:
+                raise ValueError("quotation_not_found")
+            distinct_sources.add(source.url)
+            verified.append(
+                VerifiedQuote(
+                    source_id=item.source_id,
+                    side="answer",
+                    claim_id=claim.id,
+                    quote=item.quote,
+                    supports=item.supports,
+                    start=start,
+                    end=start + len(item.quote),
+                    source_sha256=source.content_sha256,
+                    content_kind=source.content_kind,
+                )
+            )
+        if claim.label == "postulated" and len(distinct_sources) < 2:
+            raise ValueError("postulated_requires_distinct_sources")
+    return tuple(verified)
+
+
+def _verify_surprise_fields(finding: BridgeFinding, selections: tuple[FieldSelection, ...]) -> None:
+    if not selections:
+        raise ValueError("fields_not_selected")
+    selected = {_normalized_text(name) for name in selections[-1].fields}
+    proposed = {_normalized_text(finding.field_left), _normalized_text(finding.field_right)}
+    if len(proposed) != 2 or not proposed.issubset(selected):
+        raise ValueError("bridge_outside_current_fields")
+
+
 class ResearchController:
     def __init__(
         self,
@@ -147,17 +224,33 @@ class ResearchController:
         self.limits = limits or ResearchLimits()
         self.on_event = on_event
 
-    async def investigate(self, goal: str) -> ResearchResult:
-        if not isinstance(goal, str) or not 1 <= len(goal.strip()) <= 4000:
-            raise ValueError("Research goal must contain 1–4000 characters")
+    async def investigate(self, goal: str, *, mode: ResearchMode = "explore") -> ResearchResult:
+        if not isinstance(mode, str) or mode not in MODE_INSTRUCTIONS:
+            raise ValueError("Unsupported research mode")
+        if (
+            not isinstance(goal, str)
+            or len(goal.strip()) > 4000
+            or (not goal.strip() and mode != "surprise")
+        ):
+            raise ValueError("Research goal must contain 1–4000 characters unless mode is surprise")
         schema = json.dumps(ACTION_ADAPTER.json_schema(), separators=(",", ":"))
         messages = [
-            {"role": "system", "content": SYSTEM_PROMPT + "\nAction schema:\n" + schema},
-            {"role": "user", "content": json.dumps({"research_goal": goal.strip()})},
+            {
+                "role": "system",
+                "content": SYSTEM_PROMPT
+                + "\nCurrent mode: "
+                + mode
+                + ". "
+                + MODE_INSTRUCTIONS[mode]
+                + "\nAction schema:\n"
+                + schema,
+            },
+            {"role": "user", "content": json.dumps({"mode": mode, "research_goal": goal.strip()})},
         ]
         discovered: dict[str, SourceReference] = {}
         sources: dict[str, SourceDocument] = {}
         purposes: set[str] = set()
+        selections: list[FieldSelection] = []
         events: list[ResearchEvent] = []
         calls = input_tokens = output_tokens = unknown_usage = actions = repairs = 0
 
@@ -173,13 +266,15 @@ class ResearchController:
         def result(
             status: str,
             *,
-            finding: BridgeFinding | InsufficientFinding | None = None,
+            finding: BridgeFinding | AnswerFinding | InsufficientFinding | None = None,
             quotes: tuple[VerifiedQuote, ...] = (),
             error_code: str | None = None,
         ) -> ResearchResult:
             return ResearchResult(
                 status=status,
+                mode=mode,
                 finding=finding,
+                field_selections=tuple(selections),
                 quotes=quotes,
                 sources=tuple(sources.values()),
                 events=tuple(events),
@@ -197,7 +292,10 @@ class ResearchController:
             repairs += 1
             await event("action_rejected", "Rejected an invalid action or unsupported evidence.")
             observation(
-                {"error": code, "instruction": "Choose a valid action or reject the bridge."}
+                {
+                    "error": code,
+                    "instruction": "Choose a valid action or conclude insufficient_evidence.",
+                }
             )
             return repairs > self.limits.max_repairs
 
@@ -239,7 +337,31 @@ class ResearchController:
                     return result("failed", error_code="repair_limit")
                 continue
             actions += 1
-            if isinstance(action, SearchAction):
+            if isinstance(action, SelectFieldsAction):
+                if mode != "surprise":
+                    if await reject("field_selection_wrong_mode"):
+                        return result("failed", error_code="repair_limit")
+                    continue
+                if len(selections) >= 3:
+                    if await reject("field_selection_limit"):
+                        return result("failed", error_code="repair_limit")
+                    continue
+                selection = FieldSelection(fields=action.fields, rationale=action.rationale)
+                selections.append(selection)
+                purposes.clear()
+                observation({"kind": "fields_selected", **selection.model_dump(mode="json")})
+                await event(
+                    "fields_selected",
+                    f"Selected fields: {', '.join(selection.fields)}. {selection.rationale}",
+                )
+            elif (
+                isinstance(action, (SearchAction, ReadAction))
+                and mode == "surprise"
+                and not selections
+            ):
+                if await reject("fields_not_selected"):
+                    return result("failed", error_code="repair_limit")
+            elif isinstance(action, SearchAction):
                 try:
                     search_result = await asyncio.wait_for(
                         self.tools.search(action.query, action.purpose),
@@ -315,15 +437,28 @@ class ResearchController:
                     await event("concluded", "Concluded that the evidence is insufficient.")
                     return result("insufficient_evidence", finding=action.conclusion)
                 try:
-                    quotes = _verify_evidence(action.conclusion, sources, purposes)
+                    if isinstance(action.conclusion, AnswerFinding):
+                        if mode != "ask":
+                            raise ValueError("answer_wrong_mode")
+                        if _normalized_text(action.conclusion.question) != _normalized_text(goal):
+                            raise ValueError("answer_question_mismatch")
+                        quotes = _verify_answer_evidence(action.conclusion, sources, purposes)
+                    else:
+                        if mode == "ask":
+                            raise ValueError("bridge_wrong_mode")
+                        if mode == "surprise":
+                            _verify_surprise_fields(action.conclusion, tuple(selections))
+                        quotes = _verify_evidence(action.conclusion, sources, purposes)
                 except ValueError as exc:
                     if await reject(str(exc)):
                         return result("failed", error_code="repair_limit")
                     continue
                 await event(
                     "concluded",
-                    "Recorded a candidate bridge with source-matched quotations and limitations.",
+                    "Recorded an answer with source-matched claims and explicit uncertainty."
+                    if isinstance(action.conclusion, AnswerFinding)
+                    else "Recorded a candidate bridge with matching quotations and limitations.",
                 )
-                return result("bridge", finding=action.conclusion, quotes=quotes)
+                return result(action.conclusion.outcome, finding=action.conclusion, quotes=quotes)
         await event("stopped", "Stopped at the configured research call or action limit.")
         return result("limit_reached", error_code="research_limit")
