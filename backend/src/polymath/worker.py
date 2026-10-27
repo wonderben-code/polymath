@@ -159,7 +159,7 @@ class _RecordedModel:
         request_id = f"model-{self.step:04d}"
         request_hash = _digest(
             {
-                "protocol": "polymath-worker-v1",
+                "protocol": "polymath-worker-modes-v2",
                 "model_identity": self.policy.model_identity,
                 "endpoint": META_COMPLETIONS_URL,
                 "stream": False,
@@ -368,6 +368,7 @@ class ResearchWorker:
         context = _RunContext(self.engine, lease, self.policy.lease_seconds)
         parent = asyncio.current_task()
         lost = asyncio.Event()
+        closing = asyncio.Event()
 
         async def heartbeat() -> None:
             while True:
@@ -379,6 +380,8 @@ class ResearchWorker:
                         lease_seconds=self.policy.lease_seconds,
                     )
                 except Exception:
+                    if closing.is_set():
+                        return
                     lost.set()
                     if parent is not None:
                         parent.cancel()
@@ -389,7 +392,7 @@ class ResearchWorker:
                 await asyncio.to_thread(
                     self.jobs.append_event,
                     lease,
-                    event_key=f"controller:v1:{item.sequence}",
+                    event_key=f"controller:v2:{item.sequence}",
                     kind=item.kind,
                     summary=item.summary,
                 )
@@ -397,17 +400,23 @@ class ResearchWorker:
                 raise ExecutionStopped("ownership_lost") from None
 
         pulse = asyncio.create_task(heartbeat())
+
+        async def stop_heartbeat() -> None:
+            closing.set()
+            pulse.cancel()
+            with suppress(asyncio.CancelledError):
+                await pulse
+
         try:
             snapshot = await context.checkpoint()
-            if snapshot.mode != "explore":
-                await asyncio.to_thread(
-                    self.jobs.finish,
-                    lease,
-                    status="failed",
-                    outcome={"error_code": "unsupported_research_mode"},
-                )
-                return WorkerOutcome("failed", str(lease.run_id))
-            fingerprint = _digest({"policy": asdict(self.policy), "limits": asdict(self.limits)})
+            fingerprint = _digest(
+                {
+                    "protocol": "polymath-worker-modes-v2",
+                    "mode": snapshot.mode,
+                    "policy": asdict(self.policy),
+                    "limits": asdict(self.limits),
+                }
+            )
             existing = snapshot.checkpoint.get("worker_protocol")
             if existing is not None and existing != fingerprint:
                 raise ExecutionStopped("worker_protocol_changed")
@@ -436,13 +445,14 @@ class ResearchWorker:
                 self.limits,
                 on_event=public_event,
             )
-            result = await controller.investigate(snapshot.goal)
+            result = await controller.investigate(snapshot.goal, mode=snapshot.mode)
             await context.check_owner()
             current = await asyncio.to_thread(self.jobs.get, lease.run_id)
             if current.external_request_in_flight:
                 raise ExecutionStopped("external_outcome_unknown")
             saved = await asyncio.to_thread(context.evidence.save_result, lease, result)
             status = "failed" if result.status == "failed" else "succeeded"
+            await stop_heartbeat()
             await asyncio.to_thread(
                 self.jobs.finish,
                 lease,
@@ -456,6 +466,7 @@ class ResearchWorker:
             )
             return WorkerOutcome(status, str(lease.run_id), str(saved.id))
         except (ExecutionStopped, asyncio.CancelledError):
+            await stop_heartbeat()
             await self._stop(lease)
             if not lost.is_set() and asyncio.current_task().cancelling():
                 raise
@@ -463,14 +474,13 @@ class ResearchWorker:
                 (await asyncio.to_thread(self.jobs.get, lease.run_id)).status, str(lease.run_id)
             )
         except Exception:
+            await stop_heartbeat()
             await self._stop(lease)
             return WorkerOutcome(
                 (await asyncio.to_thread(self.jobs.get, lease.run_id)).status, str(lease.run_id)
             )
         finally:
-            pulse.cancel()
-            with suppress(asyncio.CancelledError):
-                await pulse
+            await stop_heartbeat()
 
     async def _stop(self, lease: JobLease) -> None:
         snapshot = await asyncio.to_thread(self.jobs.get, lease.run_id)

@@ -29,6 +29,7 @@ from polymath.evidence_models import (
 )
 from polymath.jobs import JobLease, _owned
 from polymath.research.models import (
+    AnswerFinding,
     BridgeFinding,
     InsufficientFinding,
     ResearchResult,
@@ -245,7 +246,14 @@ class EvidenceStore:
             raise EvidenceError("invalid_research_result") from None
         self._validate_result_shape(result)
         with Session(self.engine) as session, session.begin():
-            _owned(session, lease)
+            run = _owned(session, lease)
+            if result.mode != run.mode:
+                raise EvidenceError("result_mode_mismatch")
+            if isinstance(result.finding, AnswerFinding) and (
+                " ".join(result.finding.question.split()).casefold()
+                != " ".join(run.goal.split()).casefold()
+            ):
+                raise EvidenceError("answer_question_mismatch")
             source_map = {}
             refs = []
             for document in result.sources:
@@ -295,6 +303,7 @@ class EvidenceStore:
                         version_id=version.id,
                         retrieval_id=retrieval.id,
                         side=quote.side,
+                        claim_id=quote.claim_id,
                         quote=quote.quote,
                         supports=quote.supports,
                         start_offset=quote.start,
@@ -317,30 +326,57 @@ class EvidenceStore:
         ):
             raise EvidenceError("invalid_result_events")
         if result.status == "bridge":
-            if not isinstance(result.finding, BridgeFinding):
+            if not isinstance(result.finding, BridgeFinding) or result.mode == "ask":
+                raise EvidenceError("invalid_result_finding")
+        elif result.status == "answer":
+            if not isinstance(result.finding, AnswerFinding) or result.mode != "ask":
                 raise EvidenceError("invalid_result_finding")
         elif result.status == "insufficient_evidence":
             if not isinstance(result.finding, InsufficientFinding) or result.quotes:
                 raise EvidenceError("invalid_result_finding")
         elif result.finding is not None or result.quotes:
             raise EvidenceError("invalid_result_finding")
+        if result.mode != "surprise" and result.field_selections:
+            raise EvidenceError("unexpected_field_selection")
+        if len(result.field_selections) > 3:
+            raise EvidenceError("field_selection_limit")
+        if result.mode == "surprise" and result.status == "bridge":
+            if not result.field_selections:
+                raise EvidenceError("missing_field_selection")
+            selected = {
+                " ".join(field.split()).casefold() for field in result.field_selections[-1].fields
+            }
+            if not {
+                " ".join(result.finding.field_left.split()).casefold(),
+                " ".join(result.finding.field_right.split()).casefold(),
+            }.issubset(selected):
+                raise EvidenceError("bridge_fields_not_selected")
 
     @staticmethod
     def _validate_quotes(result: ResearchResult, sources: dict):
-        if result.status != "bridge":
+        if result.status not in {"bridge", "answer"}:
             return []
-        if len(result.quotes) != len(result.finding.evidence):
+        if isinstance(result.finding, AnswerFinding):
+            expected = [
+                (evidence, "answer", claim.id)
+                for claim in result.finding.claims
+                for evidence in claim.evidence
+            ]
+        else:
+            expected = [(evidence, evidence.side, None) for evidence in result.finding.evidence]
+        if len(result.quotes) != len(expected):
             raise EvidenceError("missing_verified_quotes")
         rows = []
         sides = {"left": set(), "right": set()}
-        for evidence, quote in zip(result.finding.evidence, result.quotes, strict=True):
+        claim_sources: dict[str, set[str]] = {}
+        for (evidence, side, claim_id), quote in zip(expected, result.quotes, strict=True):
             source = sources.get(quote.source_id)
             if source is None:
                 raise EvidenceError("quote_source_not_observed")
             version, retrieval = source
             if (
-                (quote.source_id, quote.side, quote.quote, quote.supports)
-                != (evidence.source_id, evidence.side, evidence.quote, evidence.supports)
+                (quote.source_id, quote.side, quote.claim_id, quote.quote, quote.supports)
+                != (evidence.source_id, side, claim_id, evidence.quote, evidence.supports)
                 or quote.source_sha256 != version.content_sha256
                 or quote.content_kind != version.content_kind
                 or type(quote.start) is not int
@@ -349,9 +385,18 @@ class EvidenceStore:
                 or version.source_text[quote.start : quote.end] != quote.quote
             ):
                 raise EvidenceError("quote_integrity_failed")
-            sides[quote.side].add(retrieval.url)
+            if side == "answer":
+                claim_sources.setdefault(claim_id, set()).add(retrieval.url)
+            else:
+                sides[side].add(retrieval.url)
             rows.append((quote, version, retrieval))
-        if (
+        if result.status == "answer":
+            if any(
+                claim.label == "postulated" and len(claim_sources.get(claim.id, ())) < 2
+                for claim in result.finding.claims
+            ):
+                raise EvidenceError("postulated_distinct_sources_required")
+        elif (
             not sides["left"]
             or not sides["right"]
             or not any(left != right for left in sides["left"] for right in sides["right"])

@@ -75,7 +75,7 @@ class EvidenceResult(Base):
         UniqueConstraint("run_id", "content_sha256", name="uq_evidence_result"),
         UniqueConstraint("id", "run_id", name="uq_evidence_result_run"),
         CheckConstraint(
-            "status IN ('bridge', 'insufficient_evidence', 'limit_reached', 'failed')",
+            "status IN ('bridge', 'answer', 'insufficient_evidence', 'limit_reached', 'failed')",
             name="ck_evidence_result_status",
         ),
     )
@@ -102,7 +102,11 @@ class EvidenceQuote(Base):
             ["version_id", "retrieval_id"],
             ["evidence_source_retrievals.version_id", "evidence_source_retrievals.id"],
         ),
-        CheckConstraint("side IN ('left', 'right')", name="ck_evidence_quote_side"),
+        CheckConstraint("side IN ('left', 'right', 'answer')", name="ck_evidence_quote_side"),
+        CheckConstraint(
+            "(side = 'answer' AND claim_id IS NOT NULL) OR (side <> 'answer' AND claim_id IS NULL)",
+            name="ck_evidence_quote_claim",
+        ),
         CheckConstraint("start_offset >= 0 AND end_offset > start_offset", name="ck_quote_offsets"),
     )
 
@@ -112,6 +116,7 @@ class EvidenceQuote(Base):
     version_id: Mapped[uuid.UUID] = mapped_column(Uuid)
     retrieval_id: Mapped[uuid.UUID] = mapped_column(Uuid)
     side: Mapped[str] = mapped_column(String(8))
+    claim_id: Mapped[str | None] = mapped_column(String(100))
     quote: Mapped[str] = mapped_column(Text)
     supports: Mapped[str] = mapped_column(Text)
     start_offset: Mapped[int] = mapped_column(Integer)

@@ -2,6 +2,7 @@
 
 import asyncio
 import os
+import time
 import uuid
 from pathlib import Path
 
@@ -12,6 +13,7 @@ from sqlalchemy import create_engine, select, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
 from test_research_controller import AdaptiveFixture, Tools
+from test_research_modes import AskFixtureModel, ModeFixtureTools, SurpriseFixtureModel
 
 from polymath.budget import BudgetService
 from polymath.budget_models import BudgetReservation
@@ -205,12 +207,71 @@ async def test_restart_replays_observed_model_response_without_duplicate_charge(
 
 
 @pytest.mark.asyncio
-async def test_unsupported_mode_fails_explicitly_without_model_calls(database):
-    run = JobRepository(database).create(mode="ask", goal="Synthetic unsupported-mode exercise")
-    outcome = await setup_worker(database, AdaptiveFixture()).run_once("fixture-worker")
-    assert outcome.status == "failed"
-    assert JobRepository(database).get(run.id).outcome["error_code"] == "unsupported_research_mode"
-    assert BudgetService(database).usage("fixture").reservations == 0
+@pytest.mark.parametrize(
+    "mode,goal", [("ask", "What do synthetic sources support?"), ("surprise", "")]
+)
+async def test_question_and_autonomous_field_modes_persist_real_job_artifacts(database, mode, goal):
+    jobs = JobRepository(database)
+    run = jobs.create(mode=mode, goal=goal)
+    model = AskFixtureModel() if mode == "ask" else SurpriseFixtureModel()
+    worker = setup_worker(database, model, tools_factory=lambda _: ModeFixtureTools())
+    outcome = await worker.run_once("fixture-mode-worker")
+    assert outcome.status == "succeeded"
+    saved = EvidenceStore(database).get_result(run.id, uuid.UUID(outcome.result_id))
+    assert saved.payload["mode"] == mode
+    if mode == "ask":
+        assert saved.payload["status"] == "answer"
+        assert {claim["label"] for claim in saved.payload["finding"]["claims"]} == {
+            "known",
+            "postulated",
+            "speculative",
+        }
+        assert all(quote["claim_id"] for quote in saved.payload["quotes"])
+    else:
+        assert saved.payload["status"] == "bridge"
+        assert len(saved.payload["field_selections"]) == 1
+        assert any(event.kind == "fields_selected" for event in jobs.events_after(run.id))
+    assert BudgetService(database).usage("fixture").reservations == len(model.seen)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mode", ["ask", "surprise"])
+async def test_new_mode_restart_replays_old_selection_and_usage_without_recharging(database, mode):
+    class PausingTools(ModeFixtureTools):
+        def __init__(self):
+            super().__init__()
+            self.started = asyncio.Event()
+
+        async def read(self, source_id):
+            if source_id == "right":
+                self.started.set()
+                await asyncio.Event().wait()
+            return await super().read(source_id)
+
+    jobs = JobRepository(database)
+    run = jobs.create(mode=mode, goal="Synthetic mode restart" if mode == "ask" else "")
+    factory = AskFixtureModel if mode == "ask" else SurpriseFixtureModel
+    first, tools = factory(), PausingTools()
+    worker = setup_worker(database, first, tools_factory=lambda _: tools)
+    task = asyncio.create_task(worker.run_once("fixture-mode-first"))
+    await asyncio.wait_for(tools.started.wait(), timeout=5)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    interrupted = jobs.get(run.id)
+    assert interrupted.status == "interrupted"
+    jobs.resume_interrupted(run.id, expected_token=interrupted.lease_token)
+    second = factory()
+    worker.model_factory = lambda _: second
+    worker.tools_factory = lambda _: ModeFixtureTools()
+    outcome = await worker.run_once("fixture-mode-second")
+    assert outcome.status == "succeeded"
+    total = len(first.seen) + len(second.seen)
+    assert BudgetService(database).usage("fixture").reservations == total
+    assert BudgetService(database).usage("fixture").committed_microdollars == 25 * total
+    saved = EvidenceStore(database).get_result(run.id, uuid.UUID(outcome.result_id))
+    if mode == "surprise":
+        assert len(saved.payload["field_selections"]) == 1
 
 
 @pytest.mark.asyncio
@@ -225,6 +286,27 @@ async def test_worker_cannot_bypass_disabled_budget_account(database):
     assert model.seen == []
     assert not jobs.get(run.id).external_request_in_flight
     assert BudgetService(database).usage("fixture").reservations == 0
+
+
+@pytest.mark.asyncio
+async def test_heartbeat_cannot_cancel_worker_while_it_records_its_own_stop(database):
+    jobs = JobRepository(database)
+    run = jobs.create(mode="explore", goal="Synthetic slow cleanup exercise")
+    worker = setup_worker(database, AdaptiveFixture())
+    BudgetService(database).disable_execution("fixture")
+    interrupt = worker.jobs.interrupt
+
+    def slow_interrupt(lease):
+        stopped = interrupt(lease)
+        # A heartbeat after this terminal transition must not cancel the parent
+        # while it is retaining and returning the interruption record.
+        time.sleep(0.15)
+        return stopped
+
+    worker.jobs.interrupt = slow_interrupt
+    outcome = await worker.run_once("fixture-worker")
+    assert outcome.status == "interrupted"
+    assert jobs.get(run.id).status == "interrupted"
 
 
 @pytest.mark.asyncio
