@@ -20,6 +20,7 @@ from polymath.research.models import (
     ResearchEvent,
     ResearchResult,
     SearchAction,
+    SearchResults,
     SourceDocument,
     SourceReference,
     Usage,
@@ -28,7 +29,7 @@ from polymath.research.models import (
 
 
 class LiteratureTools(Protocol):
-    async def search(self, query: str, purpose: str) -> list[SourceReference]: ...
+    async def search(self, query: str, purpose: str) -> SearchResults | list[SourceReference]: ...
 
     async def read(self, source_id: str) -> SourceDocument: ...
 
@@ -230,10 +231,16 @@ class ResearchController:
             actions += 1
             if isinstance(action, SearchAction):
                 try:
-                    matches = await asyncio.wait_for(
+                    search_result = await asyncio.wait_for(
                         self.tools.search(action.query, action.purpose),
                         timeout=self.limits.tool_timeout_seconds,
                     )
+                    failures = ()
+                    if isinstance(search_result, SearchResults):
+                        matches = list(search_result.sources)
+                        failures = search_result.provider_failures
+                    else:
+                        matches = search_result
                     if not isinstance(matches, list) or len(matches) > 10:
                         raise ValueError("invalid_search_result")
                     if not all(isinstance(item, SourceReference) for item in matches):
@@ -251,11 +258,13 @@ class ResearchController:
                             "kind": "search_results",
                             "purpose": action.purpose,
                             "sources": [item.model_dump(mode="json") for item in matches],
+                            "provider_failures": [item.model_dump() for item in failures],
                         }
                     )
                     event(
                         "search_completed",
-                        f"Searched literature for {action.purpose}; found {len(matches)} sources.",
+                        f"Searched literature for {action.purpose}; found {len(matches)} sources."
+                        + (" Some providers were unavailable." if failures else ""),
                     )
                 except Exception:
                     observation({"error": "literature_search_failed"})

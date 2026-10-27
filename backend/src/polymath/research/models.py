@@ -22,6 +22,24 @@ class SourceReference(StrictModel):
     url: Annotated[str, StringConstraints(pattern=r"^https://[^\s]+$", max_length=2000)]
 
 
+class ProviderFailure(StrictModel):
+    provider: Literal["openalex", "arxiv"]
+    code: Literal[
+        "access_denied",
+        "rate_limited",
+        "timeout",
+        "transport_error",
+        "invalid_response",
+        "response_too_large",
+        "source_unavailable",
+    ]
+
+
+class SearchResults(StrictModel):
+    sources: Annotated[tuple[SourceReference, ...], Field(max_length=10)]
+    provider_failures: Annotated[tuple[ProviderFailure, ...], Field(max_length=2)] = ()
+
+
 class SourceDocument(SourceReference):
     text: Annotated[str, Field(min_length=1, max_length=20_000)]
     content_kind: Literal["abstract", "full_text"]

@@ -4,7 +4,7 @@ Last updated: 27 October 2026 (Bangkok). This file records verified outcomes; [B
 
 ## Current position
 
-**Stage: application foundation (A3), research-controller prototype (A4), and internal durable-job/budget services implemented and locally validated. Live research is not enabled.**
+**Stage: application foundation (A3), research-controller prototype (A4), internal durable-job/budget services, and abstract-reading literature adapters implemented and locally validated. Live research is not enabled.**
 
 Scope: the complete product, including Surprise Me, the knowledge base, map, and connections between connections. Meta intelligence controls research. See [ARCHITECTURE.md](ARCHITECTURE.md).
 
@@ -20,7 +20,7 @@ Scope: the complete product, including Surprise Me, the knowledge base, map, and
 | Cloud tooling | Partially verified | Git read access worked; OpenTimestamps 0.7.2 installed; all four local proofs parsed and matched commit-hash payloads; install script reran successfully |
 | A — Real Meta research path | A3/A4 complete; live checks blocked | Foundation and adaptive-controller prototype implemented; actual model authentication/capabilities and real-source investigation still unverified |
 | B — Durable research and controls | B2/B3 internal services verified; execution integration pending | 12 real PostgreSQL job tests and 24 budget tests passed, including concurrency, fencing, recovery, unknown costs, and rollover; integrated worker, full evidence store, and public execution still pending |
-| C — Explore | Not started | Complete real-source browser investigation |
+| C — Explore | C1 partially implemented | Abstract adapters and explicit provider-coverage diagnostics tested; live access, full text, durable evidence storage, and the complete research journey pending |
 | D — Public deployment and API | Not started | Host selection, public URL, quota controls, persistence/recovery |
 | E — Ask and Surprise Me | Not started | Both modes working end to end |
 | F — Knowledge base, map, higher-level research | Not started | Scheduled ingestion/reassessment and navigable evidence graph |
@@ -61,5 +61,7 @@ Track: real source identity, quote integrity, claim support, mapping assumptions
 | 27 Oct 2026 | Pushed application foundation `c259968` and research prototype `1b1e0d4` to main; preserved and integrated automatic timestamp commits | First two implementation milestones saved remotely |
 | 27 Oct 2026 | Owner instructed continuing without paid calls; began durable-job, budget, and literature-tool work | No paid model execution is authorized at this stage |
 | 27 Oct 2026 | B2/B3 internal services: 12 job and 24 budget tests passed on real PostgreSQL, including threaded races, stale workers, cancellation, ambiguous external outcomes, day rollover, and migration reversibility | Repository invariants verified. Integrated worker, authorization, real model usage/pricing, and actual paid dispatch remain unverified; B2/B3 full workflow gates stay open. |
+| 27 Oct 2026 | Partial C1: 73 synthetic HTTP fixture cases passed; controller forwards partial-provider failures and rejects invented/unread evidence | Abstract retrieval/provenance, DOI deduplication, input/response limits, XML hardening, and snapshot stability verified with fixtures; no live literature/model integration claimed |
+| 27 Oct 2026 | Full local check: `make check`, `make test` (120 backend + 6 frontend), `TEST_DATABASE_URL=... make integration` (37 real PostgreSQL tests), and `make build` passed | 157 backend tests plus 6 frontend tests passed; upstream Starlette TestClient deprecation warning remains. Hosted CI outcome is still unverified. |
 
 For subsequent implementation, append the task IDs, commit, exact meaningful checks and outcomes, deployed evidence where applicable, and remaining limitations. Keep planned, passed, failed, blocked, skipped, and unrun results distinct.

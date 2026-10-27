@@ -71,6 +71,12 @@ Settings load from the process and optionally `.env` in the working directory. `
 
 These are internal services, not authenticated operator/public endpoints. Do not assemble independent job and budget method calls into a live worker without a coordinated dispatch transaction and cancellation/recovery policy. That integration and its tests remain required. The current application still exposes no research submission endpoint or worker process. All ledger tests use synthetic amounts; they perform no paid requests.
 
+## Literature tools
+
+The [literature package](../backend/src/polymath/literature/README.md) implements fixed-host OpenAlex/arXiv searches and abstract snapshots. It does not fetch arbitrary paper URLs or claim to have read full text. Retrieved abstracts retain their identity, time, extraction method, and hash; reads require prior discovery in the same tool instance. First readable snapshots are frozen within an investigation. DOI-based deduplication reduces counting one paper twice, but is not complete identity resolution.
+
+`SearchResults` includes typed provider-failure diagnostics. The controller forwards partial coverage to the model; an all-provider outage is an error, not evidence of no relevant literature. Safe authenticated OpenAlex access, live provider checks, full-text extraction, and persistent source versions remain incomplete. All current literature tests use synthetic HTTP fixtures without paid/model requests.
+
 ## Meta integration prerequisites
 
 `MODEL_API_KEY` and an explicitly verified `META_MODEL` are required for real model access. The prototype targets the repository's proposed HTTPS endpoint on `api.meta.ai`; actual capabilities and model IDs still need live verification. No model ID is guessed by default, no non-Meta fallback is configured, and no paid calls run from startup, CI, or the web page.

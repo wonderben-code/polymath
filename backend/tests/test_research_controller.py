@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 import pytest
 
 from polymath.research import ModelError, ModelReply, ResearchController, ResearchLimits
-from polymath.research.models import SourceDocument, SourceReference
+from polymath.research.models import ProviderFailure, SearchResults, SourceDocument, SourceReference
 
 LEFT_QUOTE = "Shared redundancy protects messages against corruption."
 RIGHT_QUOTE = "Redundant biochemical pathways protect signals against perturbations."
@@ -144,6 +144,45 @@ class AdaptiveFixture:
         else:
             action = bridge()
         return ModelReply(json.dumps(action), 10, 15)
+
+
+@pytest.mark.asyncio
+async def test_partial_provider_failure_is_visible_to_model_and_activity():
+    class PartialTools(Tools):
+        async def search(self, query, purpose):
+            return SearchResults(
+                sources=tuple(await super().search(query, purpose)),
+                provider_failures=(ProviderFailure(provider="arxiv", code="rate_limited"),),
+            )
+
+    class CoverageAwareFixture:
+        async def complete(self, messages, *, max_output_tokens):
+            observation = json.loads(messages[-1]["content"]).get("observation")
+            if observation is None:
+                action = {
+                    "kind": "search_literature",
+                    "query": "fixture redundancy",
+                    "purpose": "discovery",
+                }
+            else:
+                assert observation["provider_failures"] == [
+                    {"provider": "arxiv", "code": "rate_limited"}
+                ]
+                assert len(observation["sources"]) == 2
+                action = {
+                    "kind": "conclude",
+                    "conclusion": {
+                        "outcome": "insufficient_evidence",
+                        "reason": "Fixture search coverage is incomplete.",
+                    },
+                }
+            return ModelReply(json.dumps(action), 10, 15)
+
+    result = await ResearchController(CoverageAwareFixture(), PartialTools()).investigate(
+        "A synthetic partial-provider exercise"
+    )
+    assert result.status == "insufficient_evidence"
+    assert any("Some providers were unavailable" in event.summary for event in result.events)
 
 
 @pytest.mark.asyncio

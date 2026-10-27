@@ -46,7 +46,7 @@ The implementation baseline is recorded in `docs/ARCHITECTURE.md`. The target is
 - [ ] G: Formalise, Write, and approval-gated Publish
 - [ ] H: complete-product validation, polish, and submission
 
-The application foundation is implemented: a responsive research workspace, FastAPI backend, PostgreSQL schema/migrations, locked dependencies, and a locally tested container stack. Live investigations remain unavailable while Meta access and execution/spending controls are completed. See the [development guide](docs/DEVELOPMENT.md) to run it and the [progress tracker](docs/PROGRESS.md) for verified outcomes and remaining work.
+The application foundation is implemented: a responsive research workspace, FastAPI backend, PostgreSQL schema/migrations, locked dependencies, and a locally tested container stack. Internal job/budget services and abstract-reading literature adapters are tested; integrated worker execution, full-text retrieval, and live Meta access remain incomplete. Live investigations are unavailable, and paid calls are disabled per the owner's instruction. See the [development guide](docs/DEVELOPMENT.md) to run it and the [progress tracker](docs/PROGRESS.md) for evidence and remaining work.
 
 ## Licence
 Apache 2.0. See [LICENSE](LICENSE).

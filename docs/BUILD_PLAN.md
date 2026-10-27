@@ -32,7 +32,7 @@ Gate: a research job survives a worker restart or fails explicitly with retained
 
 Dependencies: A5, B1–B5.
 
-- [ ] **C1 — Integrate literature providers.** Start with OpenAlex discovery and accessible arXiv/open-access text. Verify provider requirements, canonical identifiers, deduplication, rate-limit handling, and abstract/full-text distinctions.
+- [ ] **C1 — Integrate literature providers.** Fixed-host OpenAlex/arXiv abstract adapters implemented with canonical identities/DOI deduplication, bounded reads, preserved first snapshots, and explicit partial-provider failures; 73 synthetic fixture tests passed. Remaining: live provider verification, extended bibliographic metadata, safe verified authentication where required, accessible full-text retrieval, and durable source storage. Abstract support must never be described as full-text support.
 - [ ] **C2 — Build evidence validation.** Persist exact passages and locations; check quotations against retrieved text; reject nonexistent sources and unsupported references; version corrections.
 - [ ] **C3 — Build the adaptive investigation policy.** Support branching hypotheses, counterevidence, prior-connection searches, revisions, stopping conditions, and useful empty outcomes.
 - [ ] **C4 — Build the research workspace.** Implement concept entry, live events, cancellation, saved run history, bridge cards, side-by-side mappings, evidence inspection, objections, and assessment limitations. Make it accessible on desktop and mobile.
