@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { loadSystemStatus } from './api'
 import type { SystemStatus } from './api'
+import { ResearchRunView } from './research'
+import { useResearchWorkspace } from './research/useResearchWorkspace'
 
 type Mode = 'explore' | 'ask' | 'surprise'
 
@@ -67,6 +69,10 @@ export function App() {
   const [retry, setRetry] = useState(0)
   const [notice, setNotice] = useState('')
   const content = copy[mode]
+  const workspace = useResearchWorkspace(
+    connection === 'connected' && !!system?.database && system.migrations,
+    !!system?.researchAvailable,
+  )
 
   useEffect(() => {
     const controller = new AbortController()
@@ -96,16 +102,18 @@ export function App() {
     }
   }, [retry])
 
-  // Job submission is intentionally unavailable until the real research endpoint exists.
-  // The server's capability flag alone must never turn an unimplemented path into a launch.
-  const researchConnected = false
+  // The server defaults to unavailable. A real cookie-owned session and healthy
+  // storage are required as well; a capability flag alone cannot create a job.
+  const researchConnected = workspace.canSubmit && (mode === 'surprise' || !!prompts[mode].trim())
   const unavailable = connection === 'offline'
     ? 'The research service could not be reached. Check the connection and try again.'
     : 'Live investigations are not available yet. The research engine is being connected.'
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    setNotice(unavailable)
+    if (!researchConnected) { setNotice(unavailable); return }
+    setNotice('')
+    void workspace.submit(mode, prompts[mode])
   }
 
   return (
@@ -154,7 +162,7 @@ export function App() {
                   <div className="prompt-footer">
                     <span>Curiosity starts here</span>
                     <button className="primary-button" type="submit" disabled={!researchConnected}
-                      aria-describedby="research-availability">{content.action}<Arrow /></button>
+                      aria-describedby="research-availability">{workspace.submitting ? 'Queuing investigation…' : content.action}<Arrow /></button>
                   </div>
                 </div>
                 <p id="prompt-note" className="prompt-note">{content.note}</p>
@@ -173,14 +181,14 @@ export function App() {
 
               <div className="availability-note" id="research-availability" role="status">
                 <span className="small-star" aria-hidden="true">✳︎</span>
-                <p>{connection === 'loading' ? 'Checking the research service…' : unavailable}</p>
+                <p>{connection === 'loading' ? 'Checking the research service…' : workspace.canSubmit ? 'Research is available. Your investigation will be saved to this browser session.' : unavailable}</p>
               </div>
               {notice && <p role="alert">{notice}</p>}
             </section>
 
             <aside className="desk-sidebar" aria-label="Research desk status">
               <div className="sidebar-heading"><span className="eyebrow">ON YOUR DESK</span><Arrow diagonal /></div>
-              <div className="empty-illustration" aria-hidden="true">
+              {workspace.runs.length === 0 && <><div className="empty-illustration" aria-hidden="true">
                 <svg viewBox="0 0 280 160" fill="none">
                   <path d="M39 102C80 102 80 49 125 49S180 115 231 74M39 102L125 49L231 74M125 49L154 130L231 74M39 102L154 130" stroke="currentColor" strokeWidth="1" />
                   <circle cx="39" cy="102" r="7" /><circle cx="125" cy="49" r="12" /><circle cx="231" cy="74" r="8" /><circle cx="154" cy="130" r="5" />
@@ -190,7 +198,15 @@ export function App() {
               </div>
               <h2>Your next connection<br />starts with a question.</h2>
               <p className="sidebar-description">When an investigation runs, its searches, source passages, and tested connections will appear here.</p>
-              <div className="empty-label"><span className="dot waiting" aria-hidden="true" />No investigation started</div>
+              <div className="empty-label"><span className="dot waiting" aria-hidden="true" />{workspace.phase === 'loading' ? 'Loading saved research…' : workspace.phase === 'error' || workspace.phase === 'expired' ? 'Saved research unavailable' : 'No investigation started'}</div></>}
+
+              <section className="research-history" aria-labelledby="history-title">
+                <div className="system-heading"><h3 id="history-title">Saved investigations</h3><button type="button" className="text-button" disabled={workspace.phase === 'loading' || connection !== 'connected' || !system?.database || !system.migrations} onClick={workspace.refresh}>Reload saved research</button></div>
+                {workspace.phase === 'ready' && workspace.runs.length === 0 && <p className="history-note">No saved investigations in this browser session.</p>}
+                {workspace.runs.length > 0 && <ul aria-label="Your saved investigations">{workspace.runs.map((run) => <li key={run.id}><button type="button" aria-pressed={workspace.selectedId === run.id} onClick={() => workspace.selectRun(run.id)}><span className="history-mode">{run.mode === 'surprise' ? 'Surprise me' : run.mode === 'ask' ? 'Ask' : 'Explore'} · {run.status.replaceAll('_', ' ')}</span><span className="history-goal">{run.goal || 'An open discovery'}</span></button></li>)}</ul>}
+                {workspace.nextCursor && <button className="history-more" type="button" disabled={workspace.loadingMore} onClick={() => void workspace.loadMore()}>{workspace.loadingMore ? 'Loading more…' : 'Load earlier investigations'}</button>}
+                {workspace.error && <p className="history-error" role="alert">{workspace.error}</p>}
+              </section>
 
               <section className="system-status" aria-labelledby="system-title">
                 <div className="system-heading"><h3 id="system-title">Workspace connection</h3>
@@ -208,6 +224,10 @@ export function App() {
               </section>
             </aside>
           </div>
+
+          {workspace.selectedId && !workspace.activeRun && <p className="history-note" role="status">Loading the saved investigation…</p>}
+          {workspace.detailError && <div className="research-detail-error" role="alert"><p>{workspace.detailError}</p>{workspace.selectedId && <button type="button" className="text-button" onClick={() => workspace.selectRun(workspace.selectedId!)}>Reload investigation</button>}</div>}
+          {workspace.activeRun && <ResearchRunView run={workspace.activeRun} events={workspace.events} result={workspace.result} connection={workspace.connection} onCancel={workspace.canCancel ? () => void workspace.cancel() : undefined} cancelling={workspace.cancelling} />}
 
           <section className="approach-section" id="approach" aria-labelledby="approach-title">
             <div className="approach-heading"><span className="eyebrow">HOW WE INVESTIGATE</span><h2 id="approach-title">Follow the evidence.<br /> <em>Keep the questions open.</em></h2></div>

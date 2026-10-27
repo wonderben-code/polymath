@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { App } from './App'
@@ -28,6 +28,8 @@ function mockServer({ ready = true, metaConfigured = false, researchAvailable = 
         meta_configured: metaConfigured,
       })
     }
+    if (path === '/api/v1/session') return Response.json({ csrf_token: 'a'.repeat(64), expires_at: '2100-01-01T00:00:00Z' })
+    if (path === '/api/v1/runs') return Response.json({ runs: [], next_cursor: null })
     throw new Error(`Unexpected request: ${path}`)
   })
   vi.stubGlobal('fetch', mockFetch)
@@ -43,10 +45,11 @@ describe('research workspace', () => {
     expect(await screen.findByText('Connected')).toBeInTheDocument()
     expect(screen.getByText('Ready')).toBeInTheDocument()
     expect(screen.getByText('Not configured')).toBeInTheDocument()
+    expect(await screen.findByText('No saved investigations in this browser session.')).toBeInTheDocument()
     expect(screen.getByText('No investigation started')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Explore connections' })).toBeDisabled()
     expect(screen.getByRole('status')).toHaveTextContent('Live investigations are not available yet')
-    expect(requests).toHaveBeenCalledTimes(3)
+    expect(requests).toHaveBeenCalledTimes(5)
   })
 
   it('switches research modes and preserves each draft without launching an investigation', async () => {
@@ -54,6 +57,7 @@ describe('research workspace', () => {
     const requests = mockServer()
     render(<App />)
     await screen.findByText('Connected')
+    await screen.findByText('No saved investigations in this browser session.')
     await user.click(screen.getByRole('button', { name: /Error-correcting codes/ }))
     expect(screen.getByRole('textbox')).toHaveValue('Error-correcting codes')
 
@@ -72,7 +76,7 @@ describe('research workspace', () => {
     expect(screen.getByRole('textbox')).toHaveValue('Error-correcting codes')
     await user.click(screen.getByRole('button', { name: /02Ask/ }))
     expect(screen.getByRole('textbox')).toHaveValue('Why do systems sleep?')
-    expect(requests).toHaveBeenCalledTimes(3)
+    expect(requests).toHaveBeenCalledTimes(5)
   })
 
   it('distinguishes a database readiness failure from an unreachable application', async () => {
@@ -97,15 +101,18 @@ describe('research workspace', () => {
     expect(screen.getByRole('button', { name: 'Explore connections' })).toBeDisabled()
   })
 
-  it('does not turn a future capability flag into an unimplemented submission path', async () => {
+  it('does not submit a research job while the server execution gate is disabled, even on form submission', async () => {
     const user = userEvent.setup()
-    const requests = mockServer({ researchAvailable: true, metaConfigured: true })
+    const requests = mockServer({ researchAvailable: false, metaConfigured: true })
     render(<App />)
     await screen.findByText('Connected')
+    await screen.findByText('No saved investigations in this browser session.')
+    await user.type(screen.getByRole('textbox'), 'A bounded research question')
     const launch = screen.getByRole('button', { name: 'Explore connections' })
     await user.click(launch)
+    fireEvent.submit(screen.getByRole('textbox').closest('form')!)
     expect(launch).toBeDisabled()
-    expect(requests).toHaveBeenCalledTimes(3)
+    expect(requests).toHaveBeenCalledTimes(5)
   })
 
   it('does not present malformed capability data as a working service', async () => {
