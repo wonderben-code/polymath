@@ -4,13 +4,13 @@ Last updated: 27 October 2026 (Bangkok). This file records verified outcomes; [B
 
 ## Current position
 
-**Stage: application foundation implemented and locally validated (A3). Live research is not enabled.**
+**Stage: application foundation (A3) and research-controller prototype (A4) implemented and locally validated. Live research is not enabled.**
 
 Scope: the complete product, including Surprise Me, the knowledge base, map, and connections between connections. Meta intelligence controls research. See [ARCHITECTURE.md](ARCHITECTURE.md).
 
 **First engineering objective:** A1–A5 in the build plan: establish real Meta access and capabilities, create the application foundation, and complete one bounded research investigation with real sources, a structural mapping, an objection, and an evidence-backed conclusion or honest rejection.
 
-**Next work:** finish the minimal research-controller milestone (A4), verify actual Meta capabilities (A1/A2), and then run the first real investigation (A5). Durable jobs and transactional spending controls (B2/B3) are required before exposing research publicly. No fixture result counts as a completed live investigation.
+**Next work:** verify actual Meta capabilities (A1/A2), add real literature-provider tools, and run the first real investigation (A5). Durable jobs and transactional spending controls (B2/B3) can proceed independently and are required before exposing research publicly. No fixture result counts as a completed live investigation.
 
 ## Milestone status
 
@@ -18,7 +18,7 @@ Scope: the complete product, including Surprise Me, the knowledge base, map, and
 |---|---|---|
 | Repository and planning documents | Complete | Existing specification plus architecture, roadmap, task plan, and tracker in this change |
 | Cloud tooling | Partially verified | Git read access worked; OpenTimestamps 0.7.2 installed; all four local proofs parsed and matched commit-hash payloads; install script reran successfully |
-| A — Real Meta research path | A3 complete; live checks blocked | React/FastAPI/PostgreSQL foundation, tests, CI definition, and local container stack implemented; model authentication/capabilities still unverified |
+| A — Real Meta research path | A3/A4 complete; live checks blocked | Foundation and adaptive-controller prototype implemented; actual model authentication/capabilities and real-source investigation still unverified |
 | B — Durable research and controls | Not started | Jobs, evidence storage, activity, security, budgets |
 | C — Explore | Not started | Complete real-source browser investigation |
 | D — Public deployment and API | Not started | Host selection, public URL, quota controls, persistence/recovery |
@@ -55,5 +55,8 @@ Track: real source identity, quote integrity, claim support, mapping assumptions
 | 27 Oct 2026 | A3: 14 backend unit tests and 1 real PostgreSQL integration test passed; frontend 6 tests and production build passed; container ran as UID 10001 with database/migrations ready and unknown API paths returning 404 | Foundation works locally; no live investigation or public deployment claimed. CI is defined but hosted outcome not yet verified. |
 | 27 Oct 2026 | Container build initially failed certificate validation; mounted the injected cloud proxy CA for package-install steps and rebuilt successfully with verification enabled | Trust problem corrected without disabling verification; CA is not committed or retained in image layers |
 | 27 Oct 2026 | Unauthenticated Meta models request returned HTTP 401; key/model variables absent. Literature and developer-doc requests were proxy-blocked; additive domain requirements saved | Meta network reachability improved; authentication/model/pricing checks still pending. Draft persistence does not establish runtime access to the additional destinations. |
+| 27 Oct 2026 | A4: 32 fixture/mock-HTTP research tests passed; root checks passed with 46 backend unit tests, 1 real PostgreSQL integration test, and 6 frontend tests; Ruff/type checks and production build passed | Prototype validates action flow, evidence identity/quotes, timeouts/limits, and sanitized transport errors. Actual Meta protocol and scientific quality remain unverified. |
+| 27 Oct 2026 | Rebuilt and restarted the non-root container stack; Chromium exercised all three entry modes, prompt switching, real status/retry, disabled launch, and 390px mobile layout; zero console errors/failed requests | Packaged foundation works in a real browser; mode selection is not completed live Explore/Ask/Surprise functionality |
+| 27 Oct 2026 | GitHub Actions API read returned Forbidden | Workflow definition committed and equivalent local checks passed; hosted CI outcome remains unverified, not inferred from Git push success |
 
 For subsequent implementation, append the task IDs, commit, exact meaningful checks and outcomes, deployed evidence where applicable, and remaining limitations. Keep planned, passed, failed, blocked, skipped, and unrun results distinct.

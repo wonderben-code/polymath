@@ -37,6 +37,7 @@ The implementation baseline is recorded in `docs/ARCHITECTURE.md`. The target is
 - [x] What we're building, defined
 - [x] Architecture, full-product roadmap, development plan, and progress tracker recorded
 - [x] A3: application foundation, PostgreSQL migrations, health checks, and automated checks
+- [x] A4: bounded adaptive research-controller prototype and Meta adapter, verified with fixtures
 - [ ] A1–A2, A5: verified Meta capabilities and first real-source investigation
 - [ ] B–C: durable research, evidence, spending controls, and Explore
 - [ ] D: public URL and controlled public API
