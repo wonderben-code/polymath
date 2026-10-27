@@ -52,6 +52,32 @@ function props(overrides: Partial<ResearchRunViewProps> = {}): ResearchRunViewPr
   }
 }
 
+function fixtureAnswer(): ResearchResult {
+  const result = fixtureResult()
+  const [left, right] = result.quotes
+  result.status = 'answer'
+  result.mode = 'ask'
+  result.field_selections = []
+  result.finding = {
+    outcome: 'answer', question: 'What do these synthetic sources support?',
+    summary: 'A synthetic overview of reported evidence, inference, and remaining possibilities.',
+    claims: [
+      { id: 'reported', text: 'The synthetic information source describes redundancy under a specified noise model.', label: 'known', evidence: [{ source_id: left.source_id, quote: left.quote, supports: left.supports }], derivation: null, caveats: [] },
+      { id: 'inferred', text: 'A structural analogy might connect the two synthetic representations.', label: 'postulated', evidence: [{ source_id: left.source_id, quote: left.quote, supports: left.supports }, { source_id: right.source_id, quote: right.quote, supports: right.supports }], derivation: 'This synthetic inference compares redundancy across two mechanisms under explicit assumptions.', caveats: ['The mechanisms are not established as equivalent.'] },
+      { id: 'possible', text: 'The analogy might suggest a useful experiment.', label: 'speculative', evidence: [{ source_id: right.source_id, quote: right.quote, supports: right.supports }], derivation: null, caveats: ['No experiment was carried out in these synthetic fixtures.'] },
+    ],
+    limitations: ['These are synthetic fixtures, not scientific findings.'],
+    unanswered_questions: ['Would the proposed analogy survive a real perturbation experiment?'],
+  }
+  result.quotes = [
+    { ...left, side: 'answer', claim_id: 'reported' },
+    { ...left, side: 'answer', claim_id: 'inferred' },
+    { ...right, side: 'answer', claim_id: 'inferred' },
+    { ...right, side: 'answer', claim_id: 'possible' },
+  ]
+  return result
+}
+
 describe('recorded research view', () => {
   it('shows only actual recorded events in sequence and ignores replay duplicates', () => {
     render(<ResearchRunView {...props({ events: [
@@ -215,5 +241,75 @@ describe('recorded research view', () => {
     expect(screen.getByText('<img src=x onerror=alert(1)>')).toBeInTheDocument()
     expect(document.querySelector('script')).toBeNull()
     expect(document.querySelector('img')).toBeNull()
+  })
+
+  it('presents classified Ask claims with their own source quotations and open questions', async () => {
+    const user = userEvent.setup()
+    render(<ResearchRunView {...props({ run: { ...props().run, mode: 'ask', status: 'succeeded' }, result: fixtureAnswer(), connection: 'closed' })} />)
+    expect(screen.getByRole('heading', { level: 3, name: 'What do these synthetic sources support?' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Model overview' })).toBeInTheDocument()
+    expect(screen.getByText(/These are model assessments, not guarantees of truth/)).toBeInTheDocument()
+    const claims = within(screen.getByRole('list', { name: 'Answer claims' })).getAllByRole('listitem').filter((item) => item.parentElement?.getAttribute('aria-label') === 'Answer claims')
+    expect(claims).toHaveLength(3)
+    expect(within(claims[0]).getByText('Known', { exact: true })).toBeInTheDocument()
+    expect(within(claims[1]).getByText('Postulated', { exact: true })).toBeInTheDocument()
+    expect(within(claims[2]).getByText('Speculative', { exact: true })).toBeInTheDocument()
+    expect(within(claims[1]).getByText(/This synthetic inference compares redundancy/)).toBeInTheDocument()
+    expect(within(claims[2]).getByText('No experiment was carried out in these synthetic fixtures.')).toBeInTheDocument()
+    expect(claims[0].querySelectorAll('summary')).toHaveLength(1)
+    expect(claims[1].querySelectorAll('summary')).toHaveLength(2)
+    await user.click(claims[0].querySelector('summary')!)
+    expect(within(claims[0]).getByText(leftQuote)).toBeVisible()
+    expect(within(claims[0]).getByText('Abstract only')).toBeInTheDocument()
+    expect(screen.getByText('Would the proposed analogy survive a real perturbation experiment?')).toBeInTheDocument()
+    expect(screen.getByRole('list', { name: 'Saved sources' })).toBeInTheDocument()
+  })
+
+  it('does not borrow another claim’s quotation when answer evidence is missing', () => {
+    const result = fixtureAnswer()
+    result.quotes = result.quotes.filter((quote) => quote.claim_id !== 'reported')
+    render(<ResearchRunView {...props({ run: { ...props().run, mode: 'ask' }, result })} />)
+    expect(screen.getByText('No matched source quotations saved for this claim.')).toBeInTheDocument()
+    expect(screen.getByText(/These are model assessments/)).toBeInTheDocument()
+  })
+
+  it('keeps an empty Ask outcome honest instead of inventing a labelled answer', () => {
+    const result = fixtureAnswer()
+    result.status = 'insufficient_evidence'
+    result.finding = { outcome: 'insufficient_evidence', reason: 'The synthetic sources do not resolve the question.' }
+    result.quotes = []
+    render(<ResearchRunView {...props({ run: { ...props().run, mode: 'ask' }, result })} />)
+    expect(screen.getByRole('heading', { name: 'No supported answer established' })).toBeInTheDocument()
+    expect(screen.queryByRole('list', { name: 'Answer claims' })).not.toBeInTheDocument()
+  })
+
+  it('shows actual autonomous field selections and revisions without a predefined pair', () => {
+    const result = fixtureResult()
+    result.mode = 'surprise'
+    result.field_selections = [
+      { fields: ['Mycology', 'Orbital mechanics'], rationale: 'Synthetic direction selected to test an uncertain structural analogy.' },
+      { fields: ['Information theory', 'Biology'], rationale: 'The synthetic evidence shifted the model’s direction.' },
+    ]
+    render(<ResearchRunView {...props({ run: { ...props().run, mode: 'surprise', goal: '' }, result })} />)
+    expect(screen.getByRole('heading', { name: 'Fields selected for this investigation' })).toBeInTheDocument()
+    expect(within(screen.getByRole('list', { name: 'Fields in research direction 1' })).getByText('Mycology')).toBeInTheDocument()
+    expect(within(screen.getByRole('list', { name: 'Fields in research direction 1' })).getByText('Orbital mechanics')).toBeInTheDocument()
+    expect(screen.getByText('Final selected direction')).toBeInTheDocument()
+    expect(screen.getByText('The synthetic evidence shifted the model’s direction.')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'A synthetic analogy requiring further tests' })).toBeInTheDocument()
+  })
+
+  it('renders untrusted answer statements and selection rationales as plain text', () => {
+    const answer = fixtureAnswer()
+    if (answer.finding?.outcome === 'answer') answer.finding.claims[0].text = '<img src=x onerror=alert(1)>'
+    const { rerender } = render(<ResearchRunView {...props({ run: { ...props().run, mode: 'ask' }, result: answer })} />)
+    expect(screen.getByText('<img src=x onerror=alert(1)>')).toBeInTheDocument()
+    expect(document.querySelector('img')).toBeNull()
+    const surprise = fixtureResult()
+    surprise.mode = 'surprise'
+    surprise.field_selections = [{ fields: ['Information theory', 'Biology'], rationale: '<script>window.pwned=true</script>' }]
+    rerender(<ResearchRunView {...props({ run: { ...props().run, mode: 'surprise' }, result: surprise })} />)
+    expect(screen.getByText('<script>window.pwned=true</script>')).toBeInTheDocument()
+    expect(document.querySelector('script')).toBeNull()
   })
 })

@@ -1,6 +1,9 @@
 import type { ReactNode } from 'react'
 import type {
+  AnswerClaim,
+  AnswerFinding,
   BridgeFinding,
+  FieldSelection,
   ResearchActivityEvent,
   ResearchResult,
   ResearchRunViewProps,
@@ -104,18 +107,70 @@ function PendingOutcome({ status }: { status: string }) {
 
 function Outcome({ result }: { result: ResearchResult }) {
   if (result.status === 'insufficient_evidence' && result.finding?.outcome === 'insufficient_evidence') {
-    return <OutcomeNotice title="No supported connection established">{result.finding.reason}</OutcomeNotice>
+    return <OutcomeNotice title={result.mode === 'ask' ? 'No supported answer established' : 'No supported connection established'}>{result.finding.reason}</OutcomeNotice>
   }
   if (result.status === 'limit_reached') {
-    return <OutcomeNotice title="Research stopped at its limit">The investigation reached a configured research limit. Saved sources are available below; this outcome does not establish a connection.</OutcomeNotice>
+    return <OutcomeNotice title="Research stopped at its limit">The investigation reached a configured research limit. Saved sources are available below; this outcome does not establish {result.mode === 'ask' ? 'an answer' : 'a connection'}.</OutcomeNotice>
   }
   if (result.status === 'failed') {
-    return <OutcomeNotice title="The investigation could not complete">A research operation did not produce a usable outcome. Saved material is retained; this is not evidence that no connection exists.</OutcomeNotice>
+    return <OutcomeNotice title="The investigation could not complete">A research operation did not produce a usable outcome. Saved material is retained; this is not evidence that {result.mode === 'ask' ? 'the question has no answer' : 'no connection exists'}.</OutcomeNotice>
   }
   if (result.status === 'bridge' && result.finding?.outcome === 'bridge') {
     return <Bridge finding={result.finding} />
   }
+  if (result.status === 'answer' && result.finding?.outcome === 'answer') {
+    return <Answer finding={result.finding} result={result} />
+  }
   return <OutcomeNotice title="Outcome unavailable">A complete research outcome is not available. Review the recorded activity and any saved sources.</OutcomeNotice>
+}
+
+const claimLabels: Record<AnswerClaim['label'], string> = {
+  known: 'Known', postulated: 'Postulated', speculative: 'Speculative',
+}
+
+function ClaimEvidence({ claim, result, ordinal }: { claim: AnswerClaim; result: ResearchResult; ordinal: number }) {
+  const sources = new Map(result.sources.map((source) => [source.source_id, source]))
+  const quotes = result.quotes.filter((quote) => quote.side === 'answer' && quote.claim_id === claim.id &&
+    claim.evidence.some((item) => item.source_id === quote.source_id && item.quote === quote.quote && item.supports === quote.supports))
+  return <section className="research-claim-evidence" aria-label={`Source evidence for claim ${ordinal}`}>
+    {quotes.length ? quotes.map((quote, index) => {
+      const source = sources.get(quote.source_id)
+      const matched = quoteMatches(quote, source)
+      return <details className="research-quote" key={`${claim.id}-${quote.source_id}-${index}`}><summary><span>{source?.title ?? 'Source unavailable'}</span><span className={`research-evidence-label${matched ? '' : ' needs-review'}`}>{matched ? sourceKind(quote.content_kind) : 'Quotation needs review'}</span></summary><div className="research-quote-body"><p className="research-quote-scope">{matched ? 'Quotation matches the saved source text.' : 'This quotation could not be matched to the saved source and must not be treated as verified evidence.'}</p><blockquote>{quote.quote}</blockquote><p className="research-claim"><span>Recorded support:</span> {quote.supports}</p>{source && <SourceLink source={source} />}</div></details>
+    }) : <p className="research-citation-warning">No matched source quotations saved for this claim.</p>}
+  </section>
+}
+
+function Answer({ finding, result }: { finding: AnswerFinding; result: ResearchResult }) {
+  if (!finding.claims.length) return <OutcomeNotice title="No cited answer saved">No source-backed claims were saved for this question. Review the unanswered questions and recorded activity.</OutcomeNotice>
+  return <article className="research-answer" aria-labelledby="answer-title">
+    <span className="eyebrow accent">EVIDENCE-LINKED ANSWER</span>
+    <h3 id="answer-title">{finding.question}</h3>
+    <div className="research-answer-labels"><h4>How to read the claim labels</h4><p><strong>Known</strong> is the model’s source-supported classification. <strong>Postulated</strong> is an inference across sources. <strong>Speculative</strong> is a tentative possibility.</p><p className="research-scope-note">These are model assessments, not guarantees of truth. Matched quotations do not independently verify the interpretation.</p></div>
+    <div className="research-answer-overview"><h4>Model overview</h4><p className="research-answer-summary">{finding.summary}</p><p className="research-scope-note">This overview is the model’s assessment. The classified claims below carry the source quotations.</p></div>
+    <ol className="research-answer-claims" aria-label="Answer claims">{finding.claims.map((claim, index) => <li key={claim.id}>
+      <div className="research-answer-claim-heading"><span className={`research-claim-label label-${claim.label}`}>{claimLabels[claim.label]}</span><span className="research-claim-number">Claim {index + 1}</span></div>
+      <p className="research-answer-claim-text">{claim.text}</p>
+      {claim.derivation && <div className="research-derivation"><h4>How this inference was made</h4><p>{claim.derivation}</p></div>}
+      {claim.caveats.length > 0 && <div className="research-answer-caveats"><h4>What limits this claim</h4><ul aria-label={`Caveats for claim ${index + 1}`}>{claim.caveats.map((caveat, position) => <li key={position}>{caveat}</li>)}</ul></div>}
+      <ClaimEvidence claim={claim} result={result} ordinal={index + 1} />
+    </li>)}</ol>
+    <section className="research-answer-limits" aria-labelledby="answer-limits-title"><h4 id="answer-limits-title">Limits of this answer</h4><ul>{finding.limitations.map((item, index) => <li key={index}>{item}</li>)}</ul></section>
+    <section className="research-unanswered" aria-labelledby="answer-unanswered-title"><h4 id="answer-unanswered-title">What remains unanswered</h4>{finding.unanswered_questions.length ? <ul>{finding.unanswered_questions.map((item, index) => <li key={index}>{item}</li>)}</ul> : <p>No further questions were recorded. This does not establish that the question is fully resolved.</p>}</section>
+  </article>
+}
+
+function SelectedFields({ selections }: { selections: FieldSelection[] }) {
+  if (!selections.length) return null
+  return <section className="research-selected-fields" aria-labelledby="selected-fields-title">
+    <div className="research-section-heading"><div><span className="eyebrow accent">A DIRECTION CHOSEN BY THE MODEL</span><h3 id="selected-fields-title">Fields selected for this investigation</h3></div></div>
+    <p className="research-scope-note">These are the research model’s recorded choices and concise rationale. Selecting fields does not establish a connection.</p>
+    <ol className="research-field-directions" aria-label="Recorded research directions">{selections.map((selection, index) => <li key={index}>
+      <span className="research-field-direction-label">{selections.length === 1 ? 'Selected direction' : index === selections.length - 1 ? 'Final selected direction' : `Earlier direction ${index + 1}`}</span>
+      <ul className="research-field-tags" aria-label={`Fields in research direction ${index + 1}`}>{selection.fields.map((field) => <li key={field}>{field}</li>)}</ul>
+      <p>{selection.rationale}</p>
+    </li>)}</ol>
+  </section>
 }
 
 function Bridge({ finding }: { finding: BridgeFinding }) {
@@ -140,7 +195,7 @@ function Evidence({ result }: { result: ResearchResult }) {
     <section className="research-evidence" aria-labelledby="research-evidence-title">
       <div className="research-section-heading"><div><span className="eyebrow accent">CHECK THE SOURCES</span><h3 id="research-evidence-title">Evidence you can inspect</h3></div><span className="research-count">{result.sources.length} saved {result.sources.length === 1 ? 'source' : 'sources'}</span></div>
       <p className="research-scope-note">Quotation matching checks the saved text. It does not establish whether a scientific interpretation or connection is correct.</p>
-      {result.quotes.length > 0 && <div className="research-quotes">{result.quotes.map((quote, index) => {
+      {result.finding?.outcome !== 'answer' && result.quotes.length > 0 && <div className="research-quotes">{result.quotes.map((quote, index) => {
         const source = sources.get(quote.source_id)
         const matched = quoteMatches(quote, source)
         return <details className="research-quote" key={`${quote.source_id}-${quote.start}-${index}`}><summary><span>{source ? source.title : 'Source unavailable'}</span><span className={`research-evidence-label${matched ? '' : ' needs-review'}`}>{matched ? sourceKind(quote.content_kind) : 'Quotation needs review'}</span></summary><div className="research-quote-body"><p className="research-quote-scope">{matched ? 'Quotation matches the saved source text.' : 'This quotation could not be matched to the saved source and must not be treated as verified evidence.'}</p><blockquote>{quote.quote}</blockquote><p className="research-claim"><span>Recorded support:</span> {quote.supports}</p>{source && <SourceLink source={source} />}</div></details>
@@ -160,7 +215,7 @@ export function ResearchRunView({ run, events, result, connection, onCancel, can
       <div className="research-run-summary"><p>{state.description}</p>{canCancel && <button type="button" className="research-cancel" onClick={onCancel} disabled={cancelling}>{cancelling ? 'Requesting cancellation…' : 'Cancel investigation'}</button>}</div>
       <div className="research-run-layout">
         <section className="research-activity" aria-labelledby="research-activity-title"><div className="research-section-heading"><h3 id="research-activity-title">Research activity</h3><span className={`research-connection connection-${connection}`} aria-live="polite">{connectionNames[connection]}</span></div>{activity.length ? <ol className="research-timeline" aria-label="Recorded research activity" aria-live="polite" aria-relevant="additions">{activity.map((event, index) => <li key={event.sequence}><span className="research-event-number" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span><p>{event.summary}</p></li>)}</ol> : <p className="research-empty">No recorded activity yet.</p>}</section>
-        <section className="research-results" aria-labelledby="research-outcome-title"><h3 className="research-sr-only" id="research-outcome-title">Research outcome</h3>{result ? <><Outcome result={result} /><Evidence result={result} /></> : <PendingOutcome status={run.status} />}</section>
+        <section className="research-results" aria-labelledby="research-outcome-title"><h3 className="research-sr-only" id="research-outcome-title">Research outcome</h3>{result ? <>{run.mode === 'surprise' && <SelectedFields selections={result.field_selections ?? []} />}<Outcome result={result} /><Evidence result={result} /></> : <PendingOutcome status={run.status} />}</section>
       </div>
     </section>
   )

@@ -55,10 +55,10 @@ Gate: the real public URL runs Explore with controlled spending and survives the
 
 Dependencies: C; deploy incrementally through D.
 
-- [ ] **E1 — Implement Ask.** Investigate a question, assemble claim-level Known/Postulated/Speculative answers, link evidence and bridges, and show conflicting evidence and unanswered parts.
-- [ ] **E2 — Implement autonomous field selection.** Let Meta choose fields from prior coverage, conceptual distance, and unresolved questions; preserve the selection and concise public rationale.
-- [ ] **E3 — Complete Surprise Me.** Run selected fields through real research, stream actual activity, display supported discoveries or empty results, and allow follow-up investigation. Verify field selection is not just a rotating list of prewritten examples.
-- [ ] **E4 — Verify both modes.** Add browser journeys, fixture regressions, and bounded live evaluations; check citations, labels, costs, cancellation, and persistence.
+- [x] **E1 — Implement Ask.** Question-bound answers, individually classified/cited claims, derivations, caveats, limits, and unanswered questions implemented through worker, immutable storage, and UI. Quote integrity and classified inference rules are tested; semantic correctness of the labels still requires live evaluation.
+- [x] **E2 — Implement autonomous field selection.** The research model chooses/revises 2–4 fields with a concise rationale; no production field list is supplied. Selections are preserved and displayed. Revisions reset challenge/prior-work scope and positive findings must match the current selection. Actual Meta selection quality remains unverified.
+- [x] **E3 — Implement Surprise Me.** Selected fields flow through shared tools, evidence checks, worker budgets, events, storage, and UI; empty outcomes remain allowed. Synthetic fixture tests verify the full path and restart without duplicate dispatch/selection. No prewritten discoveries or fixture fields are shipped as production outcomes.
+- [ ] **E4 — Verify both modes live.** Fixture regressions and isolated browser journeys passed for both modes, including labels/citations/field selection, persistence, map navigation, and refresh without duplicates. Bounded live Meta/source evaluations, scientific review, and public deployment remain blocked/unrun; the owner still prohibits paid calls.
 
 Gate: users can complete both modes on the deployed application using the same evidence and job infrastructure as Explore.
 
@@ -66,8 +66,8 @@ Gate: users can complete both modes on the deployed application using the same e
 
 Dependencies: B1, C, E2/E3 for Surprise Me integration.
 
-- [ ] **F1 — Build knowledge retrieval.** Search saved papers, fields, claims, and bridges; deduplicate source identities; preserve finding versions and provenance relationships.
-- [ ] **F2 — Build the map.** Render bounded graph views of fields, papers, bridges, and higher-level connections; open evidence and launch follow-up research from a selected object.
+- [ ] **F1 — Build knowledge retrieval.** Session-owned search/projection over saved sources and bridge/answer findings is implemented with literal-query matching, source version identities, persisted quote associations, and bounded coverage. Remaining: agent memory tools, richer claim-level retrieval, shared/public visibility, and higher-level research integration.
+- [ ] **F2 — Build the map.** Interactive accessible field/finding/source map, owned result navigation, privacy clearing, and truncation reporting implemented and browser-verified. Remaining: higher-level connections and launching follow-up research from selected map objects; these cannot be displayed before they actually exist.
 - [ ] **F3 — Investigate connections between connections.** Have Meta form and test hypotheses across existing bridges; trace higher-level claims to original evidence; prevent circular support and compounded false certainty.
 - [ ] **F4 — Add scheduled ingestion.** Persist watches/cursors; enqueue bounded, deduplicated searches for new literature; integrate rate limits and the same spending controls.
 - [ ] **F5 — Reassess findings.** Detect potentially relevant new sources, schedule rechecks, preserve superseded conclusions, and display changes. Test using a controlled newly arriving source and a real bounded ingestion run.

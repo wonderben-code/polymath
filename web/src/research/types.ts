@@ -28,7 +28,38 @@ export interface EvidenceQuote {
   supports: string
 }
 
-export interface VerifiedQuote extends EvidenceQuote {
+export interface ClaimQuote {
+  source_id: string
+  quote: string
+  supports: string
+}
+
+export interface AnswerClaim {
+  id: string
+  text: string
+  label: 'known' | 'postulated' | 'speculative'
+  evidence: ClaimQuote[]
+  derivation: string | null
+  caveats: string[]
+}
+
+export interface AnswerFinding {
+  outcome: 'answer'
+  question: string
+  summary: string
+  claims: AnswerClaim[]
+  limitations: string[]
+  unanswered_questions: string[]
+}
+
+export interface FieldSelection {
+  fields: string[]
+  rationale: string
+}
+
+export interface VerifiedQuote extends ClaimQuote {
+  side: 'left' | 'right' | 'answer'
+  claim_id?: string | null
   start: number
   end: number
   source_sha256: string
@@ -55,8 +86,11 @@ export interface InsufficientFinding {
 }
 
 export interface ResearchResult {
-  status: 'bridge' | 'insufficient_evidence' | 'limit_reached' | 'failed'
-  finding: BridgeFinding | InsufficientFinding | null
+  status: 'bridge' | 'answer' | 'insufficient_evidence' | 'limit_reached' | 'failed'
+  // Older persisted Explore findings predate these fields.
+  mode?: ResearchRunSummary['mode']
+  field_selections?: FieldSelection[]
+  finding: BridgeFinding | AnswerFinding | InsufficientFinding | null
   quotes: VerifiedQuote[]
   sources: SourceDocument[]
   events: ResearchActivityEvent[]

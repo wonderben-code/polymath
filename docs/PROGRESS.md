@@ -4,13 +4,13 @@ Last updated: 27 October 2026 (Bangkok). This file records verified outcomes; [B
 
 ## Current position
 
-**Stage: application, injected Explore worker, atomic dispatch/budget boundary, durable evidence, session-owned APIs, and research workspace connected and locally validated. Live Meta research remains disabled.**
+**Stage: Explore, Ask, and Surprise Me now share the worker, atomic dispatch/budget controls, durable evidence, and owned workspace. Session-owned knowledge search/map is connected. Paths are locally validated with explicit fixtures; live Meta research remains disabled.**
 
 Scope: the complete product, including Surprise Me, the knowledge base, map, and connections between connections. Meta intelligence controls research. See [ARCHITECTURE.md](ARCHITECTURE.md).
 
 **First engineering objective:** A1–A5 in the build plan: establish real Meta access and capabilities, create the application foundation, and complete one bounded research investigation with real sources, a structural mapping, an objection, and an evidence-backed conclusion or honest rejection.
 
-**Next work:** extend the shared engine to Ask and autonomous Surprise Me, improve accessible full-text retrieval and bibliographic metadata, and develop the knowledge/map workflows. The Explore pipeline is now connected and tested with explicit fixtures. Real Meta capabilities (A1/A2), verified live pricing/token limits, and the live investigation (A5) remain blocked by missing access and the owner's no-paid-calls instruction; a key appearing alone is not permission to test. No fixture result counts as a live discovery.
+**Next work:** full-text/bibliographic retrieval, agent memory and connections between connections, scheduled ingestion/reassessment, and Formalise/Write/Publish. The three research modes and basic private map now work through fixture-backed end-to-end tests. Actual Meta capabilities/pricing/token bounds, scientific quality, and public deployment remain unverified. Paid calls remain forbidden until the owner confirms readiness and permits them; a key appearing alone is not permission. No fixture finding is a live discovery.
 
 ## Milestone status
 
@@ -22,8 +22,8 @@ Scope: the complete product, including Surprise Me, the knowledge base, map, and
 | B — Durable research and controls | B2/B4 integrated; B1/B3 partial | Atomic dispatch, recovery/replay, immutable source/findings, owned SSE/status/results, and synthetic worker journeys verified. Real pricing/token bounds, authenticated operator controls, full entity graph, and public execution remain pending. |
 | C — Explore | Connected fixture pipeline; live investigation pending | Abstract tools, evidence validation, and workspace connected; real Meta, live source verification, full text, and scientific evaluation remain unverified. |
 | D — Public deployment and API | Local API implemented; public deployment pending | Session/CSRF ownership and queue controls verified locally; host, HTTPS deployment, full abuse controls, and external API client/deployed recovery checks remain pending. |
-| E — Ask and Surprise Me | Not started | Both modes working end to end |
-| F — Knowledge base, map, higher-level research | Not started | Scheduled ingestion/reassessment and navigable evidence graph |
+| E — Ask and Surprise Me | Implementation connected; live evaluation pending | Question-bound classified/cited claims, model-selected field directions, storage/worker/replay, and UI/browser journeys verified with synthetic fixtures; real Meta intelligence and scientific support remain unverified. |
+| F — Knowledge base, map, higher-level research | Private search/map implemented; broader workflows pending | Owned saved source/finding graph, actual quote associations, bounded/literal search, map navigation, and privacy tested. Agent memory, public/shared views, ingestion/reassessment, and higher-level research remain pending. |
 | G — Formalise, Write, Publish | Not started | Real feature journeys, sandbox integration, approved production publication |
 | H — Quality, release, submission | Not started | Full regression, scientific audit, polished release, submission confirmation |
 
@@ -67,5 +67,10 @@ Track: real source identity, quote integrity, claim support, mapping assumptions
 | 27 Oct 2026 | Full backend check passed: 121 unit + 113 PostgreSQL integration tests; Ruff/format checks passed | 234 backend tests passed. Live protocol, real model usage/pricing, public launch, and scientific validity remain unverified. |
 | 27 Oct 2026 | Chromium exercised an isolated, explicitly synthetic browser → session/CSRF → queue → worker/ledger → saved sources/finding → SSE/result → refresh/history journey | One job submission, two saved abstract sources, no duplicate submission on refresh, no page errors or mobile overflow. The harness is outside the product and uses no real model or external literature requests. |
 | 27 Oct 2026 | Frontend: 41 tests, type check, and production build passed; UI displays actual owned history/results, handles CSRF cancellation/session expiry, and reconnects using persisted cursors | Operational bookkeeping is hidden from the visible research timeline while all persisted records/cursors remain intact; default launch stays disabled. |
+| 27 Oct 2026 | Ask/Surprise core: 26 new fixture cases; mode/query binding, claim citation rules, model-selected fields, revision scope, and bounded repairs verified | Integrity and control-flow checks do not validate actual Meta capability, claim semantics, or scientific novelty. |
+| 27 Oct 2026 | Eight new PostgreSQL answer-artifact cases verify claim-bound quotes, mode/query binding, field selection, and downgrade refusal; worker tests cover both modes and replay without duplicate charges | Incompatible answer-schema downgrade preserves data by refusing it. A discovered heartbeat/cleanup race was fixed and covered by a regression. |
+| 27 Oct 2026 | Knowledge projection: 13 PostgreSQL privacy/provenance/query/bounds tests and 11 frontend graph/search tests passed | Search/map represents current-session persisted artifacts only; no scheduled reading or higher-level inference is implied. |
+| 27 Oct 2026 | `make check`, `make test`, `TEST_DATABASE_URL=... make integration`, and `make build` passed: 285 backend tests (138 PostgreSQL integration) plus 70 frontend tests | Full local suite green; upstream TestClient deprecation warning remains. Hosted CI, public deployment, and live model/provider behavior are still not inferred from these checks. |
+| 27 Oct 2026 | Chromium fixture journey passed Ask's three labels/citations, Surprise's recorded choices, owned map navigation, persisted history, and 390px mobile layout; two submissions remained two after refresh | Explicit synthetic models/sources in an isolated schema; no external provider or paid model calls. No default fixture data ships in the product. |
 
 For subsequent implementation, append the task IDs, commit, exact meaningful checks and outcomes, deployed evidence where applicable, and remaining limitations. Keep planned, passed, failed, blocked, skipped, and unrun results distinct.

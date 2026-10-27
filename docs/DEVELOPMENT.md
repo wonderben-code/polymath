@@ -1,6 +1,6 @@
 # Developing Polymath
 
-The current release connects the application, injected Explore worker, transactional dispatch/budget controls, durable evidence, session-owned APIs, and research workspace. The complete path is verified with synthetic models/sources. Live Meta research is not enabled. Follow [BUILD_PLAN.md](BUILD_PLAN.md) and [PROGRESS.md](PROGRESS.md) for implementation and verification status.
+The current release connects Explore, Ask, and Surprise Me through the injected worker, transactional dispatch/budget controls, durable evidence, session-owned APIs, and workspace. A session-owned knowledge search/map projects saved findings and citation relationships. These paths are verified with synthetic models/sources; live Meta research is not enabled. Follow [BUILD_PLAN.md](BUILD_PLAN.md) and [PROGRESS.md](PROGRESS.md) for status.
 
 ## Prerequisites
 
@@ -73,7 +73,9 @@ Settings load from the process and optionally `.env` in the working directory. `
 
 `polymath.worker.ResearchWorker` uses that boundary, persists source reads/results, streams real controller actions, and can poll until stopped. It records tool observations and immutable model responses for replay. Restart requires an explicit safe resume; observed responses are replayed without another dispatch/charge, while unknown requests require reconciliation. A free bounded source-search refresh may restore a fresh provider's discovery state; the model still receives the saved observation. Source snapshots already read are loaded from durable retrieval IDs. Changing the worker policy or request identity stops replay rather than spending again.
 
-The worker defaults disabled, has no production Meta factory, and its module entry point refuses paid execution. It currently executes Explore only; Ask/Surprise execution are explicit future features, not silently treated as Explore. Tests inject synthetic models/tools/prices; no paid requests occur. Do not substitute fixed fixture reservations for verified model token/context/pricing limits.
+The worker defaults disabled, has no production Meta factory, and its module entry point refuses paid execution. It now executes all three research modes with separate conclusion contracts. Ask returns cited/classified claims; Surprise Me first lets the model choose fields. Tests inject synthetic models/tools/prices; no paid requests occur. Do not substitute fixed fixture reservations for verified model token/context/pricing limits.
+
+Replay protocol is now `polymath-worker-modes-v2`. Its checkpoint fingerprint includes the mode and contract version. Interrupted jobs from the earlier Explore-only protocol stop safely instead of silently making new paid requests; completed historical findings remain readable. Worker cleanup stops heartbeats before terminal transitions so a heartbeat cannot cancel its own shutdown/interruption record.
 
 ## Session-owned research API
 
@@ -88,12 +90,19 @@ The application now mounts the following routes, while **new research submission
 | `POST /api/v1/runs/{id}/cancel` | CSRF-protected cancellation of an owned job |
 | `GET /api/v1/runs/{id}/events` | Authenticated SSE activity with persisted IDs/replay, heartbeat, expiry checks, and terminal drain |
 | `GET /api/v1/runs/{id}/result` | Owned immutable evidence-backed result, once saved |
+| `GET /api/v1/knowledge` | Bounded literal search of the current session's saved source/finding metadata |
+| `GET /api/v1/knowledge/graph` | Bounded field/finding/source projection grounded in persisted findings and quote records |
+| `GET /api/v1/knowledge/findings/{id}` | Owned finding summary, with generic 404 for foreign records |
 
 Foreign runs return generic 404s. API responses, including errors, are `no-store`; validation failures do not echo private research inputs. Cookies are Secure over HTTPS and SameSite=Lax. Cookie expiry ends access to that anonymous browser history; general accounts are not implemented. These session/queue limits are not complete public abuse protection, so paid/public launch remains gated. Operator pricing/ledger configuration is still internal and needs authenticated controls before production use.
 
 `create_app(research_availability=...)` is a trusted composition/test seam. The exported application passes no policy and remains unavailable even if a key/model appear. It never constructs or runs a model from HTTP requests. Tests may inject an available policy and a synthetic worker in an isolated database to exercise the real pipeline; no fixture mode or default results are shipped in the product.
 
 The evidence service stores immutable source versions and separate retrieval metadata with database hash/immutability enforcement. Final findings may cite only sources durably read by the same run. Source identity/hash/kind, Unicode offsets, exact quotations, and proposed evidence associations are validated before saving a finding. This establishes provenance and quote integrity, not scientific truth, novelty, or an actual proof.
+
+Ask stores claim IDs on quote records. Known/Postulated/Speculative are model classifications, not guaranteed truth; postulated claims require explicit derivation and distinct source URLs, speculative claims require caveats, and every claim needs exact source quotations. Ask must answer the submitted question. Surprise bridges must use the latest recorded field selection. The migration to answer evidence preserves historical findings and refuses an incompatible downgrade when answer artifacts exist rather than deleting them.
+
+The map/search is private to the current browser session. Shared source versions never reveal another session's finding or retrieval metadata. Source bodies are excluded from graph/search payloads. Edges describe recorded mappings, selected directions, or persisted quote associations; they do not establish scientific correctness. Views are capped, disclose truncation, and link back to actual owned investigations. This is browsing over stored research, not scheduled ingestion or model-driven higher-level discovery.
 
 ## Literature tools
 

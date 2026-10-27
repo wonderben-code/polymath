@@ -41,12 +41,13 @@ The implementation baseline is recorded in `docs/ARCHITECTURE.md`. The target is
 - [ ] A1–A2, A5: verified Meta capabilities and first real-source investigation
 - [ ] B–C: durable research, evidence, spending controls, and Explore
 - [ ] D: public URL and controlled public API
-- [ ] E: Ask and Surprise Me
+- [x] E1–E3: Ask and Surprise Me implementation, verified through synthetic worker/browser journeys
+- [ ] E4: live Meta/source evaluation and scientific quality review
 - [ ] F: growing knowledge base, map, and connections between connections
 - [ ] G: Formalise, Write, and approval-gated Publish
 - [ ] H: complete-product validation, polish, and submission
 
-The application foundation now includes a responsive research workspace, FastAPI/PostgreSQL backend, integrated injected worker, atomic budget/dispatch controls, immutable source/evidence storage, and session-owned job/status/result/SSE APIs. The pipeline is tested with synthetic models and sources. Full-text retrieval, production model execution, and live Meta verification remain incomplete; paid calls and new public investigations stay disabled. See the [development guide](docs/DEVELOPMENT.md) to run it and the [progress tracker](docs/PROGRESS.md) for evidence and remaining work.
+Explore, Ask, and Surprise Me now share the worker, budget controls, immutable evidence, and session-owned activity/history APIs. Ask shows classified, individually cited claims; Surprise Me records model-chosen fields. A private knowledge search/map opens saved findings and evidence relationships. These paths are tested with synthetic models/sources. Full-text retrieval, live Meta verification, public execution, and later product features remain incomplete; paid calls stay disabled. See the [development guide](docs/DEVELOPMENT.md) and [progress tracker](docs/PROGRESS.md).
 
 ## Licence
 Apache 2.0. See [LICENSE](LICENSE).

@@ -1,6 +1,10 @@
 import type {
+  AnswerClaim,
+  AnswerFinding,
   BridgeFinding,
+  ClaimQuote,
   EvidenceQuote,
+  FieldSelection,
   ResearchActivityEvent,
   ResearchResult,
   ResearchRunSummary,
@@ -47,6 +51,10 @@ function object(value: unknown): Record<string, unknown> {
 function text(value: unknown, maximum = 8000): string {
   if (typeof value !== 'string' || value.length > maximum) return invalid()
   return value
+}
+function requiredText(value: unknown, maximum = 8000): string {
+  const parsed = text(value, maximum)
+  return parsed.trim() ? parsed : invalid()
 }
 function integer(value: unknown): number {
   if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) return invalid()
@@ -106,16 +114,57 @@ function evidence(value: unknown): EvidenceQuote {
 }
 function quote(value: unknown): VerifiedQuote {
   const record = object(value)
+  if (record.side !== 'left' && record.side !== 'right' && record.side !== 'answer') return invalid()
+  const claimId = record.claim_id === undefined || record.claim_id === null ? null : claimIdentifier(record.claim_id)
+  if (record.side === 'answer' ? !claimId : claimId !== null) return invalid()
+  const start = integer(record.start), end = integer(record.end)
+  if (end <= start || !/^[a-f\d]{64}$/i.test(text(record.source_sha256, 64))) return invalid()
   return {
-    ...evidence(record), start: integer(record.start), end: integer(record.end),
+    ...claimEvidence(record), side: record.side, claim_id: claimId, start, end,
     source_sha256: text(record.source_sha256, 64), content_kind: kind(record.content_kind),
   }
+}
+function claimIdentifier(value: unknown): string {
+  const parsed = text(value, 64)
+  return /^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(parsed) ? parsed : invalid()
+}
+function claimEvidence(value: unknown): ClaimQuote {
+  const record = object(value)
+  return { source_id: requiredText(record.source_id, 400), quote: requiredText(record.quote, 4000), supports: requiredText(record.supports, 3000) }
+}
+function answerClaim(value: unknown): AnswerClaim {
+  const record = object(value)
+  if (!['known', 'postulated', 'speculative'].includes(text(record.label, 20))) return invalid()
+  const citations = list(record.evidence, claimEvidence, 8)
+  if (!citations.length) return invalid()
+  const derivation = record.derivation === null || record.derivation === undefined ? null : requiredText(record.derivation, 6000)
+  const caveats = record.caveats === undefined ? [] : list(record.caveats, (item) => requiredText(item, 3000), 8)
+  if (record.label === 'postulated' && !derivation || record.label === 'speculative' && !caveats.length) return invalid()
+  return { id: claimIdentifier(record.id), text: requiredText(record.text, 6000), label: record.label as AnswerClaim['label'], evidence: citations, derivation, caveats }
+}
+function normalizeField(value: string): string {
+  return value.trim().replace(/\s+/gu, ' ').toLowerCase().replaceAll('ß', 'ss').replaceAll('ς', 'σ')
+}
+function fieldSelection(value: unknown): FieldSelection {
+  const record = object(value)
+  const fields = list(record.fields, (item) => requiredText(item, 200), 4)
+  if (fields.length < 2 || new Set(fields.map(normalizeField)).size !== fields.length) return invalid()
+  return { fields, rationale: requiredText(record.rationale, 1000) }
 }
 function finding(value: unknown): ResearchResult['finding'] {
   if (value === null) return null
   const record = object(value)
   if (record.outcome === 'insufficient_evidence') {
     return { outcome: 'insufficient_evidence', reason: text(record.reason, 6000) }
+  }
+  if (record.outcome === 'answer') {
+    const claims = list(record.claims, answerClaim, 8)
+    const limitations = list(record.limitations, (item) => requiredText(item, 3000), 8)
+    if (!claims.length || !limitations.length || new Set(claims.map((item) => item.id)).size !== claims.length) return invalid()
+    return {
+      outcome: 'answer', question: requiredText(record.question, 4000), summary: requiredText(record.summary, 6000),
+      claims, limitations, unanswered_questions: record.unanswered_questions === undefined ? [] : list(record.unanswered_questions, (item) => requiredText(item, 3000), 8),
+    } satisfies AnswerFinding
   }
   if (record.outcome !== 'bridge') return invalid()
   return {
@@ -133,15 +182,52 @@ function finding(value: unknown): ResearchResult['finding'] {
 
 export function parseResult(value: unknown): ResearchResult {
   const result = object(value)
-  if (!['bridge', 'insufficient_evidence', 'limit_reached', 'failed'].includes(text(result.status, 40))) return invalid()
+  if (!['bridge', 'answer', 'insufficient_evidence', 'limit_reached', 'failed'].includes(text(result.status, 40))) return invalid()
   if (result.validation_scope !== 'source_identity_and_quote_integrity') return invalid()
+  const mode = result.mode === undefined ? 'explore' : text(result.mode, 20)
+  if (mode !== 'explore' && mode !== 'ask' && mode !== 'surprise') return invalid()
   const usage = object(result.usage)
-  return {
-    status: result.status as ResearchResult['status'], finding: finding(result.finding),
-    sources: list(result.sources, source), quotes: list(result.quotes, quote, 12), events: list(result.events, parseActivity, 2000),
+  const parsed: ResearchResult = {
+    status: result.status as ResearchResult['status'], mode, finding: finding(result.finding),
+    field_selections: result.field_selections === undefined ? [] : list(result.field_selections, fieldSelection, 3),
+    sources: list(result.sources, source), quotes: list(result.quotes, quote, 64), events: list(result.events, parseActivity, 2000),
     usage: { model_calls: integer(usage.model_calls), input_tokens_reported: integer(usage.input_tokens_reported), output_tokens_reported: integer(usage.output_tokens_reported), calls_without_usage: integer(usage.calls_without_usage) },
     error_code: result.error_code === null ? null : text(result.error_code, 100), validation_scope: result.validation_scope,
   }
+  if (mode !== 'surprise' && parsed.field_selections?.length) return invalid()
+  if (parsed.status === 'answer') {
+    if (mode !== 'ask' || parsed.finding?.outcome !== 'answer') return invalid()
+    validateAnswerEvidence(parsed, parsed.finding)
+  } else if (parsed.finding?.outcome === 'answer') return invalid()
+  if (parsed.status === 'bridge') {
+    if (mode === 'ask' || parsed.finding?.outcome !== 'bridge') return invalid()
+    if (mode === 'surprise') {
+      const selected = parsed.field_selections?.at(-1)?.fields.map(normalizeField) ?? []
+      if (!selected.includes(normalizeField(parsed.finding.field_left)) || !selected.includes(normalizeField(parsed.finding.field_right))) return invalid()
+    }
+  }
+  return parsed
+}
+
+function validateAnswerEvidence(result: ResearchResult, answer: AnswerFinding): void {
+  const sources = new Map(result.sources.map((item) => [item.source_id, item]))
+  if (sources.size !== result.sources.length) return invalid()
+  const remaining = [...result.quotes]
+  for (const claim of answer.claims) {
+    const sourceUrls = new Set<string>()
+    for (const citation of claim.evidence) {
+      const source = sources.get(citation.source_id)
+      const index = remaining.findIndex((item) => item.side === 'answer' && item.claim_id === claim.id && item.source_id === citation.source_id && item.quote === citation.quote && item.supports === citation.supports)
+      if (!source || index < 0) return invalid()
+      const [checked] = remaining.splice(index, 1)
+      if (source.content_kind !== checked.content_kind) return invalid()
+      const characters = Array.from(source.text)
+      if (checked.end > characters.length || checked.end - checked.start !== Array.from(checked.quote).length || characters.slice(checked.start, checked.end).join('') !== citation.quote) return invalid()
+      sourceUrls.add(source.url)
+    }
+    if (claim.label === 'postulated' && sourceUrls.size < 2) return invalid()
+  }
+  if (remaining.length) return invalid()
 }
 
 async function json(response: Response): Promise<unknown> {
