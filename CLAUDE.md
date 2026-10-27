@@ -21,6 +21,7 @@ Meta intelligence chooses research directions and adapts to evidence. Applicatio
 - It must be a genuinely **intelligent system** that reasons about where to look and what to believe, not a fixed script with model calls slotted in.
 - It must be **live on a public URL**.
 - Budget: **$150 in API credits**. Protect it in development and on the public site.
+- Current owner instruction: **continue without paid calls** until credits and the account spending limit are configured and the owner confirms paid testing may resume. Keep all model execution disabled by default; a key appearing alone is not authorization to start paid tests.
 - Deadline: **Thu 5 Nov 2026, 09:00 Bangkok / Wed 4 Nov, 9:00 PM ET**. Target submitting by Wed 4 Nov, 21:00 Bangkok.
 
 ## Rules

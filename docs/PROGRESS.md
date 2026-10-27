@@ -4,13 +4,13 @@ Last updated: 27 October 2026 (Bangkok). This file records verified outcomes; [B
 
 ## Current position
 
-**Stage: application foundation (A3) and research-controller prototype (A4) implemented and locally validated. Live research is not enabled.**
+**Stage: application foundation (A3), research-controller prototype (A4), and internal durable-job/budget services implemented and locally validated. Live research is not enabled.**
 
 Scope: the complete product, including Surprise Me, the knowledge base, map, and connections between connections. Meta intelligence controls research. See [ARCHITECTURE.md](ARCHITECTURE.md).
 
 **First engineering objective:** A1–A5 in the build plan: establish real Meta access and capabilities, create the application foundation, and complete one bounded research investigation with real sources, a structural mapping, an objection, and an evidence-backed conclusion or honest rejection.
 
-**Next work:** verify actual Meta capabilities (A1/A2), add real literature-provider tools, and run the first real investigation (A5). Durable jobs and transactional spending controls (B2/B3) can proceed independently and are required before exposing research publicly. No fixture result counts as a completed live investigation.
+**Next work:** integrate job ownership, cancellation, budget dispatch, and external-request recording into one worker execution boundary. Continue literature integration and evidence persistence. The owner explicitly requested continuing without paid calls because credits/account limits are not ready. Real Meta capabilities (A1/A2) and the live investigation (A5) remain blocked; a key appearing alone does not authorize paid tests. No fixture result counts as a completed live investigation.
 
 ## Milestone status
 
@@ -19,7 +19,7 @@ Scope: the complete product, including Surprise Me, the knowledge base, map, and
 | Repository and planning documents | Complete | Existing specification plus architecture, roadmap, task plan, and tracker in this change |
 | Cloud tooling | Partially verified | Git read access worked; OpenTimestamps 0.7.2 installed; all four local proofs parsed and matched commit-hash payloads; install script reran successfully |
 | A — Real Meta research path | A3/A4 complete; live checks blocked | Foundation and adaptive-controller prototype implemented; actual model authentication/capabilities and real-source investigation still unverified |
-| B — Durable research and controls | Not started | Jobs, evidence storage, activity, security, budgets |
+| B — Durable research and controls | B2/B3 internal services verified; execution integration pending | 12 real PostgreSQL job tests and 24 budget tests passed, including concurrency, fencing, recovery, unknown costs, and rollover; integrated worker, full evidence store, and public execution still pending |
 | C — Explore | Not started | Complete real-source browser investigation |
 | D — Public deployment and API | Not started | Host selection, public URL, quota controls, persistence/recovery |
 | E — Ask and Surprise Me | Not started | Both modes working end to end |
@@ -32,7 +32,7 @@ Scope: the complete product, including Surprise Me, the knowledge base, map, and
 | ID | Requirement | Current evidence | Action / unblocked work |
 |---|---|---|---|
 | X1 | Meta API authentication | Latest unauthenticated `GET https://api.meta.ai/v1/models` reached the service and returned HTTP 401; the earlier proxy block has changed. `MODEL_API_KEY` and `META_MODEL` remain absent. | Owner supplies the key securely in environment settings; engineering verifies authenticated access and available models. Never enter the key in chat or Git. Independent development continues. |
-| X2 | Verified model behavior, pricing, and account spending cap | Model names/prices in HACKATHON.md are unverified notes; no paid call executed. | Engineer verifies official documentation and actual API behavior; owner confirms account cap/credits before bounded live tests. |
+| X2 | Verified model behavior, pricing, and account spending cap | Owner answered that credits/account limits are not ready and instructed continuing without paid calls. No paid call executed; model names/prices remain unverified notes. | Continue local/fixture-based engineering. Paid tests remain disabled until the owner confirms credits/limits and permits them; then verify pricing and actual Meta capabilities. |
 | X3 | Deployment account and hosting allowance | No host or infrastructure budget selected. | Evaluate host requirements/cost early; obtain authorization before provisioning paid resources. Local implementation continues. |
 | X4 | Zenodo publisher identity, credentials, and artifact approval | Not configured or tested. | Set up sandbox first; secure production credentials and explicit approval of an exact artifact before production publication. Other research features continue independently. |
 | X5 | Official submission details | Repository checklist contains unanswered fields. | Verify rules, submission fields, video requirements, and deadline before final submission; owner handles personal/account confirmations. |
@@ -58,5 +58,8 @@ Track: real source identity, quote integrity, claim support, mapping assumptions
 | 27 Oct 2026 | A4: 32 fixture/mock-HTTP research tests passed; root checks passed with 46 backend unit tests, 1 real PostgreSQL integration test, and 6 frontend tests; Ruff/type checks and production build passed | Prototype validates action flow, evidence identity/quotes, timeouts/limits, and sanitized transport errors. Actual Meta protocol and scientific quality remain unverified. |
 | 27 Oct 2026 | Rebuilt and restarted the non-root container stack; Chromium exercised all three entry modes, prompt switching, real status/retry, disabled launch, and 390px mobile layout; zero console errors/failed requests | Packaged foundation works in a real browser; mode selection is not completed live Explore/Ask/Surprise functionality |
 | 27 Oct 2026 | GitHub Actions API read returned Forbidden | Workflow definition committed and equivalent local checks passed; hosted CI outcome remains unverified, not inferred from Git push success |
+| 27 Oct 2026 | Pushed application foundation `c259968` and research prototype `1b1e0d4` to main; preserved and integrated automatic timestamp commits | First two implementation milestones saved remotely |
+| 27 Oct 2026 | Owner instructed continuing without paid calls; began durable-job, budget, and literature-tool work | No paid model execution is authorized at this stage |
+| 27 Oct 2026 | B2/B3 internal services: 12 job and 24 budget tests passed on real PostgreSQL, including threaded races, stale workers, cancellation, ambiguous external outcomes, day rollover, and migration reversibility | Repository invariants verified. Integrated worker, authorization, real model usage/pricing, and actual paid dispatch remain unverified; B2/B3 full workflow gates stay open. |
 
 For subsequent implementation, append the task IDs, commit, exact meaningful checks and outcomes, deployed evidence where applicable, and remaining limitations. Keep planned, passed, failed, blocked, skipped, and unrun results distinct.

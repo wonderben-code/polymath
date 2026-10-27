@@ -7,7 +7,7 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.pool import StaticPool
 
 from polymath.config import Settings
-from polymath.main import create_app
+from polymath.main import create_app, migration_heads
 
 
 def test_health_does_not_require_database_or_model() -> None:
@@ -44,13 +44,15 @@ def test_unavailable_database_has_sanitized_readiness(monkeypatch: pytest.Monkey
     assert "private-database-host" not in response.text
 
 
-@pytest.mark.parametrize("revision", [None, "old_revision", "0001_research_runs"])
+@pytest.mark.parametrize("revision", [None, "old_revision", "current"])
 def test_readiness_requires_current_migrations(revision: str | None) -> None:
     # SQLite exercises the readiness state logic only. PostgreSQL migrations have a separate
     # integration test and are never considered validated by this test.
     engine = create_engine(
         "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
     )
+    if revision == "current":
+        revision = next(iter(migration_heads()))
     if revision:
         with engine.begin() as connection:
             connection.execute(text("CREATE TABLE alembic_version (version_num VARCHAR(32))"))
@@ -62,7 +64,7 @@ def test_readiness_requires_current_migrations(revision: str | None) -> None:
     application.state.engine = engine
     with TestClient(application) as client:
         response = client.get("/api/v1/readiness")
-    expected_ready = revision == "0001_research_runs"
+    expected_ready = revision in migration_heads()
     assert response.status_code == (200 if expected_ready else 503)
     assert response.json() == {
         "status": "ready" if expected_ready else "not_ready",

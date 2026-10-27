@@ -21,8 +21,8 @@ Gate: a real Meta-driven investigation works. Access blockers do not prevent A3 
 Dependencies: A3; use A4 contracts and validate against A5.
 
 - [ ] **B1 — Persist research artifacts.** Implement the core entities, provenance links, source versions, uniqueness rules, and migrations described in the architecture.
-- [ ] **B2 — Implement job ownership and recovery.** Add transactional claims, leases, heartbeats, fenced checkpoints, retry states, cancellation, and reconciliation for ambiguous external requests.
-- [ ] **B3 — Enforce spending controls.** Add atomic reservations, usage reconciliation, call/token/run/global limits, concurrency bounds, and a kill switch. Test races and unknown usage, not only successful calls.
+- [ ] **B2 — Implement job ownership and recovery.** Internal PostgreSQL repository implemented and verified with 12 real-database tests: transactional claims, leases, heartbeats, fenced checkpoints, ordered events, cancellation, per-request outcome history, and explicit recovery. Remaining: integrate a worker, dispatch/budget boundary, shutdown/restart behavior, and orchestration-level cancellation before closing the complete execution gate.
+- [ ] **B3 — Enforce spending controls.** Internal disabled-by-default ledger implemented and verified with 24 real-database tests: atomic integer-money reservations, conservative unknown-cost holds, UTC rollover accounting, per-run/global/daily/call/concurrency limits, kill switch, and reconciliation. Remaining: bind the ledger to fenced worker dispatch, verified model pricing/usage, and authorized operator controls. No live dispatch has been verified.
 - [ ] **B4 — Preserve and stream activity.** Store ordered public events; support SSE replay/reconnect and status/result endpoints. Verify refresh does not duplicate an investigation.
 - [ ] **B5 — Secure tool and source boundaries.** Validate tool inputs, URLs and redirects; block internal destinations; limit fetch size/time; isolate mathematical checks; treat papers as untrusted data; redact credentials.
 

@@ -63,10 +63,20 @@ The foundation's Compose application deliberately does not forward model credent
 
 Settings load from the process and optionally `.env` in the working directory. `DATABASE_URL` must use `postgresql+psycopg`. `STATIC_DIR` (or `FRONTEND_DIST`) enables serving a built frontend. API routes that do not exist return JSON 404s instead of the SPA page.
 
+## Internal job and budget services
+
+`polymath.jobs.JobRepository` provides PostgreSQL claims, fenced leases, checkpoints, ordered/idempotent events, cancellation, and explicit interruption/recovery. Expired jobs are never automatically replayed. Dispatched external requests have their own durable bounded observation/reconciliation history, so a full checkpoint cannot block recovery. Ambiguous requests must be reconciled before a run can resume.
+
+`polymath.budget.BudgetService` stores integer microdollars and serializes mutations under an account lock. Accounts default to paid execution disabled and pricing unverified. Reservations account for worst-case cost before dispatch; a separate one-time dispatch claim prevents duplicate use. Unknown outcomes retain their full hold and concurrency slot until explicit evidence resolves them. Settled costs are conservatively counted on both dispatch and settlement UTC dates, while counted only once globally. Unexpected actual charges freeze further dispatch.
+
+These are internal services, not authenticated operator/public endpoints. Do not assemble independent job and budget method calls into a live worker without a coordinated dispatch transaction and cancellation/recovery policy. That integration and its tests remain required. The current application still exposes no research submission endpoint or worker process. All ledger tests use synthetic amounts; they perform no paid requests.
+
 ## Meta integration prerequisites
 
 `MODEL_API_KEY` and an explicitly verified `META_MODEL` are required for real model access. The prototype targets the repository's proposed HTTPS endpoint on `api.meta.ai`; actual capabilities and model IDs still need live verification. No model ID is guessed by default, no non-Meta fallback is configured, and no paid calls run from startup, CI, or the web page.
 
 Before an explicitly bounded live experiment: verify current pricing and account limits, supply authentication securely, and verify runtime access. Before enabling public investigations: implement and test durable jobs, atomic spending reservations, quotas, and operational authorization. The prototype's call/token limits are not a substitute for those controls. Read the [research package's usage notes](../backend/src/polymath/research/README.md) before invoking it manually.
+
+**Current owner instruction: continue without paid calls.** Credits/account limits are not ready. Do not enable a model request merely because a key appears; the owner must confirm readiness and permit paid testing first.
 
 Network destinations identified so far: `api.meta.ai`, `dev.meta.ai` for model documentation, `api.openalex.org` for discovery, and `export.arxiv.org`/`arxiv.org` for accessible literature. Saved environment requirements do not establish runtime connectivity or provider authorization.
