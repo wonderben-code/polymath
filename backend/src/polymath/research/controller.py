@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import math
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -134,11 +135,17 @@ def _verify_evidence(
 
 class ResearchController:
     def __init__(
-        self, model: ResearchModel, tools: LiteratureTools, limits: ResearchLimits | None = None
+        self,
+        model: ResearchModel,
+        tools: LiteratureTools,
+        limits: ResearchLimits | None = None,
+        *,
+        on_event: Callable[[ResearchEvent], Awaitable[None]] | None = None,
     ) -> None:
         self.model = model
         self.tools = tools
         self.limits = limits or ResearchLimits()
+        self.on_event = on_event
 
     async def investigate(self, goal: str) -> ResearchResult:
         if not isinstance(goal, str) or not 1 <= len(goal.strip()) <= 4000:
@@ -154,8 +161,11 @@ class ResearchController:
         events: list[ResearchEvent] = []
         calls = input_tokens = output_tokens = unknown_usage = actions = repairs = 0
 
-        def event(kind: str, summary: str) -> None:
-            events.append(ResearchEvent(sequence=len(events) + 1, kind=kind, summary=summary))
+        async def event(kind: str, summary: str) -> None:
+            item = ResearchEvent(sequence=len(events) + 1, kind=kind, summary=summary)
+            events.append(item)
+            if self.on_event is not None:
+                await self.on_event(item)
 
         def observation(value: dict) -> None:
             messages.append({"role": "user", "content": json.dumps({"observation": value})})
@@ -182,10 +192,10 @@ class ResearchController:
                 error_code=error_code,
             )
 
-        def reject(code: str) -> bool:
+        async def reject(code: str) -> bool:
             nonlocal repairs
             repairs += 1
-            event("action_rejected", "Rejected an invalid action or unsupported evidence.")
+            await event("action_rejected", "Rejected an invalid action or unsupported evidence.")
             observation(
                 {"error": code, "instruction": "Choose a valid action or reject the bridge."}
             )
@@ -206,14 +216,14 @@ class ResearchController:
                     timeout=self.limits.model_timeout_seconds,
                 )
             except TimeoutError:
-                event("model_failed", "The model request exceeded its wall-clock limit.")
+                await event("model_failed", "The model request exceeded its wall-clock limit.")
                 return result("failed", error_code="model_timeout_outcome_unknown")
             except ModelError as exc:
                 code = str(exc) if str(exc) in SAFE_MODEL_ERRORS else "model_failed"
-                event("model_failed", "The model request did not produce a usable response.")
+                await event("model_failed", "The model request did not produce a usable response.")
                 return result("failed", error_code=code)
             except Exception:
-                event("model_failed", "The model request did not produce a usable response.")
+                await event("model_failed", "The model request did not produce a usable response.")
                 return result("failed", error_code="model_failed")
             if reply.input_tokens is not None and reply.output_tokens is not None:
                 unknown_usage -= 1
@@ -225,7 +235,7 @@ class ResearchController:
             try:
                 action = ACTION_ADAPTER.validate_json(reply.content)
             except ValidationError:
-                if reject("invalid_action_schema"):
+                if await reject("invalid_action_schema"):
                     return result("failed", error_code="repair_limit")
                 continue
             actions += 1
@@ -261,17 +271,20 @@ class ResearchController:
                             "provider_failures": [item.model_dump() for item in failures],
                         }
                     )
-                    event(
+                    await event(
                         "search_completed",
-                        f"Searched literature for {action.purpose}; found {len(matches)} sources."
+                        f'Searched literature for {action.purpose}: "{action.query}"; '
+                        f"found {len(matches)} sources."
                         + (" Some providers were unavailable." if failures else ""),
                     )
                 except Exception:
                     observation({"error": "literature_search_failed"})
-                    event("tool_failed", "The literature search did not return usable results.")
+                    await event(
+                        "tool_failed", "The literature search did not return usable results."
+                    )
             elif isinstance(action, ReadAction):
                 if action.source_id not in discovered:
-                    if reject("source_not_discovered"):
+                    if await reject("source_not_discovered"):
                         return result("failed", error_code="repair_limit")
                     continue
                 try:
@@ -293,24 +306,24 @@ class ResearchController:
                             "content_sha256": document.content_sha256,
                         }
                     )
-                    event("source_read", f"Retrieved {document.content_kind} source text.")
+                    await event("source_read", f"Read {document.content_kind}: {document.title}")
                 except Exception:
                     observation({"error": "source_retrieval_failed"})
-                    event("tool_failed", "The source text could not be retrieved.")
+                    await event("tool_failed", "The source text could not be retrieved.")
             elif isinstance(action, ConcludeAction):
                 if isinstance(action.conclusion, InsufficientFinding):
-                    event("concluded", "Concluded that the evidence is insufficient.")
+                    await event("concluded", "Concluded that the evidence is insufficient.")
                     return result("insufficient_evidence", finding=action.conclusion)
                 try:
                     quotes = _verify_evidence(action.conclusion, sources, purposes)
                 except ValueError as exc:
-                    if reject(str(exc)):
+                    if await reject(str(exc)):
                         return result("failed", error_code="repair_limit")
                     continue
-                event(
+                await event(
                     "concluded",
                     "Recorded a candidate bridge with source-matched quotations and limitations.",
                 )
                 return result("bridge", finding=action.conclusion, quotes=quotes)
-        event("stopped", "Stopped at the configured research call or action limit.")
+        await event("stopped", "Stopped at the configured research call or action limit.")
         return result("limit_reached", error_code="research_limit")

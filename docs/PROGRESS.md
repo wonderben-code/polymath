@@ -4,13 +4,13 @@ Last updated: 27 October 2026 (Bangkok). This file records verified outcomes; [B
 
 ## Current position
 
-**Stage: application foundation (A3), research-controller prototype (A4), internal durable-job/budget services, and abstract-reading literature adapters implemented and locally validated. Live research is not enabled.**
+**Stage: application, injected Explore worker, atomic dispatch/budget boundary, durable evidence, session-owned APIs, and research workspace connected and locally validated. Live Meta research remains disabled.**
 
 Scope: the complete product, including Surprise Me, the knowledge base, map, and connections between connections. Meta intelligence controls research. See [ARCHITECTURE.md](ARCHITECTURE.md).
 
 **First engineering objective:** A1–A5 in the build plan: establish real Meta access and capabilities, create the application foundation, and complete one bounded research investigation with real sources, a structural mapping, an objection, and an evidence-backed conclusion or honest rejection.
 
-**Next work:** integrate job ownership, cancellation, budget dispatch, and external-request recording into one worker execution boundary. Continue literature integration and evidence persistence. The owner explicitly requested continuing without paid calls because credits/account limits are not ready. Real Meta capabilities (A1/A2) and the live investigation (A5) remain blocked; a key appearing alone does not authorize paid tests. No fixture result counts as a completed live investigation.
+**Next work:** extend the shared engine to Ask and autonomous Surprise Me, improve accessible full-text retrieval and bibliographic metadata, and develop the knowledge/map workflows. The Explore pipeline is now connected and tested with explicit fixtures. Real Meta capabilities (A1/A2), verified live pricing/token limits, and the live investigation (A5) remain blocked by missing access and the owner's no-paid-calls instruction; a key appearing alone is not permission to test. No fixture result counts as a live discovery.
 
 ## Milestone status
 
@@ -19,9 +19,9 @@ Scope: the complete product, including Surprise Me, the knowledge base, map, and
 | Repository and planning documents | Complete | Existing specification plus architecture, roadmap, task plan, and tracker in this change |
 | Cloud tooling | Partially verified | Git read access worked; OpenTimestamps 0.7.2 installed; all four local proofs parsed and matched commit-hash payloads; install script reran successfully |
 | A — Real Meta research path | A3/A4 complete; live checks blocked | Foundation and adaptive-controller prototype implemented; actual model authentication/capabilities and real-source investigation still unverified |
-| B — Durable research and controls | B2/B3 internal services verified; execution integration pending | 12 real PostgreSQL job tests and 24 budget tests passed, including concurrency, fencing, recovery, unknown costs, and rollover; integrated worker, full evidence store, and public execution still pending |
-| C — Explore | C1 partially implemented | Abstract adapters and explicit provider-coverage diagnostics tested; live access, full text, durable evidence storage, and the complete research journey pending |
-| D — Public deployment and API | Not started | Host selection, public URL, quota controls, persistence/recovery |
+| B — Durable research and controls | B2/B4 integrated; B1/B3 partial | Atomic dispatch, recovery/replay, immutable source/findings, owned SSE/status/results, and synthetic worker journeys verified. Real pricing/token bounds, authenticated operator controls, full entity graph, and public execution remain pending. |
+| C — Explore | Connected fixture pipeline; live investigation pending | Abstract tools, evidence validation, and workspace connected; real Meta, live source verification, full text, and scientific evaluation remain unverified. |
+| D — Public deployment and API | Local API implemented; public deployment pending | Session/CSRF ownership and queue controls verified locally; host, HTTPS deployment, full abuse controls, and external API client/deployed recovery checks remain pending. |
 | E — Ask and Surprise Me | Not started | Both modes working end to end |
 | F — Knowledge base, map, higher-level research | Not started | Scheduled ingestion/reassessment and navigable evidence graph |
 | G — Formalise, Write, Publish | Not started | Real feature journeys, sandbox integration, approved production publication |
@@ -63,5 +63,9 @@ Track: real source identity, quote integrity, claim support, mapping assumptions
 | 27 Oct 2026 | B2/B3 internal services: 12 job and 24 budget tests passed on real PostgreSQL, including threaded races, stale workers, cancellation, ambiguous external outcomes, day rollover, and migration reversibility | Repository invariants verified. Integrated worker, authorization, real model usage/pricing, and actual paid dispatch remain unverified; B2/B3 full workflow gates stay open. |
 | 27 Oct 2026 | Partial C1: 73 synthetic HTTP fixture cases passed; controller forwards partial-provider failures and rejects invented/unread evidence | Abstract retrieval/provenance, DOI deduplication, input/response limits, XML hardening, and snapshot stability verified with fixtures; no live literature/model integration claimed |
 | 27 Oct 2026 | Full local check: `make check`, `make test` (120 backend + 6 frontend), `TEST_DATABASE_URL=... make integration` (37 real PostgreSQL tests), and `make build` passed | 157 backend tests plus 6 frontend tests passed; upstream Starlette TestClient deprecation warning remains. Hosted CI outcome is still unverified. |
+| 27 Oct 2026 | Atomic dispatch integration passed 17 PostgreSQL tests; source/finding storage passed 28; session-owned API passed 22; injected worker passed 9 | Verified lease/budget atomicity, response accounting, immutable provenance, CSRF/ownership, SSE replay, cancellation, shutdown, and restart without duplicate model dispatch; no model/network calls in these tests. |
+| 27 Oct 2026 | Full backend check passed: 121 unit + 113 PostgreSQL integration tests; Ruff/format checks passed | 234 backend tests passed. Live protocol, real model usage/pricing, public launch, and scientific validity remain unverified. |
+| 27 Oct 2026 | Chromium exercised an isolated, explicitly synthetic browser → session/CSRF → queue → worker/ledger → saved sources/finding → SSE/result → refresh/history journey | One job submission, two saved abstract sources, no duplicate submission on refresh, no page errors or mobile overflow. The harness is outside the product and uses no real model or external literature requests. |
+| 27 Oct 2026 | Frontend: 41 tests, type check, and production build passed; UI displays actual owned history/results, handles CSRF cancellation/session expiry, and reconnects using persisted cursors | Operational bookkeeping is hidden from the visible research timeline while all persisted records/cursors remain intact; default launch stays disabled. |
 
 For subsequent implementation, append the task IDs, commit, exact meaningful checks and outcomes, deployed evidence where applicable, and remaining limitations. Keep planned, passed, failed, blocked, skipped, and unrun results distinct.

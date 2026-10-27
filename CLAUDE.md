@@ -14,6 +14,8 @@ The owner approved recording the full-product development direction on 27 Octobe
 
 The full specified product is the delivery target: Explore, Ask, Surprise Me, live research, connections between connections, a growing knowledge base, a map, Formalise, Write, approval-gated Publish, and a public API. Earlier after-v1/stretch labels for these features are superseded. Sequence them around the shared engine; do not silently omit functionality or substitute simulated integrations.
 
+Current implementation includes the injected Explore worker, atomic dispatch/budget boundary, durable evidence store, and session-owned job/SSE/result routes. Production submission remains disabled; no production Meta factory exists. Read the current progress tracker before claiming feature completion. Synthetic end-to-end tests exercise real persistence and orchestration but do not verify live Meta behavior or scientific findings.
+
 Meta intelligence chooses research directions and adapts to evidence. Application code enforces tool contracts, evidence integrity, durable execution, permissions, and budgets. Preferred model: Muse Spark; verify availability and capabilities, using another capable Meta model if needed. Do not silently use a non-Meta model. Changes to product scope or major architecture decisions should be explained to Eks before replacing this baseline.
 
 ## Fixed constraints

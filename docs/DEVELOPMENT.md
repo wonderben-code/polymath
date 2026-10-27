@@ -1,6 +1,6 @@
 # Developing Polymath
 
-The current release is the application foundation, with a separately tested research-controller prototype. Live research is not enabled. Follow [BUILD_PLAN.md](BUILD_PLAN.md) and [PROGRESS.md](PROGRESS.md) for implementation and verification status.
+The current release connects the application, injected Explore worker, transactional dispatch/budget controls, durable evidence, session-owned APIs, and research workspace. The complete path is verified with synthetic models/sources. Live Meta research is not enabled. Follow [BUILD_PLAN.md](BUILD_PLAN.md) and [PROGRESS.md](PROGRESS.md) for implementation and verification status.
 
 ## Prerequisites
 
@@ -52,14 +52,14 @@ The foundation's Compose application deliberately does not forward model credent
 
 `make image` builds the image separately. In Codex cloud, the build helper mounts the injected proxy CA for package downloads when available. TLS verification remains enabled; the CA is not committed or retained in image layers. Outside this cloud, ordinary system certificate trust is used. A failed certificate check must be corrected through trust configuration, never bypassed.
 
-`make compose-stop` stops the stack without deleting the database volume. Stop a separately launched local API before starting the packaged app because they share port 8000. There is no research worker/scheduler service yet; those arrive with the durable-job tasks.
+`make compose-stop` stops the stack without deleting the database volume. Stop a separately launched local API before starting the packaged app because they share port 8000. Compose intentionally starts no model worker or scheduler: the worker library is integrated and tested, but a verified production Meta factory and permission for paid calls are still absent.
 
 ## Health and configuration
 
 - `GET /api/v1/health`: process liveness; does not imply database readiness.
 - `GET /api/v1/readiness`: queries PostgreSQL and compares the actual Alembic revision with the packaged migration head; returns 503 for unavailable/pending dependencies.
 - `GET /api/v1/capabilities`: explicitly reports research unavailable and whether both key/model settings are present; configuration presence is not verified authentication.
-- FastAPI's generated `/docs` describes implemented routes. There is no public research-submission endpoint yet.
+- FastAPI's generated `/docs` describes the implemented session/job/event/result routes. The research-submission route exists but rejects new jobs while its default availability gate is off.
 
 Settings load from the process and optionally `.env` in the working directory. `DATABASE_URL` must use `postgresql+psycopg`. `STATIC_DIR` (or `FRONTEND_DIST`) enables serving a built frontend. API routes that do not exist return JSON 404s instead of the SPA page.
 
@@ -69,7 +69,31 @@ Settings load from the process and optionally `.env` in the working directory. `
 
 `polymath.budget.BudgetService` stores integer microdollars and serializes mutations under an account lock. Accounts default to paid execution disabled and pricing unverified. Reservations account for worst-case cost before dispatch; a separate one-time dispatch claim prevents duplicate use. Unknown outcomes retain their full hold and concurrency slot until explicit evidence resolves them. Settled costs are conservatively counted on both dispatch and settlement UTC dates, while counted only once globally. Unexpected actual charges freeze further dispatch.
 
-These are internal services, not authenticated operator/public endpoints. Do not assemble independent job and budget method calls into a live worker without a coordinated dispatch transaction and cancellation/recovery policy. That integration and its tests remain required. The current application still exposes no research submission endpoint or worker process. All ledger tests use synthetic amounts; they perform no paid requests.
+`polymath.dispatch.DispatchCoordinator` now binds live job ownership, budget reservation, one-time dispatch, payload identity, and pending external work in one transaction. A committed grant is the authorization point; cancellation after it cannot unsend an in-flight call, but blocks subsequent grants. Known late responses are accounted without allowing stale checkpoint writes. Conflicting operator reconciliation/late-response evidence is retained and freezes further dispatch for review.
+
+`polymath.worker.ResearchWorker` uses that boundary, persists source reads/results, streams real controller actions, and can poll until stopped. It records tool observations and immutable model responses for replay. Restart requires an explicit safe resume; observed responses are replayed without another dispatch/charge, while unknown requests require reconciliation. A free bounded source-search refresh may restore a fresh provider's discovery state; the model still receives the saved observation. Source snapshots already read are loaded from durable retrieval IDs. Changing the worker policy or request identity stops replay rather than spending again.
+
+The worker defaults disabled, has no production Meta factory, and its module entry point refuses paid execution. It currently executes Explore only; Ask/Surprise execution are explicit future features, not silently treated as Explore. Tests inject synthetic models/tools/prices; no paid requests occur. Do not substitute fixed fixture reservations for verified model token/context/pricing limits.
+
+## Session-owned research API
+
+The application now mounts the following routes, while **new research submission remains disabled by default**:
+
+| Route | Behavior |
+|---|---|
+| `GET /api/v1/session` | Bootstrap a seven-day HttpOnly browser cookie; return a separate CSRF token; only a cookie hash is stored |
+| `POST /api/v1/runs` | Validate mode/goal, session, CSRF, origin, availability, and queue quotas; create ownership/job/event atomically only if explicitly available |
+| `GET /api/v1/runs` | Cursor-paginated history belonging to the current browser session |
+| `GET /api/v1/runs/{id}` | Owned public status; no checkpoint, raw model state, or lease details |
+| `POST /api/v1/runs/{id}/cancel` | CSRF-protected cancellation of an owned job |
+| `GET /api/v1/runs/{id}/events` | Authenticated SSE activity with persisted IDs/replay, heartbeat, expiry checks, and terminal drain |
+| `GET /api/v1/runs/{id}/result` | Owned immutable evidence-backed result, once saved |
+
+Foreign runs return generic 404s. API responses, including errors, are `no-store`; validation failures do not echo private research inputs. Cookies are Secure over HTTPS and SameSite=Lax. Cookie expiry ends access to that anonymous browser history; general accounts are not implemented. These session/queue limits are not complete public abuse protection, so paid/public launch remains gated. Operator pricing/ledger configuration is still internal and needs authenticated controls before production use.
+
+`create_app(research_availability=...)` is a trusted composition/test seam. The exported application passes no policy and remains unavailable even if a key/model appear. It never constructs or runs a model from HTTP requests. Tests may inject an available policy and a synthetic worker in an isolated database to exercise the real pipeline; no fixture mode or default results are shipped in the product.
+
+The evidence service stores immutable source versions and separate retrieval metadata with database hash/immutability enforcement. Final findings may cite only sources durably read by the same run. Source identity/hash/kind, Unicode offsets, exact quotations, and proposed evidence associations are validated before saving a finding. This establishes provenance and quote integrity, not scientific truth, novelty, or an actual proof.
 
 ## Literature tools
 
