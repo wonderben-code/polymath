@@ -75,7 +75,7 @@ Settings load from the process and optionally `.env` in the working directory. `
 
 The worker defaults disabled, has no production Meta factory, and its module entry point refuses paid execution. It now executes all three research modes with separate conclusion contracts. Ask returns cited/classified claims; Surprise Me first lets the model choose fields. Tests inject synthetic models/tools/prices; no paid requests occur. Do not substitute fixed fixture reservations for verified model token/context/pricing limits.
 
-Replay protocol is now `polymath-worker-modes-v2`. Its checkpoint fingerprint includes the mode and contract version. Interrupted jobs from the earlier Explore-only protocol stop safely instead of silently making new paid requests; completed historical findings remain readable. Worker cleanup stops heartbeats before terminal transitions so a heartbeat cannot cancel its own shutdown/interruption record.
+Replay protocol is now `polymath-worker-memory-v3`. Its checkpoint fingerprint includes the mode and contract version. Earlier findings are model context, never primary evidence: memory-source actions retrieve exact original source versions and establish a durable read link in the new run. Memory search replay uses an immutable observation and an opaque session-scope fingerprint; finding/source bodies are reloaded by immutable identifiers. Interrupted jobs from the earlier Explore-only protocol stop safely instead of silently making new paid requests; completed historical findings remain readable. Worker cleanup stops heartbeats before terminal transitions so a heartbeat cannot cancel its own shutdown/interruption record.
 
 ## Session-owned research API
 

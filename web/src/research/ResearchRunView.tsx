@@ -173,6 +173,19 @@ function SelectedFields({ selections }: { selections: FieldSelection[] }) {
   </section>
 }
 
+function ResearchMemory({ result, onOpenRun }: { result: ResearchResult; onOpenRun?: (id: string) => void }) {
+  const reads = result.memory_reads ?? []
+  if (!reads.length) return null
+  return <section className="research-memory" aria-labelledby="research-memory-title">
+    <div className="research-section-heading"><div><span className="eyebrow accent">REVISITING EARLIER WORK</span><h3 id="research-memory-title">Saved findings consulted</h3></div><span className="research-count">{reads.length} {reads.length === 1 ? 'finding' : 'findings'}</span></div>
+    <p className="research-scope-note">Earlier findings were revisited as research leads. Their conclusions do not provide independent evidence; inspect the original source passages and this investigation’s objections.</p>
+    <ol className="research-memory-list" aria-label="Earlier findings consulted">{reads.map((read, index) => <li key={read.result_id}>
+      {onOpenRun ? <button type="button" onClick={() => onOpenRun(read.run_id)}>Open earlier investigation {index + 1}</button> : <span>Earlier finding {index + 1}</span>}
+      <details><summary>Saved version</summary><dl><dt>Finding</dt><dd>{read.result_id}</dd><dt>Content hash</dt><dd>{read.content_sha256}</dd></dl></details>
+    </li>)}</ol>
+  </section>
+}
+
 function Bridge({ finding }: { finding: BridgeFinding }) {
   return (
     <article className="research-bridge" aria-labelledby="bridge-title">
@@ -205,7 +218,7 @@ function Evidence({ result }: { result: ResearchResult }) {
   )
 }
 
-export function ResearchRunView({ run, events, result, connection, onCancel, cancelling = false }: ResearchRunViewProps) {
+export function ResearchRunView({ run, events, result, connection, onCancel, cancelling = false, onOpenRun }: ResearchRunViewProps) {
   const state = states[run.status] ?? { label: 'Status unavailable', description: 'The investigation status could not be identified. Recorded material remains below.' }
   const activity = orderedEvents(events)
   const canCancel = onCancel && ['queued', 'running', 'waiting_retry'].includes(run.status)
@@ -215,7 +228,7 @@ export function ResearchRunView({ run, events, result, connection, onCancel, can
       <div className="research-run-summary"><p>{state.description}</p>{canCancel && <button type="button" className="research-cancel" onClick={onCancel} disabled={cancelling}>{cancelling ? 'Requesting cancellation…' : 'Cancel investigation'}</button>}</div>
       <div className="research-run-layout">
         <section className="research-activity" aria-labelledby="research-activity-title"><div className="research-section-heading"><h3 id="research-activity-title">Research activity</h3><span className={`research-connection connection-${connection}`} aria-live="polite">{connectionNames[connection]}</span></div>{activity.length ? <ol className="research-timeline" aria-label="Recorded research activity" aria-live="polite" aria-relevant="additions">{activity.map((event, index) => <li key={event.sequence}><span className="research-event-number" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span><p>{event.summary}</p></li>)}</ol> : <p className="research-empty">No recorded activity yet.</p>}</section>
-        <section className="research-results" aria-labelledby="research-outcome-title"><h3 className="research-sr-only" id="research-outcome-title">Research outcome</h3>{result ? <>{run.mode === 'surprise' && <SelectedFields selections={result.field_selections ?? []} />}<Outcome result={result} /><Evidence result={result} /></> : <PendingOutcome status={run.status} />}</section>
+        <section className="research-results" aria-labelledby="research-outcome-title"><h3 className="research-sr-only" id="research-outcome-title">Research outcome</h3>{result ? <>{run.mode === 'surprise' && <SelectedFields selections={result.field_selections ?? []} />}<Outcome result={result} /><ResearchMemory result={result} onOpenRun={onOpenRun} /><Evidence result={result} /></> : <PendingOutcome status={run.status} />}</section>
       </div>
     </section>
   )

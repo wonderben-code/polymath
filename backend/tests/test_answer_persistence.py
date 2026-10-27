@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 from alembic import command
 from alembic.config import Config
+from alembic.script import ScriptDirectory
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 from test_evidence import document, result_for
@@ -205,6 +206,6 @@ def test_incompatible_downgrade_refuses_to_delete_answer_artifacts(database):
     with database.connect() as connection:
         assert (
             connection.scalar(text("SELECT version_num FROM alembic_version"))
-            == "0007_answer_evidence"
+            == ScriptDirectory.from_config(config).get_current_head()
         )
     command.check(config)

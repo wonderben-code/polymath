@@ -1,16 +1,16 @@
 # Polymath: Progress tracker
 
-Last updated: 27 October 2026 (Bangkok). This file records verified outcomes; [BUILD_PLAN.md](BUILD_PLAN.md) holds task checkboxes and [ROADMAP.md](ROADMAP.md) holds target dates.
+Last updated: 28 October 2026 (Bangkok). This file records verified outcomes; [BUILD_PLAN.md](BUILD_PLAN.md) holds task checkboxes and [ROADMAP.md](ROADMAP.md) holds target dates.
 
 ## Current position
 
-**Stage: Explore, Ask, and Surprise Me now share the worker, atomic dispatch/budget controls, durable evidence, and owned workspace. Session-owned knowledge search/map is connected. Paths are locally validated with explicit fixtures; live Meta research remains disabled.**
+**Stage: Evidence-bound model memory extends Explore, Ask, and Surprise Me. The three modes share the worker, atomic dispatch/budget controls, durable evidence, and owned workspace. Session-owned knowledge search/map is connected. Paths are locally validated with explicit fixtures; live Meta research remains disabled.**
 
 Scope: the complete product, including Surprise Me, the knowledge base, map, and connections between connections. Meta intelligence controls research. See [ARCHITECTURE.md](ARCHITECTURE.md).
 
 **First engineering objective:** A1–A5 in the build plan: establish real Meta access and capabilities, create the application foundation, and complete one bounded research investigation with real sources, a structural mapping, an objection, and an evidence-backed conclusion or honest rejection.
 
-**Next work:** full-text/bibliographic retrieval, agent memory and connections between connections, scheduled ingestion/reassessment, and Formalise/Write/Publish. The three research modes and basic private map now work through fixture-backed end-to-end tests. Actual Meta capabilities/pricing/token bounds, scientific quality, and public deployment remain unverified. Paid calls remain forbidden until the owner confirms readiness and permits them; a key appearing alone is not permission. No fixture finding is a live discovery.
+**Next work:** full-text/bibliographic retrieval, connections between connections, scheduled ingestion/reassessment, and Formalise/Write/Publish. The three research modes and basic private map now work through fixture-backed end-to-end tests. Actual Meta capabilities/pricing/token bounds, scientific quality, and public deployment remain unverified. Paid calls remain forbidden until the owner confirms readiness and permits them; a key appearing alone is not permission. No fixture finding is a live discovery.
 
 ## Milestone status
 
@@ -23,7 +23,7 @@ Scope: the complete product, including Surprise Me, the knowledge base, map, and
 | C — Explore | Connected fixture pipeline; live investigation pending | Abstract tools, evidence validation, and workspace connected; real Meta, live source verification, full text, and scientific evaluation remain unverified. |
 | D — Public deployment and API | Local API implemented; public deployment pending | Session/CSRF ownership and queue controls verified locally; host, HTTPS deployment, full abuse controls, and external API client/deployed recovery checks remain pending. |
 | E — Ask and Surprise Me | Implementation connected; live evaluation pending | Question-bound classified/cited claims, model-selected field directions, storage/worker/replay, and UI/browser journeys verified with synthetic fixtures; real Meta intelligence and scientific support remain unverified. |
-| F — Knowledge base, map, higher-level research | Private search/map implemented; broader workflows pending | Owned saved source/finding graph, actual quote associations, bounded/literal search, map navigation, and privacy tested. Agent memory, public/shared views, ingestion/reassessment, and higher-level research remain pending. |
+| F — Knowledge base, map, higher-level research | Private search/map implemented; broader workflows pending | Owned saved source/finding graph, actual quote associations, bounded/literal search, map navigation, and privacy tested. Owned model memory is implemented; public/shared views, ingestion/reassessment, and higher-level research remain pending. |
 | G — Formalise, Write, Publish | Not started | Real feature journeys, sandbox integration, approved production publication |
 | H — Quality, release, submission | Not started | Full regression, scientific audit, polished release, submission confirmation |
 
@@ -72,5 +72,6 @@ Track: real source identity, quote integrity, claim support, mapping assumptions
 | 27 Oct 2026 | Knowledge projection: 13 PostgreSQL privacy/provenance/query/bounds tests and 11 frontend graph/search tests passed | Search/map represents current-session persisted artifacts only; no scheduled reading or higher-level inference is implied. |
 | 27 Oct 2026 | `make check`, `make test`, `TEST_DATABASE_URL=... make integration`, and `make build` passed: 285 backend tests (138 PostgreSQL integration) plus 70 frontend tests | Full local suite green; upstream TestClient deprecation warning remains. Hosted CI, public deployment, and live model/provider behavior are still not inferred from these checks. |
 | 27 Oct 2026 | Chromium fixture journey passed Ask's three labels/citations, Surprise's recorded choices, owned map navigation, persisted history, and 390px mobile layout; two submissions remained two after refresh | Explicit synthetic models/sources in an isolated schema; no external provider or paid model calls. No default fixture data ships in the product. |
+| 28 Oct 2026 | Research memory: 29 controller fixtures, 19 PostgreSQL memory cases, and 5 worker-level journeys cover model-selected memory search, original-source rereads, immutable provenance, ownership, expiry, and restart without duplicate model charges | Earlier findings remain hypotheses. Only exact original source snapshots can enter new citations; cached searches are scope-bound and stable. A committed read with a lost response interrupts explicitly and retries the free read safely on resume. Exact staged-source verification passed Ruff, 338 backend tests (162 PostgreSQL), 73 frontend tests, type check, and production build. No live Meta or scientific quality claim. |
 
 For subsequent implementation, append the task IDs, commit, exact meaningful checks and outcomes, deployed evidence where applicable, and remaining limitations. Keep planned, passed, failed, blocked, skipped, and unrun results distinct.

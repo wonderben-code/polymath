@@ -85,11 +85,18 @@ export interface InsufficientFinding {
   reason: string
 }
 
+export interface MemoryReadReference {
+  result_id: string
+  run_id: string
+  content_sha256: string
+}
+
 export interface ResearchResult {
   status: 'bridge' | 'answer' | 'insufficient_evidence' | 'limit_reached' | 'failed'
   // Older persisted Explore findings predate these fields.
   mode?: ResearchRunSummary['mode']
   field_selections?: FieldSelection[]
+  memory_reads?: MemoryReadReference[]
   finding: BridgeFinding | AnswerFinding | InsufficientFinding | null
   quotes: VerifiedQuote[]
   sources: SourceDocument[]
@@ -111,4 +118,5 @@ export interface ResearchRunViewProps {
   connection: 'connecting' | 'live' | 'reconnecting' | 'closed' | 'error'
   onCancel?: () => void
   cancelling?: boolean
+  onOpenRun?: (id: string) => void
 }

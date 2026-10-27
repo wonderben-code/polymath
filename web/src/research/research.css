@@ -102,3 +102,12 @@
 .research-field-tags > li { padding: 5px 10px; border: 1px solid #cbd6c4; background: #edf1e7; border-radius: 20px; font-size: 11px; color: #49634e; max-width: 100%; overflow-wrap: anywhere; }
 .research-field-directions > li > p { font-size: 12px; line-height: 1.85; color: #596c5e; margin: 0; overflow-wrap: anywhere; }
 @media (max-width: 760px) { .research-answer > h3 { font-size: 26px; } .research-answer-labels { padding: 14px; } .research-answer-claim-text { font-size: 18px; } }
+.research-memory { margin-top: 28px; padding-top: 24px; border-top: 1px solid var(--line); }
+.research-memory-list { margin: 14px 0 0; padding-left: 22px; font-size: 12px; color: var(--muted); }
+.research-memory-list li { padding: 9px 0; }
+.research-memory-list button { padding: 0; border: 0; background: none; color: var(--accent); text-decoration: underline; text-underline-offset: 3px; font-size: 12px; }
+.research-memory-list details { margin-top: 8px; font-size: 10px; }
+.research-memory-list summary { cursor: pointer; }
+.research-memory-list dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 12px; }
+.research-memory-list dt { font-weight: 600; }
+.research-memory-list dd { margin: 0; overflow-wrap: anywhere; }

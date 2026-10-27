@@ -21,9 +21,17 @@ from polymath.budget import BudgetError, BudgetService
 from polymath.dispatch import DispatchCoordinator, DispatchError
 from polymath.evidence import EvidenceStore
 from polymath.jobs import JobLease, JobRepository, LeaseLost, RunSnapshot
+from polymath.memory import MemoryError as ResearchMemoryError
+from polymath.memory import ResearchMemory
 from polymath.research.controller import LiteratureTools, ResearchController, ResearchLimits
 from polymath.research.meta import META_COMPLETIONS_URL, ModelError, ModelReply, ResearchModel
-from polymath.research.models import ResearchEvent, SearchResults, SourceDocument
+from polymath.research.models import (
+    MemoryFinding,
+    MemorySearchResults,
+    ResearchEvent,
+    SearchResults,
+    SourceDocument,
+)
 
 
 class ExecutionStopped(BaseException):
@@ -159,7 +167,7 @@ class _RecordedModel:
         request_id = f"model-{self.step:04d}"
         request_hash = _digest(
             {
-                "protocol": "polymath-worker-modes-v2",
+                "protocol": "polymath-worker-memory-v3",
                 "model_identity": self.policy.model_identity,
                 "endpoint": META_COMPLETIONS_URL,
                 "stream": False,
@@ -304,6 +312,130 @@ class _RecordedTools:
         return document
 
 
+class _RecordedMemory:
+    """Replay immutable owned memory without repeating a changing database search.
+
+    Finding bodies stay in immutable storage; checkpoints retain their digests.
+    Original source snapshots are also linked durably to the current run before
+    the controller can quote them. No provider refresh or external call occurs.
+    """
+
+    def __init__(self, context: _RunContext, memory: ResearchMemory):
+        self.context, self.memory = context, memory
+        self.step = 0
+
+    async def _cached(self, arguments: dict) -> tuple[str, str, dict | None]:
+        self.step += 1
+        key, digest = f"memory-{self.step:04d}", _digest(arguments)
+        snapshot = await self.context.checkpoint()
+        cached = snapshot.checkpoint.get("tool_observations", {}).get(key)
+        if cached is not None and cached["hash"] != digest:
+            raise ExecutionStopped("memory_replay_conflict")
+        if cached is not None and cached.get("error"):
+            raise RuntimeError("recorded_memory_failure")
+        return key, digest, cached
+
+    async def search(self, query: str) -> MemorySearchResults:
+        key, digest, cached = await self._cached({"kind": "search_memory", "query": query})
+        scope = await asyncio.to_thread(self.memory.scope_fingerprint)
+        if cached is not None:
+            if cached["scope"] != scope:
+                raise ExecutionStopped("memory_scope_lost")
+            return MemorySearchResults.model_validate_json(json.dumps(cached["payload"]))
+        try:
+            found = await asyncio.to_thread(self.memory.search, query)
+            if not isinstance(found, MemorySearchResults):
+                raise ValueError("Invalid memory search")
+        except LeaseLost:
+            raise ExecutionStopped("ownership_lost") from None
+        except Exception:
+            await self.context.save_cache(key, {"hash": digest, "error": True})
+            raise RuntimeError("memory_search_failed") from None
+        await self.context.save_cache(
+            key, {"hash": digest, "scope": scope, "payload": found.model_dump(mode="json")}
+        )
+        return found
+
+    async def read_finding(self, result_id: str) -> MemoryFinding:
+        async def record() -> MemoryFinding:
+            key, digest, cached = await self._cached(
+                {"kind": "read_memory_finding", "result_id": result_id}
+            )
+            try:
+                found = await asyncio.to_thread(self.memory.read_finding, result_id)
+                if not isinstance(found, MemoryFinding):
+                    raise ValueError("Invalid memory finding")
+                finding_digest = _digest(found.model_dump(mode="json"))
+                if cached is not None and finding_digest != cached["finding_digest"]:
+                    raise ExecutionStopped("memory_replay_conflict")
+            except LeaseLost:
+                raise ExecutionStopped("ownership_lost") from None
+            except ResearchMemoryError:
+                # These static failures leave the read transaction rolled back.
+                # A known failed first read can be replayed as a tool failure.
+                if cached is not None:
+                    raise ExecutionStopped("memory_replay_unavailable") from None
+                try:
+                    await self.context.save_cache(key, {"hash": digest, "error": True})
+                except Exception:
+                    raise ExecutionStopped("memory_read_interrupted") from None
+                raise RuntimeError("memory_finding_failed") from None
+            except Exception:
+                # The transaction may have committed its durable access receipt
+                # before the caller lost the response. Never cache that as a
+                # failed read: explicit resume retries this free, idempotent read.
+                raise ExecutionStopped("memory_read_interrupted") from None
+            if cached is None:
+                try:
+                    await self.context.save_cache(
+                        key, {"hash": digest, "finding_digest": finding_digest}
+                    )
+                except Exception:
+                    raise ExecutionStopped("memory_read_interrupted") from None
+            return found
+
+        try:
+            return await record()
+        except asyncio.CancelledError:
+            # wait_for cancels this coroutine on a tool timeout. Its database
+            # thread can still finish, so stop before any further model dispatch.
+            raise ExecutionStopped("memory_read_interrupted") from None
+
+    async def read_source(self, result_id: str, retrieval_id: str) -> SourceDocument:
+        key, digest, cached = await self._cached(
+            {"kind": "read_memory_source", "result_id": result_id, "retrieval_id": retrieval_id}
+        )
+        try:
+            # Reauthorize even replayed observations: a saved checkpoint cannot
+            # widen this run's current session scope or revive an expired one.
+            document = await asyncio.to_thread(self.memory.read_source, result_id, retrieval_id)
+            if not isinstance(document, SourceDocument):
+                raise ValueError("Invalid memory source")
+            if cached is not None:
+                saved = await asyncio.to_thread(
+                    self.context.evidence.get_document,
+                    self.context.lease.run_id,
+                    uuid.UUID(cached["retrieval_id"]),
+                )
+                if document != saved:
+                    raise ExecutionStopped("memory_replay_conflict")
+                return saved
+            stored = await asyncio.to_thread(
+                self.context.evidence.save_source, self.context.lease, document
+            )
+        except LeaseLost:
+            raise ExecutionStopped("ownership_lost") from None
+        except Exception:
+            if cached is not None:
+                raise ExecutionStopped("memory_replay_unavailable") from None
+            await self.context.save_cache(key, {"hash": digest, "error": True})
+            raise RuntimeError("memory_source_failed") from None
+        await self.context.save_cache(
+            key, {"hash": digest, "retrieval_id": str(stored.retrieval_id)}
+        )
+        return document
+
+
 class ResearchWorker:
     def __init__(
         self,
@@ -392,7 +524,7 @@ class ResearchWorker:
                 await asyncio.to_thread(
                     self.jobs.append_event,
                     lease,
-                    event_key=f"controller:v2:{item.sequence}",
+                    event_key=f"controller:v3:{item.sequence}",
                     kind=item.kind,
                     summary=item.summary,
                 )
@@ -411,7 +543,7 @@ class ResearchWorker:
             snapshot = await context.checkpoint()
             fingerprint = _digest(
                 {
-                    "protocol": "polymath-worker-modes-v2",
+                    "protocol": "polymath-worker-memory-v3",
                     "mode": snapshot.mode,
                     "policy": asdict(self.policy),
                     "limits": asdict(self.limits),
@@ -444,6 +576,7 @@ class ResearchWorker:
                 _RecordedTools(context, self.tools_factory(snapshot)),
                 self.limits,
                 on_event=public_event,
+                memory=_RecordedMemory(context, ResearchMemory(self.engine, lease)),
             )
             result = await controller.investigate(snapshot.goal, mode=snapshot.mode)
             await context.check_owner()

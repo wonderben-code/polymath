@@ -66,7 +66,7 @@ Gate: users can complete both modes on the deployed application using the same e
 
 Dependencies: B1, C, E2/E3 for Surprise Me integration.
 
-- [ ] **F1 — Build knowledge retrieval.** Session-owned search/projection over saved sources and bridge/answer findings is implemented with literal-query matching, source version identities, persisted quote associations, and bounded coverage. Remaining: agent memory tools, richer claim-level retrieval, shared/public visibility, and higher-level research integration.
+- [ ] **F1 — Build knowledge retrieval.** Session-owned search/projection over saved sources and bridge/answer findings is implemented with literal-query matching, source version identities, persisted quote associations, and bounded coverage. Owned model memory search, immutable finding reads, and separate original-source rereads are implemented with fenced replay. Remaining: richer claim-level retrieval, shared/public visibility, and higher-level research integration.
 - [ ] **F2 — Build the map.** Interactive accessible field/finding/source map, owned result navigation, privacy clearing, and truncation reporting implemented and browser-verified. Remaining: higher-level connections and launching follow-up research from selected map objects; these cannot be displayed before they actually exist.
 - [ ] **F3 — Investigate connections between connections.** Have Meta form and test hypotheses across existing bridges; trace higher-level claims to original evidence; prevent circular support and compounded false certainty.
 - [ ] **F4 — Add scheduled ingestion.** Persist watches/cursors; enqueue bounded, deduplicated searches for new literature; integrate rate limits and the same spending controls.

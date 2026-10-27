@@ -5,6 +5,7 @@ import type {
   ClaimQuote,
   EvidenceQuote,
   FieldSelection,
+  MemoryReadReference,
   ResearchActivityEvent,
   ResearchResult,
   ResearchRunSummary,
@@ -151,6 +152,12 @@ function fieldSelection(value: unknown): FieldSelection {
   if (fields.length < 2 || new Set(fields.map(normalizeField)).size !== fields.length) return invalid()
   return { fields, rationale: requiredText(record.rationale, 1000) }
 }
+function memoryRead(value: unknown): MemoryReadReference {
+  const record = object(value)
+  const hash = text(record.content_sha256, 64)
+  if (!/^[a-f\d]{64}$/.test(hash)) return invalid()
+  return { result_id: id(record.result_id), run_id: id(record.run_id), content_sha256: hash }
+}
 function finding(value: unknown): ResearchResult['finding'] {
   if (value === null) return null
   const record = object(value)
@@ -190,10 +197,12 @@ export function parseResult(value: unknown): ResearchResult {
   const parsed: ResearchResult = {
     status: result.status as ResearchResult['status'], mode, finding: finding(result.finding),
     field_selections: result.field_selections === undefined ? [] : list(result.field_selections, fieldSelection, 3),
+    memory_reads: result.memory_reads === undefined ? [] : list(result.memory_reads, memoryRead, 10),
     sources: list(result.sources, source), quotes: list(result.quotes, quote, 64), events: list(result.events, parseActivity, 2000),
     usage: { model_calls: integer(usage.model_calls), input_tokens_reported: integer(usage.input_tokens_reported), output_tokens_reported: integer(usage.output_tokens_reported), calls_without_usage: integer(usage.calls_without_usage) },
     error_code: result.error_code === null ? null : text(result.error_code, 100), validation_scope: result.validation_scope,
   }
+  if (new Set(parsed.memory_reads?.map((item) => item.result_id)).size !== parsed.memory_reads?.length) return invalid()
   if (mode !== 'surprise' && parsed.field_selections?.length) return invalid()
   if (parsed.status === 'answer') {
     if (mode !== 'ask' || parsed.finding?.outcome !== 'answer') return invalid()
@@ -315,7 +324,8 @@ export async function cancelResearchRun(runId: string, csrf: string, signal?: Ab
   return run.id === runId ? run : invalid()
 }
 
-export async function createResearchRun(mode: OwnedRun['mode'], goal: string, csrf: string, signal?: AbortSignal): Promise<OwnedRun> {
+export async function createResearchRun(mode: OwnedRun['mode'], goal: string, csrf: string, signal?: AbortSignal, parentResultIds: readonly string[] = []): Promise<OwnedRun> {
   if (!['explore', 'ask', 'surprise'].includes(mode) || typeof goal !== 'string' || goal.length > 4000 || (!goal.trim() && mode !== 'surprise')) throw new ResearchApiError('invalid_request')
-  return parseRun(await request('/api/v1/runs', signal, { csrf, body: { mode, goal } }))
+  if (parentResultIds.length && (mode !== 'explore' || parentResultIds.length < 2 || parentResultIds.length > 4 || parentResultIds.some((value) => typeof value !== 'string' || !UUID.test(value)) || new Set(parentResultIds.map((value) => value.toLowerCase())).size !== parentResultIds.length)) throw new ResearchApiError('invalid_request')
+  return parseRun(await request('/api/v1/runs', signal, { csrf, body: { mode, goal, ...(parentResultIds.length ? { parent_result_ids: parentResultIds } : {}) } }))
 }

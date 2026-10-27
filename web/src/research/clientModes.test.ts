@@ -89,6 +89,15 @@ function rejects(value: unknown) {
 }
 
 describe('saved Ask and Surprise record boundary', () => {
+  it('preserves only valid immutable memory references and defaults older records to no reads', () => {
+    expect(parseResult(legacyBridge()).memory_reads).toEqual([])
+    const memory = { result_id: '11111111-1111-4111-8111-111111111111', run_id: '22222222-2222-4222-8222-222222222222', content_sha256: 'a'.repeat(64) }
+    expect(parseResult({ ...legacyBridge(), memory_reads: [memory] }).memory_reads).toEqual([memory])
+    rejects({ ...legacyBridge(), memory_reads: [{ ...memory, content_sha256: 'not-a-hash' }] })
+    rejects({ ...legacyBridge(), memory_reads: [{ ...memory, result_id: 'not-an-id' }] })
+    rejects({ ...legacyBridge(), memory_reads: [memory, memory] })
+  })
+
   it('keeps older saved bridge records readable without inventing selected fields', () => {
     const parsed = parseResult(legacyBridge())
     expect(parsed.status).toBe('bridge')

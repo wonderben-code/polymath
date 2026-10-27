@@ -19,11 +19,18 @@ from polymath.research.models import (
     ConcludeAction,
     FieldSelection,
     InsufficientFinding,
+    MemoryFinding,
+    MemoryFindingReference,
+    MemoryReadReference,
+    MemorySearchResults,
     ReadAction,
+    ReadMemoryAction,
+    ReadMemorySourceAction,
     ResearchEvent,
     ResearchMode,
     ResearchResult,
     SearchAction,
+    SearchMemoryAction,
     SearchResults,
     SelectFieldsAction,
     SourceDocument,
@@ -37,6 +44,16 @@ class LiteratureTools(Protocol):
     async def search(self, query: str, purpose: str) -> SearchResults | list[SourceReference]: ...
 
     async def read(self, source_id: str) -> SourceDocument: ...
+
+
+class MemoryTools(Protocol):
+    """Ownership comes from the current run, never from model arguments."""
+
+    async def search(self, query: str) -> MemorySearchResults: ...
+
+    async def read_finding(self, result_id: str) -> MemoryFinding: ...
+
+    async def read_source(self, result_id: str, retrieval_id: str) -> SourceDocument: ...
 
 
 @dataclass(frozen=True)
@@ -100,6 +117,20 @@ concise public rationale, before searching. There is no predefined field pair.
 You may make at most three field selections total. Each selection starts
 a fresh prior-work/counterevidence search scope; the final bridge must connect
 fields from your current selection. Do not expose hidden reasoning.
+You may search_memory for leads, read_memory_finding to inspect a saved finding,
+then read_memory_source to inspect one of that finding's original source snapshots.
+Saved findings are previous model hypotheses with limitations, not independent
+scientific evidence. Never quote finding prose as if it were a paper. Read original
+sources before citing them. Saved source snapshots may be older than current
+literature. Search memory does not replace fresh counterevidence and prior-work
+literature searches. Do not count repeated sources or uncertain bridges as new
+corroboration or increase certainty merely by combining earlier hypotheses.
+When parent_result_ids are supplied, investigate connections across those bridges:
+read every selected parent finding, revisit original evidence from each, and test
+the new mapping against literature and objections. A positive bridge must quote
+original evidence traceable to every selected parent. Traceability alone does not
+validate the inferred connection. If a parent is unavailable or its evidence is
+insufficient, report insufficient_evidence. Do not force a higher-level finding.
 """
 
 MODE_INSTRUCTIONS = {
@@ -210,6 +241,40 @@ def _verify_surprise_fields(finding: BridgeFinding, selections: tuple[FieldSelec
         raise ValueError("bridge_outside_current_fields")
 
 
+def _retain_source(sources: dict[str, SourceDocument], document: SourceDocument) -> SourceDocument:
+    """One immutable text version per canonical source identifier within a run."""
+    prior = sources.get(document.source_id)
+    if prior is not None:
+        if (
+            prior.url != document.url
+            or prior.content_sha256 != document.content_sha256
+            or prior.content_kind != document.content_kind
+        ):
+            raise ValueError("source_version_conflict")
+        return prior
+    sources[document.source_id] = document
+    return document
+
+
+def _verify_parent_evidence(
+    parent_result_ids: tuple[str, ...],
+    memory_findings: dict[str, MemoryFinding],
+    quotes: tuple[VerifiedQuote, ...],
+) -> None:
+    quoted_versions = {
+        (quote.source_id, quote.source_sha256, quote.content_kind) for quote in quotes
+    }
+    for result_id in parent_result_ids:
+        parent = memory_findings.get(result_id)
+        if parent is None:
+            raise ValueError("parent_finding_not_read")
+        if not any(
+            (source.source.source_id, source.content_sha256, source.content_kind) in quoted_versions
+            for source in parent.sources
+        ):
+            raise ValueError("parent_evidence_not_quoted")
+
+
 class ResearchController:
     def __init__(
         self,
@@ -218,13 +283,21 @@ class ResearchController:
         limits: ResearchLimits | None = None,
         *,
         on_event: Callable[[ResearchEvent], Awaitable[None]] | None = None,
+        memory: MemoryTools | None = None,
     ) -> None:
         self.model = model
         self.tools = tools
         self.limits = limits or ResearchLimits()
         self.on_event = on_event
+        self.memory = memory
 
-    async def investigate(self, goal: str, *, mode: ResearchMode = "explore") -> ResearchResult:
+    async def investigate(
+        self,
+        goal: str,
+        *,
+        mode: ResearchMode = "explore",
+        parent_result_ids: tuple[str, ...] = (),
+    ) -> ResearchResult:
         if not isinstance(mode, str) or mode not in MODE_INSTRUCTIONS:
             raise ValueError("Unsupported research mode")
         if (
@@ -233,6 +306,18 @@ class ResearchController:
             or (not goal.strip() and mode != "surprise")
         ):
             raise ValueError("Research goal must contain 1–4000 characters unless mode is surprise")
+        if not isinstance(parent_result_ids, tuple) or (
+            parent_result_ids
+            and (
+                mode != "explore"
+                or not 2 <= len(parent_result_ids) <= 4
+                or not all(isinstance(result_id, str) for result_id in parent_result_ids)
+                or len(set(parent_result_ids)) != len(parent_result_ids)
+            )
+        ):
+            raise ValueError("Higher-level research requires two to four distinct Explore parents")
+        for result_id in parent_result_ids:
+            ReadMemoryAction(kind="read_memory_finding", result_id=result_id)
         schema = json.dumps(ACTION_ADAPTER.json_schema(), separators=(",", ":"))
         messages = [
             {
@@ -245,10 +330,22 @@ class ResearchController:
                 + "\nAction schema:\n"
                 + schema,
             },
-            {"role": "user", "content": json.dumps({"mode": mode, "research_goal": goal.strip()})},
+            {
+                "role": "user",
+                "content": json.dumps(
+                    {
+                        "mode": mode,
+                        "research_goal": goal.strip(),
+                        "memory_available": self.memory is not None,
+                        "parent_result_ids": list(parent_result_ids),
+                    }
+                ),
+            },
         ]
         discovered: dict[str, SourceReference] = {}
         sources: dict[str, SourceDocument] = {}
+        memory_discovered: dict[str, MemoryFindingReference] = {}
+        memory_findings: dict[str, MemoryFinding] = {}
         purposes: set[str] = set()
         selections: list[FieldSelection] = []
         events: list[ResearchEvent] = []
@@ -275,6 +372,14 @@ class ResearchController:
                 mode=mode,
                 finding=finding,
                 field_selections=tuple(selections),
+                memory_reads=tuple(
+                    MemoryReadReference(
+                        result_id=item.reference.result_id,
+                        run_id=item.reference.run_id,
+                        content_sha256=item.reference.content_sha256,
+                    )
+                    for item in memory_findings.values()
+                ),
                 quotes=quotes,
                 sources=tuple(sources.values()),
                 events=tuple(events),
@@ -355,12 +460,151 @@ class ResearchController:
                     f"Selected fields: {', '.join(selection.fields)}. {selection.rationale}",
                 )
             elif (
-                isinstance(action, (SearchAction, ReadAction))
+                isinstance(
+                    action,
+                    (
+                        SearchAction,
+                        ReadAction,
+                        SearchMemoryAction,
+                        ReadMemoryAction,
+                        ReadMemorySourceAction,
+                    ),
+                )
                 and mode == "surprise"
                 and not selections
             ):
                 if await reject("fields_not_selected"):
                     return result("failed", error_code="repair_limit")
+            elif isinstance(action, SearchMemoryAction):
+                try:
+                    if self.memory is None:
+                        raise ValueError("memory_unavailable")
+                    matches = await asyncio.wait_for(
+                        self.memory.search(action.query),
+                        timeout=self.limits.tool_timeout_seconds,
+                    )
+                    if not isinstance(matches, MemorySearchResults):
+                        raise ValueError("invalid_memory_search_result")
+                    matches = MemorySearchResults.model_validate_json(matches.model_dump_json())
+                    candidates = dict(memory_discovered)
+                    for item in matches.findings:
+                        prior = candidates.get(item.result_id)
+                        if prior is not None and prior != item:
+                            raise ValueError("memory_identity_conflict")
+                        candidates[item.result_id] = item
+                    if len(candidates) > 100:
+                        raise ValueError("memory_discovery_limit")
+                    memory_discovered = candidates
+                    observation(
+                        {"kind": "memory_search_results", **matches.model_dump(mode="json")}
+                    )
+                    await event(
+                        "memory_searched",
+                        f'Searched saved research for "{action.query}"; '
+                        f"found {len(matches.findings)} findings."
+                        + (" More results are available." if matches.truncated else ""),
+                    )
+                except Exception:
+                    observation({"error": "memory_search_failed"})
+                    await event("tool_failed", "Saved research could not be searched.")
+            elif isinstance(action, ReadMemoryAction):
+                if (
+                    action.result_id not in memory_discovered
+                    and action.result_id not in parent_result_ids
+                ):
+                    if await reject("memory_finding_not_discovered"):
+                        return result("failed", error_code="repair_limit")
+                    continue
+                if action.result_id not in memory_findings and len(memory_findings) >= 10:
+                    if await reject("memory_read_limit"):
+                        return result("failed", error_code="repair_limit")
+                    continue
+                try:
+                    if self.memory is None:
+                        raise ValueError("memory_unavailable")
+                    saved = await asyncio.wait_for(
+                        self.memory.read_finding(action.result_id),
+                        timeout=self.limits.tool_timeout_seconds,
+                    )
+                    if not isinstance(saved, MemoryFinding):
+                        raise ValueError("invalid_memory_finding")
+                    saved = MemoryFinding.model_validate_json(saved.model_dump_json())
+                    expected = memory_discovered.get(action.result_id)
+                    prior = memory_findings.get(action.result_id)
+                    if (
+                        saved.reference.result_id != action.result_id
+                        or (expected is not None and saved.reference != expected)
+                        or (prior is not None and saved != prior)
+                        or (
+                            action.result_id in parent_result_ids
+                            and saved.reference.outcome != "bridge"
+                        )
+                    ):
+                        raise ValueError("memory_identity_mismatch")
+                    memory_findings[action.result_id] = saved
+                    observation({"kind": "memory_finding", **saved.model_dump(mode="json")})
+                    await event(
+                        "memory_finding_read",
+                        f"Revisited saved finding: {saved.reference.title[:1000]}",
+                    )
+                except Exception:
+                    observation({"error": "memory_finding_read_failed"})
+                    await event("tool_failed", "The saved finding could not be read.")
+            elif isinstance(action, ReadMemorySourceAction):
+                saved = memory_findings.get(action.result_id)
+                reference = (
+                    next(
+                        (
+                            item
+                            for item in saved.sources
+                            if item.retrieval_id == action.retrieval_id
+                        ),
+                        None,
+                    )
+                    if saved is not None
+                    else None
+                )
+                if reference is None:
+                    if await reject("memory_source_not_discovered"):
+                        return result("failed", error_code="repair_limit")
+                    continue
+                try:
+                    if self.memory is None:
+                        raise ValueError("memory_unavailable")
+                    document = await asyncio.wait_for(
+                        self.memory.read_source(action.result_id, action.retrieval_id),
+                        timeout=self.limits.tool_timeout_seconds,
+                    )
+                    if not isinstance(document, SourceDocument):
+                        raise ValueError("invalid_source_document")
+                    if (
+                        document.source_id != reference.source.source_id
+                        or document.title != reference.source.title
+                        or document.url != reference.source.url
+                        or document.content_kind != reference.content_kind
+                        or document.content_sha256 != reference.content_sha256
+                    ):
+                        raise ValueError("memory_source_mismatch")
+                    discovered_prior = discovered.get(document.source_id)
+                    if discovered_prior is not None and discovered_prior.url != document.url:
+                        raise ValueError("source_identity_conflict")
+                    document = _retain_source(sources, document)
+                    observation(
+                        {
+                            "kind": "source_text",
+                            "memory_result_id": action.result_id,
+                            "memory_retrieval_id": action.retrieval_id,
+                            **document.model_dump(mode="json"),
+                            "content_sha256": document.content_sha256,
+                        }
+                    )
+                    await event(
+                        "memory_source_read",
+                        f"Revisited saved {document.content_kind}: {document.title}",
+                    )
+                except Exception:
+                    observation({"error": "memory_source_read_failed"})
+                    await event("tool_failed", "The saved original source could not be read.")
             elif isinstance(action, SearchAction):
                 try:
                     search_result = await asyncio.wait_for(
@@ -420,7 +664,7 @@ class ResearchController:
                         or document.url != discovered[action.source_id].url
                     ):
                         raise ValueError("source_identity_mismatch")
-                    sources[document.source_id] = document
+                    document = _retain_source(sources, document)
                     observation(
                         {
                             "kind": "source_text",
@@ -449,6 +693,7 @@ class ResearchController:
                         if mode == "surprise":
                             _verify_surprise_fields(action.conclusion, tuple(selections))
                         quotes = _verify_evidence(action.conclusion, sources, purposes)
+                        _verify_parent_evidence(parent_result_ids, memory_findings, quotes)
                 except ValueError as exc:
                     if await reject(str(exc)):
                         return result("failed", error_code="repair_limit")

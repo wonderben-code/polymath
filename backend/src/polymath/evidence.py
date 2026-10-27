@@ -28,6 +28,7 @@ from polymath.evidence_models import (
     SourceVersion,
 )
 from polymath.jobs import JobLease, _owned
+from polymath.memory_models import ResearchMemoryRead
 from polymath.research.models import (
     AnswerFinding,
     BridgeFinding,
@@ -247,6 +248,7 @@ class EvidenceStore:
         self._validate_result_shape(result)
         with Session(self.engine) as session, session.begin():
             run = _owned(session, lease)
+            self._validate_memory_reads(session, run, result)
             if result.mode != run.mode:
                 raise EvidenceError("result_mode_mismatch")
             if isinstance(result.finding, AnswerFinding) and (
@@ -311,6 +313,47 @@ class EvidenceStore:
                     )
                 )
             return self._stored_result(session, stored)
+
+    @staticmethod
+    def _validate_memory_reads(session: Session, run, result: ResearchResult) -> None:
+        recorded = session.scalars(
+            select(ResearchMemoryRead).where(ResearchMemoryRead.run_id == run.id)
+        ).all()
+        actual = {
+            (str(row.parent_result_id), str(row.parent_run_id), row.parent_content_sha256)
+            for row in recorded
+        }
+        declared = {
+            (item.result_id, item.run_id, item.content_sha256) for item in result.memory_reads
+        }
+        if len(declared) != len(result.memory_reads) or declared != actual:
+            raise EvidenceError("memory_read_provenance_mismatch")
+        if not recorded:
+            return
+        # Do not trust a hash string stored by a caller. Re-bind every observed
+        # artifact to the immutable parent row and an earlier investigation.
+        from polymath.access_models import ResearchRunAccess
+
+        owner = session.scalar(
+            select(ResearchRunAccess.session_hash).where(ResearchRunAccess.run_id == run.id)
+        )
+        if owner is None:
+            raise EvidenceError("memory_read_provenance_mismatch")
+        parents = session.execute(
+            select(EvidenceResult, ResearchRunAccess.session_hash)
+            .join(ResearchRunAccess, ResearchRunAccess.run_id == EvidenceResult.run_id)
+            .where(EvidenceResult.id.in_([row.parent_result_id for row in recorded]))
+        ).all()
+        bound = {
+            (str(parent.id), str(parent.run_id), parent.content_sha256)
+            for parent, parent_owner in parents
+            if parent_owner == owner
+            and parent.run_id != run.id
+            and parent.created_at < run.created_at
+            and parent.status in ("bridge", "answer")
+        }
+        if bound != actual:
+            raise EvidenceError("memory_read_provenance_mismatch")
 
     @staticmethod
     def _validate_result_shape(result: ResearchResult) -> None:

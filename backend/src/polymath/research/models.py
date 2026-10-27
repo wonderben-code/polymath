@@ -11,6 +11,13 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints, TypeAdapte
 Text = Annotated[str, StringConstraints(strict=True, strip_whitespace=True, min_length=1)]
 SourceId = Annotated[str, StringConstraints(strict=True, min_length=1, max_length=200)]
 ClaimId = Annotated[str, StringConstraints(strict=True, pattern=r"^[A-Za-z][A-Za-z0-9_-]{0,63}$")]
+ArtifactId = Annotated[
+    str,
+    StringConstraints(
+        strict=True, pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    ),
+]
+ContentHash = Annotated[str, StringConstraints(strict=True, pattern=r"^[0-9a-f]{64}$")]
 ResearchMode = Literal["explore", "ask", "surprise"]
 
 
@@ -85,6 +92,29 @@ class SearchAction(StrictModel):
 class ReadAction(StrictModel):
     kind: Literal["read_source"]
     source_id: SourceId
+
+
+class SearchMemoryAction(StrictModel):
+    kind: Literal["search_memory"]
+    query: Annotated[Text, Field(max_length=200)]
+
+    @model_validator(mode="after")
+    def validate_query(self) -> SearchMemoryAction:
+        _validate_public_text(self.query)
+        if any(ord(character) < 32 for character in self.query):
+            raise ValueError("memory query cannot contain control characters")
+        return self
+
+
+class ReadMemoryAction(StrictModel):
+    kind: Literal["read_memory_finding"]
+    result_id: ArtifactId
+
+
+class ReadMemorySourceAction(StrictModel):
+    kind: Literal["read_memory_source"]
+    result_id: ArtifactId
+    retrieval_id: ArtifactId
 
 
 class FieldSelection(StrictModel):
@@ -193,6 +223,58 @@ class AnswerFinding(StrictModel):
         return self
 
 
+class MemoryReadReference(StrictModel):
+    """An immutable finding read by this run, not independent scientific evidence."""
+
+    result_id: ArtifactId
+    run_id: ArtifactId
+    content_sha256: ContentHash
+
+
+class MemoryFindingReference(MemoryReadReference):
+    title: Annotated[Text, Field(max_length=4000)]
+    summary: Annotated[Text, Field(max_length=1000)]
+    outcome: Literal["bridge", "answer"]
+
+    @model_validator(mode="after")
+    def validate_public_reference(self) -> MemoryFindingReference:
+        _validate_public_text(self.model_dump())
+        return self
+
+
+class MemorySearchResults(StrictModel):
+    findings: Annotated[tuple[MemoryFindingReference, ...], Field(max_length=10)]
+    truncated: bool
+
+    @model_validator(mode="after")
+    def distinct_findings(self) -> MemorySearchResults:
+        if len({item.result_id for item in self.findings}) != len(self.findings):
+            raise ValueError("memory search findings must be distinct")
+        return self
+
+
+class MemorySourceReference(StrictModel):
+    retrieval_id: ArtifactId
+    source: SourceReference
+    content_sha256: ContentHash
+    content_kind: Literal["abstract", "full_text"]
+
+
+class MemoryFinding(StrictModel):
+    reference: MemoryFindingReference
+    finding: BridgeFinding | AnswerFinding
+    sources: Annotated[tuple[MemorySourceReference, ...], Field(max_length=64)]
+
+    @model_validator(mode="after")
+    def consistent_reference(self) -> MemoryFinding:
+        _validate_public_text(self.model_dump())
+        if self.reference.outcome != self.finding.outcome:
+            raise ValueError("memory finding outcome must match its reference")
+        if len({item.retrieval_id for item in self.sources}) != len(self.sources):
+            raise ValueError("memory source retrievals must be distinct")
+        return self
+
+
 Finding = Annotated[
     BridgeFinding | AnswerFinding | InsufficientFinding, Field(discriminator="outcome")
 ]
@@ -209,7 +291,14 @@ class ConcludeAction(StrictModel):
 
 
 Action = Annotated[
-    SearchAction | ReadAction | SelectFieldsAction | ConcludeAction, Field(discriminator="kind")
+    SearchAction
+    | ReadAction
+    | SearchMemoryAction
+    | ReadMemoryAction
+    | ReadMemorySourceAction
+    | SelectFieldsAction
+    | ConcludeAction,
+    Field(discriminator="kind"),
 ]
 ACTION_ADAPTER = TypeAdapter(Action)
 
@@ -246,6 +335,7 @@ class ResearchResult(StrictModel):
     mode: ResearchMode = "explore"
     finding: BridgeFinding | AnswerFinding | InsufficientFinding | None = None
     field_selections: Annotated[tuple[FieldSelection, ...], Field(max_length=3)] = ()
+    memory_reads: Annotated[tuple[MemoryReadReference, ...], Field(max_length=10)] = ()
     quotes: tuple[VerifiedQuote, ...] = ()
     sources: tuple[SourceDocument, ...] = ()
     events: tuple[ResearchEvent, ...] = ()

@@ -299,6 +299,25 @@ describe('recorded research view', () => {
     expect(screen.getByRole('heading', { name: 'A synthetic analogy requiring further tests' })).toBeInTheDocument()
   })
 
+  it('shows the exact earlier finding versions as research leads and opens their investigation', async () => {
+    const result = fixtureResult()
+    const priorRun = '11111111-1111-4111-8111-111111111111'
+    result.memory_reads = [{ result_id: '22222222-2222-4222-8222-222222222222', run_id: priorRun, content_sha256: 'b'.repeat(64) }]
+    const open = vi.fn()
+    render(<ResearchRunView {...props({ result, onOpenRun: open })} />)
+    expect(screen.getByRole('heading', { name: 'Saved findings consulted' })).toBeVisible()
+    expect(screen.getByText(/Their conclusions do not provide independent evidence/)).toBeVisible()
+    await userEvent.click(screen.getByRole('button', { name: 'Open earlier investigation 1' }))
+    expect(open).toHaveBeenCalledWith(priorRun)
+    await userEvent.click(screen.getByText('Saved version'))
+    expect(screen.getByText('b'.repeat(64))).toBeVisible()
+  })
+
+  it('does not invent a memory history for older saved research', () => {
+    render(<ResearchRunView {...props({ result: fixtureResult() })} />)
+    expect(screen.queryByRole('heading', { name: 'Saved findings consulted' })).not.toBeInTheDocument()
+  })
+
   it('renders untrusted answer statements and selection rationales as plain text', () => {
     const answer = fixtureAnswer()
     if (answer.finding?.outcome === 'answer') answer.finding.claims[0].text = '<img src=x onerror=alert(1)>'
