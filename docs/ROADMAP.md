@@ -31,6 +31,9 @@ Problem (20s) → live Explore run (60s) → bridge deep-dive (40s) → Ask with
 
 **Never cut:** Explore with evidence and objections, the live research view, the public URL, the demo video.
 
+## Next feature after v1: Surprise me
+Once Explore works end to end, add **Surprise me** (SPEC §3.8). Polymath picks fields itself, hunts for convergences and meta-convergences between them, and the UI shows it thinking: fields lighting up, reasoning shown, bridges forming. If v1 lands before Mon 2 Nov, pull it into the hackathon build, because it makes a brilliant opening for the demo video.
+
 ## After the hackathon
 - Make it truer: stronger objection-testing, full-text evidence, calibrated confidence, expert review
 - Real formal mathematics: proved / disproved / open as first-class results

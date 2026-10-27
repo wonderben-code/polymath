@@ -16,6 +16,7 @@ Created 27 October 2026. Every push to `main` is Bitcoin-timestamped through Ope
 - **Keep growing.** A knowledge base that keeps reading new research.
 - **Turn hunches into maths.** Conjectures, with proof attempts.
 - **Write and publish.** Plain summary or formal paper → approve → DOI on Zenodo.
+- **Surprise me** *(after v1)*. Polymath picks the fields itself and goes hunting for convergences, and you watch it think.
 
 ## Docs
 | Doc | What's in it |

@@ -60,7 +60,12 @@ With one click, any bridge or answer becomes either:
 
 It can then be **published to Zenodo with a permanent DOI**, but only after the user explicitly approves. Nothing is ever published without a human saying yes.
 
-### 3.8 For everyone
+### 3.8 Surprise me *(after v1 is running)*
+No idea where to start? Press **Surprise me**. Polymath picks fields of science itself, sometimes at random and sometimes deliberately distant from each other, and goes hunting for convergences between them. When it finds some, it climbs to meta-convergences. It's pure serendipity: discoveries you'd never have thought to look for.
+
+The experience is the point. You watch it **think out loud**: the fields lighting up as it picks them ("let's try mycology… and orbital mechanics"), the reasoning behind each choice, the search sweeping across both, and bridges appearing between them as it finds them, followed by bridges between those bridges. It's a visual show of discovery, which makes it a great homepage hero and demo moment.
+
+### 3.9 For everyone
 Open to anyone through the website, with an API so researchers and developers can point Polymath at their own field. The tool is open, and findings are open by default.
 
 ## 4. Product principles
@@ -88,6 +93,12 @@ Open to anyone through the website, with an API so researchers and developers ca
 3. An answer appears with each statement colour-coded Known / Postulated / Speculative, each linked to its bridges and papers, plus an honest "what we don't know" section.
 4. Write / publish options, as in Flow A.
 
+**Flow D: Surprise me (after v1)**
+1. The user presses **Surprise me** on the homepage.
+2. Polymath picks fields on its own and explains why, with the fields visibly lighting up.
+3. The live view shows it searching across the chosen fields and forming bridges, then climbing to bridges between bridges.
+4. The user gets a set of unexpected discoveries, each opening as a normal bridge card, with Write / publish available.
+
 **Flow C: Map**
 1. The user opens the map of everything Polymath has found: fields, bridges, and bridges between bridges.
 2. Clicking any bridge opens its card. Clicking "go up a level" looks for connections between the selected bridges.
@@ -109,6 +120,7 @@ Open to anyone through the website, with an API so researchers and developers ca
 - [ ] Public repo, demo video, submission filed
 
 **Stretch:** connections between connections (3.4), and the always-growing knowledge base running on its own (3.5).
+**After v1:** Surprise me (3.8). If v1 lands early, it's a strong demo moment worth pulling forward.
 
 ## 8. Out of scope
 - The author's unpublished theoretical research and any unrelated ventures are never used, described or referenced here. Polymath works on the open literature only.
