@@ -10,6 +10,7 @@ from polymath import (  # noqa: F401
     memory_models,
     models,
     operator_models,
+    publication_job_models,
     publication_models,
 )
 from polymath.config import Settings

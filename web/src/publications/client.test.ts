@@ -13,10 +13,11 @@ describe('exact publication contracts', () => {
     expect(() => parseManifest({ ...record, artifact_export_url: 'https://example.org/foreign' })).toThrow('invalid_response')
   })
 
-  it('refuses a receipt for another manifest or hash and never accepts a published status', () => {
+  it('refuses a receipt for another manifest or hash while retaining the separate runtime publication status', () => {
     const record = manifestFixture(true)
     for (const changed of [{ manifest_id: ARTIFACT }, { manifest_sha256: BROWSER_CSRF }, { revoked_at: '2026-10-29T00:00:00Z', valid: true }]) expect(() => parseManifest({ ...record, approval: { ...record.approval, ...changed } })).toThrow('invalid_response')
-    expect(() => parseManifest({ ...record, publication_status: 'published' })).toThrow('invalid_response')
+    expect(parseManifest({ ...record, publication_status: 'published' }).publication_status).toBe('published')
+    expect(() => parseManifest({ ...record, publication_status: 'invented_state' })).toThrow('invalid_response')
     expect(() => parseManifest({ ...record, manifest: { ...record.manifest, file_name: '../private.md' } })).toThrow('invalid_response')
   })
 

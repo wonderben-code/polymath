@@ -56,6 +56,26 @@
 .publication-login > div { display: flex; align-items: stretch; gap: 10px; }
 .publication-login input { min-width: 0; }
 .publication-login button { flex-shrink: 0; padding: 10px 14px; color: var(--ink); background: #e9eee2; border: 1px solid #bdcbb4; border-radius: 3px; font-size: 11px; }
+.publication-delivery { margin-top: 25px; border-top: 1px solid #cbd7c0; padding-top: 23px; }
+.publication-delivery-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.publication-delivery-heading h4 { font: 400 23px/1.3 Georgia, serif; margin: 0 0 12px; }
+.publication-delivery-heading > button { flex-shrink: 0; }
+.publication-job { border: 1px solid #cad7c1; padding: 19px; background: #f9faf4; margin-top: 19px; }
+.publication-job > h5 { font-size: 12px; font-weight: 600; margin: 0 0 11px; }
+.publication-job > p { font-size: 11px; color: var(--muted); line-height: 1.9; margin: 0 0 12px; }
+.publication-job .publication-unknown { color: #806243; background: #f4eddf; padding: 12px; }
+.publication-job-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 17px; }
+.publication-job-actions button { color: var(--ink); border: 1px solid #c0cdb5; background: #eaf0e3; padding: 10px 13px; border-radius: 3px; font-size: 11px; }
+.publication-job-actions button:disabled { color: #788271; background: #f0f2e9; }
+.publication-job-activity { margin-top: 18px; font-size: 10px; color: var(--muted); }
+.publication-job-activity summary { cursor: pointer; }
+.publication-job-activity ol { margin: 13px 0 0; padding-left: 20px; }
+.publication-job-activity li { margin-top: 6px; line-height: 1.8; }
+.publication-verified-record { border-top: 1px solid #d7dfcf; margin-top: 17px; padding-top: 17px; }
+.publication-verified-record a { display: block; margin: 0 0 12px; color: var(--accent); font-size: 12px; text-underline-offset: 3px; overflow-wrap: anywhere; }
+.publication-verified-record p { color: var(--muted); font-size: 10px; line-height: 1.8; }
+.publication-job-history ul { list-style: none; padding: 0; margin: 0; }
+.publication-job-history button { background: #f8f9f1; border: 1px solid var(--line); color: var(--ink); font-size: 11px; padding: 10px; margin-top: 6px; text-align: left; }
 @media (max-width: 700px) {
   .publication-heading > div { display: block; }
   .publication-heading h3 { font-size: 25px; }
@@ -68,4 +88,9 @@
   .publication-login > div, .publication-operator-session { display: block; }
   .publication-login button { margin-top: 10px; }
   .publication-approval-actions > button { width: 100%; }
+  .publication-delivery-heading { display: block; }
+  .publication-delivery-heading > button { margin-bottom: 13px; }
+  .publication-job { padding: 16px; }
+  .publication-job-actions { display: block; }
+  .publication-job-actions button { display: block; margin-top: 10px; width: 100%; }
 }

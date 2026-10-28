@@ -74,6 +74,10 @@ def test_explicit_approval_configuration_does_not_enable_model_execution() -> No
         assert publication["destinations"] == ["sandbox"]
         assert publication["publisher"]["identifier"] == "synthetic-publisher"
         assert client.get("/api/v1/capabilities").json()["research_available"] is False
+        assert (
+            client.get("/api/v1/publication-jobs/capabilities").json()["execution_available"]
+            is False
+        )
 
 
 def test_unavailable_database_has_sanitized_readiness(monkeypatch: pytest.MonkeyPatch) -> None:

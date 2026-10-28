@@ -1,11 +1,13 @@
 import type { SavedArtifact } from '../artifacts/types'
 import type { OperatorSession, PublicationCapabilities, PublicationManifest, PublicationMetadata } from './client'
+import type { PublicationJob } from './deliveryClient'
 
 export const ARTIFACT = '11111111-1111-4111-8111-111111111111'
 export const RUN = '22222222-2222-4222-8222-222222222222'
 export const MANIFEST = '33333333-3333-4333-8333-333333333333'
 export const APPROVAL = '44444444-4444-4444-8444-444444444444'
 export const SECOND_MANIFEST = '55555555-5555-4555-8555-555555555555'
+export const PUBLICATION_JOB = '88888888-8888-4888-8888-888888888888'
 export const BROWSER_CSRF = 'a'.repeat(64)
 export const OPERATOR_CSRF = 'b'.repeat(64)
 export const REVIEW_HASH = 'c'.repeat(64)
@@ -20,4 +22,8 @@ export function operatorFixture(authenticated = false, configured = true): Opera
 export function manifestFixture(approved = false): PublicationManifest {
   const source = artifactFixture()
   return { id: MANIFEST, manifest_sha256: REVIEW_HASH, manifest: { protocol: 'polymath-publication-v1', artifact_id: ARTIFACT, artifact_run_id: RUN, markdown_sha256: source.markdown_sha256, markdown_bytes: new TextEncoder().encode(source.markdown).length, payload_sha256: source.payload_sha256, basis_sha256: source.basis_sha256, file_name: `polymath-${ARTIFACT}.md`, media_type: 'text/markdown; charset=utf-8', remote_marker: `polymath-${'d'.repeat(64)}`, metadata: metadataFixture(), publisher: { identifier: 'synthetic.publisher', display_name: 'Synthetic Publisher' }, destination: 'sandbox' }, created_at: DATE, approval: approved ? { id: APPROVAL, manifest_id: MANIFEST, manifest_sha256: REVIEW_HASH, actor_id: 'synthetic.owner', approved_at: DATE, expires_at: '2100-01-01T00:00:00Z', revoked_at: null, valid: true } : null, publication_status: 'not_published', artifact_export_url: `/api/v1/artifacts/${ARTIFACT}/export` }
+}
+
+export function publicationJobFixture(changes: Partial<PublicationJob> = {}): PublicationJob {
+  return { id: PUBLICATION_JOB, manifest_id: MANIFEST, approval_id: APPROVAL, manifest_sha256: REVIEW_HASH, status: 'queued', work_kind: 'publish', stage: 'queued', created_at: DATE, updated_at: DATE, reason: null, event_sequence: 1, external_outcome_unknown: false, frozen: false, publication_reported: false, destination: 'sandbox', sandbox: true, verified: false, doi: null, record_url: null, can_cancel: true, can_reconcile: false, can_resume: false, ...changes }
 }

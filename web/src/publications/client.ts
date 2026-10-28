@@ -52,7 +52,7 @@ export interface PublicationManifest {
   }
   created_at: string
   approval: PublicationApproval | null
-  publication_status: 'not_published'
+  publication_status: 'not_published' | 'unknown' | 'published'
   artifact_export_url: string
 }
 export interface PublicationHistory { manifests: PublicationManifest[]; next_cursor: string | null }
@@ -122,7 +122,7 @@ export function parseOperatorSession(value: unknown): OperatorSession {
 export function parseManifest(value: unknown): PublicationManifest {
   const item = object(value), manifest = object(item.manifest)
   const artifactId = id(manifest.artifact_id), manifestId = id(item.id), manifestHash = hash(item.manifest_sha256)
-  if (manifest.protocol !== 'polymath-publication-v1' || manifest.media_type !== 'text/markdown; charset=utf-8' || manifest.file_name !== `polymath-${artifactId}.md` || item.publication_status !== 'not_published' || item.artifact_export_url !== `/api/v1/artifacts/${artifactId}/export` || typeof manifest.remote_marker !== 'string' || !/^polymath-[a-f\d]{64}$/.test(manifest.remote_marker)) return invalid()
+  if (manifest.protocol !== 'polymath-publication-v1' || manifest.media_type !== 'text/markdown; charset=utf-8' || manifest.file_name !== `polymath-${artifactId}.md` || !['not_published', 'unknown', 'published'].includes(item.publication_status as string) || item.artifact_export_url !== `/api/v1/artifacts/${artifactId}/export` || typeof manifest.remote_marker !== 'string' || !/^polymath-[a-f\d]{64}$/.test(manifest.remote_marker)) return invalid()
   if (typeof manifest.markdown_bytes !== 'number' || !Number.isSafeInteger(manifest.markdown_bytes) || manifest.markdown_bytes < 1 || manifest.markdown_bytes > 262144) return invalid()
   const approval = nullable(item.approval, (value) => {
     const receipt = object(value)
@@ -130,7 +130,7 @@ export function parseManifest(value: unknown): PublicationManifest {
     if (parsed.manifest_id !== manifestId || parsed.manifest_sha256 !== manifestHash || Date.parse(parsed.expires_at) <= Date.parse(parsed.approved_at) || parsed.valid && parsed.revoked_at !== null) return invalid()
     return parsed
   })
-  return { id: manifestId, manifest_sha256: manifestHash, manifest: { protocol: 'polymath-publication-v1', artifact_id: artifactId, artifact_run_id: id(manifest.artifact_run_id), markdown_sha256: hash(manifest.markdown_sha256), markdown_bytes: manifest.markdown_bytes, payload_sha256: hash(manifest.payload_sha256), basis_sha256: hash(manifest.basis_sha256), file_name: manifest.file_name, media_type: 'text/markdown; charset=utf-8', remote_marker: manifest.remote_marker, metadata: parseMetadata(manifest.metadata), publisher: publisher(manifest.publisher), destination: destination(manifest.destination) }, created_at: date(item.created_at), approval, publication_status: 'not_published', artifact_export_url: item.artifact_export_url }
+  return { id: manifestId, manifest_sha256: manifestHash, manifest: { protocol: 'polymath-publication-v1', artifact_id: artifactId, artifact_run_id: id(manifest.artifact_run_id), markdown_sha256: hash(manifest.markdown_sha256), markdown_bytes: manifest.markdown_bytes, payload_sha256: hash(manifest.payload_sha256), basis_sha256: hash(manifest.basis_sha256), file_name: manifest.file_name, media_type: 'text/markdown; charset=utf-8', remote_marker: manifest.remote_marker, metadata: parseMetadata(manifest.metadata), publisher: publisher(manifest.publisher), destination: destination(manifest.destination) }, created_at: date(item.created_at), approval, publication_status: item.publication_status as PublicationManifest['publication_status'], artifact_export_url: item.artifact_export_url }
 }
 
 export function manifestMatchesArtifact(record: PublicationManifest, artifact: SavedArtifact): boolean {
@@ -227,3 +227,5 @@ export async function revokePublication(record: PublicationManifest, csrf: strin
   if (updated.id !== record.id || updated.manifest_sha256 !== record.manifest_sha256 || JSON.stringify(updated.manifest) !== JSON.stringify(record.manifest)) return invalid()
   return updated
 }
+
+export { request as publicationRequest }

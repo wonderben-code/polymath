@@ -8,6 +8,7 @@ import {
 } from './client'
 import type { Destination, OperatorSession, PublicationCapabilities, PublicationManifest, PublicationMetadata } from './client'
 import './publications.css'
+import { PublicationDelivery } from './PublicationDelivery'
 
 interface Props { artifact: SavedArtifact; csrfToken: string | null; enabled: boolean; onSessionExpired: () => void }
 type Action = 'prepare' | 'approve' | 'revoke' | 'login' | 'logout'
@@ -21,10 +22,10 @@ function when(value: string): string { return new Date(value).toLocaleString(und
 function destinationName(value: Destination): string { return value === 'sandbox' ? 'Zenodo sandbox · test record' : 'Zenodo production · public record' }
 function status(record: PublicationManifest, now: number): string {
   const approval = record.approval
-  if (!approval) return 'Prepared preview · not published'
-  if (approval.revoked_at) return 'Approval revoked · not published'
-  if (!approval.valid || Date.parse(approval.expires_at) <= now) return 'Approval expired · not published'
-  return 'Approved document · not published'
+  if (!approval) return 'Prepared preview'
+  if (approval.revoked_at) return 'Approval revoked'
+  if (!approval.valid || Date.parse(approval.expires_at) <= now) return 'Approval expired'
+  return 'Approval recorded'
 }
 function errorMessage(error: unknown): string {
   if (!(error instanceof PublicationError)) return 'Publication details could not be checked. Reload them before continuing.'
@@ -192,7 +193,7 @@ export function PublicationPanel({ artifact, csrfToken, enabled, onSessionExpire
     {phase === 'error' && <p className="publication-message" role="status">Publication settings could not be checked. Reload publication details to try again.</p>}
     {error && phase !== 'error' && <p className="publication-message publication-error" role="alert">{error}</p>}
     {phase === 'ready' && <>
-      {!capabilities?.can_prepare && <p className="publication-message">Publication preparation is not configured yet. Saved previews remain available; no document has been published.</p>}
+      {!capabilities?.can_prepare && <p className="publication-message">Publication preparation is not configured yet. Saved previews remain available.</p>}
       <form className="publication-form" onSubmit={prepare}>
         <div className="publication-field"><label htmlFor={`${headingId}-title`}>Publication title</label><input id={`${headingId}-title`} maxLength={300} required value={metadata.title} disabled={!!busy || uncertain} onChange={(event) => update({ title: event.target.value })} /></div>
         <div className="publication-field"><label htmlFor={`${headingId}-description`}>Description</label><textarea id={`${headingId}-description`} maxLength={5000} required rows={4} value={metadata.description} disabled={!!busy || uncertain} onChange={(event) => update({ description: event.target.value })} /></div>
@@ -218,7 +219,8 @@ export function PublicationPanel({ artifact, csrfToken, enabled, onSessionExpire
         {!matchesPolicy && capabilities?.can_prepare && <p className="publication-field-note">This saved preview uses a different publisher or destination from the current settings. Prepare a new preview to approve current details.</p>}
         <label className="publication-consent"><input type="checkbox" checked={reviewed} disabled={!authenticated || !!busy || uncertain || activeApproval || !matchesPolicy || !capabilities?.can_prepare} onChange={(event) => setReviewed(event.target.checked)} /><span>I approve this exact document, metadata, publisher, and destination.<small>{record.manifest.destination === 'sandbox' ? 'This approval is for a sandbox test record.' : 'This approval is for production publication of this exact version.'}</small></span></label>
         <div className="publication-approval-actions"><button type="button" className="publication-primary" disabled={!canApprove} onClick={() => { if (record && csrfToken && operator.csrf_token && canApprove) void perform('approve', (signal) => approvePublication(record, csrfToken, operator.csrf_token!, signal), applyRecord) }}>{busy === 'approve' ? 'Recording approval…' : 'Approve this exact version'}</button>{record.approval && !record.approval.revoked_at && <button type="button" className="publication-revoke" disabled={!authenticated || !!busy || uncertain} onClick={() => { if (record && csrfToken && operator.csrf_token) void perform('revoke', (signal) => revokePublication(record, csrfToken, operator.csrf_token!, signal), applyRecord) }}>{busy === 'revoke' ? 'Revoking approval…' : 'Revoke this approval'}</button>}</div>
-        <p className="publication-not-published">Approval records a human decision. This document has not been published.</p>
+        <p className="publication-not-published">Approval records a human decision. Publishing requires the separate action below.</p>
+        <PublicationDelivery key={record.id} record={record} csrfToken={csrfToken} operatorCsrf={authenticated ? operator.csrf_token : null} operatorAuthenticated={authenticated} enabled={enabled} blocked={!!busy || uncertain || !matchesPolicy} onAuthorizationError={fail} />
       </section>}
       <section className="publication-operator" aria-label="Publisher approval access">
         <h4>Publisher approval</h4>{authenticated ? <div className="publication-operator-session"><p>Unlocked for {operator.display_name} until {operator.expires_at && when(operator.expires_at)}.</p><button type="button" className="text-button" disabled={!!busy || uncertain} onClick={() => { if (csrfToken && operator.csrf_token) { setCredential(''); setReviewed(false); void perform('logout', (signal) => logoutOperator(csrfToken, operator.csrf_token!, signal), setOperator) } }}>{busy === 'logout' ? 'Locking access…' : 'Lock publisher access'}</button></div> : operator.configured ? <form className="publication-login" onSubmit={login}><p>Only an authorized publisher can approve or revoke an exact version. Unlocking access does not approve anything.</p><label htmlFor={`${headingId}-access`}>Publisher access code</label><div><input id={`${headingId}-access`} type="password" autoComplete="off" maxLength={256} value={credential} disabled={!!busy || uncertain} onChange={(event) => setCredential(event.target.value)} /><button type="submit" disabled={!credential || !!busy || uncertain}>{busy === 'login' ? 'Unlocking…' : 'Unlock publisher approval'}</button></div></form> : <p>Publisher approval access has not been configured.</p>}

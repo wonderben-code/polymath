@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 from alembic import command
 from alembic.config import Config
-from sqlalchemy import create_engine, select, text
+from sqlalchemy import create_engine, func, select, text, update
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
 from test_research_controller import AdaptiveFixture, Tools
@@ -19,6 +19,7 @@ from polymath.budget import BudgetService
 from polymath.budget_models import BudgetReservation
 from polymath.evidence import EvidenceStore
 from polymath.jobs import JobRepository
+from polymath.models import ResearchRun
 from polymath.research.meta import ModelError, ModelReply
 from polymath.worker import ResearchWorker, WorkerPolicy
 
@@ -79,6 +80,25 @@ async def test_disabled_worker_never_claims_or_invokes_model(database):
     worker = setup_worker(database, AdaptiveFixture(), enabled=False)
     assert (await worker.run_once("disabled-worker")).status == "disabled"
     assert JobRepository(database).get(run.id).status == "queued"
+    assert BudgetService(database).usage("fixture").reservations == 0
+
+
+@pytest.mark.asyncio
+async def test_replacement_worker_exposes_expired_run_without_restarting_research(database):
+    jobs = JobRepository(database)
+    run = jobs.create(mode="explore", goal="Synthetic orphaned worker exercise")
+    jobs.claim_next("crashed-research-process")
+    with Session(database) as session, session.begin():
+        session.execute(
+            update(ResearchRun)
+            .where(ResearchRun.id == run.id)
+            .values(lease_expires_at=func.clock_timestamp() - text("interval '1 second'"))
+        )
+    model = AdaptiveFixture()
+    worker = setup_worker(database, model)
+    assert (await worker.run_once("replacement-research-process")).status == "idle"
+    assert jobs.get(run.id).status == "interrupted"
+    assert model.seen == []
     assert BudgetService(database).usage("fixture").reservations == 0
 
 

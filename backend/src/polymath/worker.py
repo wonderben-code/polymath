@@ -529,6 +529,7 @@ class ResearchWorker:
     async def run_once(self, worker_id: str) -> WorkerOutcome:
         if not self.execution_enabled:
             return WorkerOutcome("disabled")
+        await asyncio.to_thread(self.jobs.interrupt_expired)
         lease = await asyncio.to_thread(
             self.jobs.claim_next,
             worker_id,

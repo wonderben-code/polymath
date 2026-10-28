@@ -19,8 +19,15 @@ from polymath.config import Settings, get_settings
 from polymath.database import build_engine
 from polymath.knowledge import create_knowledge_router
 from polymath.operator_auth import OperatorPolicy, create_operator_router
+from polymath.publication import PublicationStore
 from polymath.publication_api import create_publication_router
-from polymath.publication_contracts import PublicationPolicy, PublisherIdentity
+from polymath.publication_contracts import PublicationPolicy
+from polymath.publication_job_api import create_publication_job_router
+from polymath.publication_jobs import PublicationJobRepository
+from polymath.publication_runtime import (
+    configured_publication_policies,
+    publication_execution_available,
+)
 from polymath.run_api import create_run_router
 
 
@@ -36,26 +43,18 @@ def create_app(
     research_availability: Callable[[], bool] | None = None,
     operator_policy: OperatorPolicy | None = None,
     publication_policy: PublicationPolicy | None = None,
+    publication_availability: Callable[[], bool] | None = None,
 ) -> FastAPI:
     settings = settings or get_settings()
+    configured_operator, configured_publication = configured_publication_policies(settings)
     if operator_policy is None:
-        operator_policy = OperatorPolicy(
-            bootstrap_token=settings.operator_bootstrap_token,
-            actor_id=settings.operator_actor_id,
-            display_name=settings.operator_display_name,
-        )
+        operator_policy = configured_operator
     if publication_policy is None:
-        publication_policy = (
-            PublicationPolicy(
-                publisher=PublisherIdentity(
-                    identifier=settings.publication_publisher_id,
-                    display_name=settings.publication_publisher_name,
-                ),
-                allowed_destinations=settings.publication_destinations,
-            )
-            if settings.publication_approval_enabled
-            else PublicationPolicy()
-        )
+        publication_policy = configured_publication
+    if publication_availability is None:
+
+        def publication_availability() -> bool:
+            return publication_execution_available(settings)
 
     @asynccontextmanager
     async def lifespan(application: FastAPI) -> AsyncIterator[None]:
@@ -79,7 +78,23 @@ def create_app(
     )
     application.include_router(
         create_publication_router(
-            application.state.engine, policy=publication_policy, operator_policy=operator_policy
+            application.state.engine,
+            policy=publication_policy,
+            operator_policy=operator_policy,
+            status_resolver=PublicationJobRepository(
+                application.state.engine,
+                PublicationStore(
+                    application.state.engine, publication_policy, operator_policy=operator_policy
+                ),
+            ).status_for_manifest,
+        )
+    )
+    application.include_router(
+        create_publication_job_router(
+            application.state.engine,
+            policy=publication_policy,
+            operator_policy=operator_policy,
+            availability=publication_availability,
         )
     )
 

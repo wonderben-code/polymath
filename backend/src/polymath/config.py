@@ -30,6 +30,9 @@ class Settings(BaseSettings):
     )
     operator_display_name: str = Field(default="Publisher", min_length=1, max_length=120)
     publication_approval_enabled: bool = False
+    publication_execution_enabled: bool = False
+    zenodo_sandbox_token: SecretStr | None = None
+    zenodo_production_token: SecretStr | None = None
     publication_publisher_id: str | None = Field(
         default=None, pattern=r"^[A-Za-z][A-Za-z0-9_.-]{0,79}$"
     )
@@ -50,7 +53,13 @@ class Settings(BaseSettings):
             raise ValueError("DATABASE_URL must use postgresql+psycopg and specify host/database")
         return value
 
-    @field_validator("model_api_key", "operator_bootstrap_token", mode="before")
+    @field_validator(
+        "model_api_key",
+        "operator_bootstrap_token",
+        "zenodo_sandbox_token",
+        "zenodo_production_token",
+        mode="before",
+    )
     @classmethod
     def empty_key_is_absent(cls, value: object) -> object:
         if isinstance(value, str) and not value.strip():
@@ -92,6 +101,15 @@ class Settings(BaseSettings):
             raise ValueError(
                 "Publication approval requires explicit operator, publisher and destination"
             )
+        if self.publication_execution_enabled:
+            if not self.publication_approval_enabled:
+                raise ValueError("Publication execution requires explicit approval configuration")
+            if any(
+                (destination == "sandbox" and self.zenodo_sandbox_token is None)
+                or (destination == "production" and self.zenodo_production_token is None)
+                for destination in self.publication_destinations
+            ):
+                raise ValueError("Publication execution requires credentials for each destination")
         return self
 
     @field_validator("meta_model")

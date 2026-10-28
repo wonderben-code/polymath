@@ -448,9 +448,12 @@ class TestPublicationStore:
         manifest = prepare(case)
         approve(case, manifest)
         config = Config(str(Path(__file__).parents[1] / "alembic.ini"))
+        with case.engine.connect() as connection:
+            original_head = connection.scalar(text("SELECT version_num FROM alembic_version"))
         with pytest.raises(Exception, match="Cannot discard publication review"):
             command.downgrade(config, "0011_operator_sessions")
         with case.engine.connect() as connection:
-            assert connection.scalar(text("SELECT version_num FROM alembic_version")) == (
-                "0012_publication_approval"
+            assert (
+                connection.scalar(text("SELECT version_num FROM alembic_version")) == original_head
             )
+        command.check(config)

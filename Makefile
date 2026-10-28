@@ -5,7 +5,7 @@ export npm_config_cache ?= /tmp/polymath-npm-cache
 export BUILDX_CONFIG ?= /tmp/polymath-buildx
 UV := uv --project backend
 
-.PHONY: install db-up db-stop migrate api web check test integration build image compose-up compose-stop
+.PHONY: install db-up db-stop migrate api web publication-worker check test integration build image compose-up compose-stop
 
 install:
 	$(UV) sync --locked
@@ -25,6 +25,9 @@ api:
 
 web:
 	npm --prefix web run dev -- --host 127.0.0.1
+
+publication-worker:
+	$(UV) run python -m polymath.publication_runtime
 
 check:
 	$(UV) run ruff check backend

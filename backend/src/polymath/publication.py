@@ -494,6 +494,10 @@ class PublicationStore:
         approval = session.get(PublicationApproval, approval_id)
         if approval is None:
             raise PublicationError("publication_approval_not_found")
+        # Check the immutable ownership pointer before inspecting the receipt's
+        # operator. Foreign and missing receipts must remain indistinguishable.
+        # This read takes no row lock; authority locks still use operator first.
+        _owned_manifest(session, owner_hash, approval.manifest_id)
         # Use the same lock order as approval/revocation and operator logout:
         # operator first, exact manifest second. A caller's eventual dispatch
         # transaction can retain both locks through its durable grant boundary.

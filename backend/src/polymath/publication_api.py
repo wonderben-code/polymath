@@ -8,6 +8,7 @@ Neither operation queues a deposit, calls Zenodo, or grants a model new tools.
 from __future__ import annotations
 
 import uuid
+from collections.abc import Callable
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
@@ -99,6 +100,7 @@ def create_publication_router(
     *,
     policy: PublicationPolicy | None = None,
     operator_policy: OperatorPolicy | None = None,
+    status_resolver: Callable[[str, uuid.UUID], str] | None = None,
 ) -> APIRouter:
     if engine.dialect.name != "postgresql":
         raise ValueError("Publication routes require PostgreSQL")
@@ -108,6 +110,20 @@ def create_publication_router(
         route_class=_PublicationRoute,
         dependencies=[Depends(_private)],
     )
+
+    def public_record(owner_hash: str, record) -> dict:
+        response = record.to_response()
+        if status_resolver is not None:
+            try:
+                status = status_resolver(owner_hash, record.id)
+            except HTTPException:
+                raise
+            except Exception:
+                raise _storage_error() from None
+            if status not in ("not_published", "unknown", "published"):
+                raise _storage_error()
+            response["publication_status"] = status
+        return response
 
     @router.get("/capabilities")
     def capabilities() -> dict:
@@ -127,7 +143,7 @@ def create_publication_router(
                 owner_hash, limit=limit + 1, before=before, artifact_id=artifact_id
             )
             return {
-                "manifests": [record.to_response() for record in records[:limit]],
+                "manifests": [public_record(owner_hash, record) for record in records[:limit]],
                 "next_cursor": str(records[limit - 1].id) if len(records) > limit else None,
             }
         except PublicationError as error:
@@ -144,7 +160,7 @@ def create_publication_router(
             record = store.prepare(
                 owner_hash, uuid.UUID(body.artifact_id), body.metadata, body.destination
             )
-            return record.to_response()
+            return public_record(owner_hash, record)
         except PublicationError as error:
             raise _publication_error(error) from None
         except SQLAlchemyError:
@@ -155,7 +171,7 @@ def create_publication_router(
         try:
             with Session(engine) as session:
                 owner_hash = _authenticated(session, request).token_hash
-            return store.get(owner_hash, manifest_id).to_response()
+            return public_record(owner_hash, store.get(owner_hash, manifest_id))
         except PublicationError as error:
             raise _publication_error(error) from None
         except SQLAlchemyError:
@@ -171,7 +187,7 @@ def create_publication_router(
             # Release the HTTP authentication lock before the store opens its
             # own transaction and independently locks/revalidates the session.
             store.approve(owner_hash, manifest_id, body.expected_manifest_sha256, operator)
-            return store.get(owner_hash, manifest_id).to_response()
+            return public_record(owner_hash, store.get(owner_hash, manifest_id))
         except PublicationError as error:
             raise _publication_error(error) from None
         except SQLAlchemyError:
@@ -185,7 +201,7 @@ def create_publication_router(
                 owner_hash = _authenticated(session, request).token_hash
                 operator = require_operator(session, request, write=True, policy=operator_policy)
             receipt = store.revoke(owner_hash, approval_id, operator)
-            return store.get(owner_hash, receipt.manifest_id).to_response()
+            return public_record(owner_hash, store.get(owner_hash, receipt.manifest_id))
         except PublicationError as error:
             raise _publication_error(error) from None
         except SQLAlchemyError:
