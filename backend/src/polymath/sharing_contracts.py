@@ -65,6 +65,18 @@ class PublicBibliography(PublicModel):
         return self
 
 
+def canonical_public_doi(value: str) -> str:
+    """Preserve DOI identity only when browsers preserve its literal URL path.
+
+    Private bibliography accepts historical DOI suffixes containing dot segments.
+    A public resolver URL must not silently navigate to a different identifier.
+    """
+    identifier = canonical_doi(value)
+    if any(segment in (".", "..") for segment in identifier.split("/")):
+        raise ValueError("public DOI links cannot contain URL dot segments")
+    return identifier
+
+
 class PublicIdentifiers(PublicModel):
     doi: Annotated[str, Field(max_length=200)] | None = None
     arxiv_id: Annotated[str, Field(max_length=100)] | None = None
@@ -74,7 +86,7 @@ class PublicIdentifiers(PublicModel):
     @field_validator("doi")
     @classmethod
     def valid_doi(cls, value):
-        return canonical_doi(value) if value is not None else None
+        return canonical_public_doi(value) if value is not None else None
 
     @field_validator("openalex_id")
     @classmethod
@@ -109,7 +121,7 @@ class PublicScholarlyLink(PublicModel):
     @model_validator(mode="after")
     def scholarly_url(self):
         if self.kind == "doi":
-            valid = self.url == "https://doi.org/" + canonical_doi(self.url)
+            valid = self.url == "https://doi.org/" + canonical_public_doi(self.url)
         elif self.kind == "openalex":
             prefix = "https://openalex.org/"
             valid = self.url.startswith(prefix) and self.url == prefix + canonical_openalex_id(

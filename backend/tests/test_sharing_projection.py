@@ -658,3 +658,77 @@ def test_token_bearing_scholarly_url_is_not_reused_as_a_public_link():
     projection = build_public_projection(bridge_result((first, source("other"))))
     assert projection.papers[0].links == ()
     assert "PRIVATE_ACCESS" not in canonical_projection_json(projection)
+
+
+@pytest.mark.parametrize(
+    "identifier",
+    [
+        "10.1234/a/../b",
+        "10.1234/a/./b",
+        "10.1234/a/..",
+        "10.1234/a/.",
+        "10.1234/a//../b",
+    ],
+)
+def test_public_dot_segment_doi_is_omitted_without_changing_private_bibliography(identifier):
+    from polymath.evidence import _canonical, _hash, _metadata
+    from polymath.literature.identity import canonical_doi
+
+    document = source(
+        identifier="doi:" + identifier,
+        url="https://doi.org/" + identifier,
+        bibliography=SourceBibliography(
+            doi=identifier, arxiv_id="2401.01234", arxiv_version=2, openalex_id="W123"
+        ),
+    )
+    private_metadata = _canonical(_metadata(document))
+    private_hash = _hash(private_metadata)
+    projection = build_public_projection(bridge_result((document, source("other"))))
+    paper = projection.papers[0]
+    assert paper.identifiers.doi is None
+    assert [(link.kind, link.url) for link in paper.links] == [
+        ("arxiv", "https://arxiv.org/abs/2401.01234v2"),
+        ("openalex", "https://openalex.org/W123"),
+    ]
+    assert identifier not in canonical_projection_json(projection)
+    assert canonical_doi(identifier) == document.bibliography.doi == identifier
+    assert _canonical(_metadata(document)) == private_metadata
+    assert _hash(_canonical(_metadata(document))) == private_hash
+
+
+@pytest.mark.parametrize("identifier", ["10.1234/a/../b", "10.1234/a/./b"])
+def test_public_dto_independently_rejects_browser_normalized_doi_identifiers_and_links(identifier):
+    from polymath.sharing_contracts import PublicIdentifiers
+
+    with pytest.raises(ValidationError, match="dot segments"):
+        PublicIdentifiers(doi=identifier)
+    with pytest.raises(ValidationError, match="dot segments"):
+        PublicScholarlyLink(kind="doi", url="https://doi.org/" + identifier)
+
+
+@pytest.mark.parametrize("identifier", ["10.1234/a..b", "10.1234/a/.../b", "10.1234/a//b"])
+def test_public_doi_keeps_literal_non_dot_segment_paths(identifier):
+    document = source(bibliography=SourceBibliography(doi=identifier))
+    projection = build_public_projection(bridge_result((document, source("other"))))
+    assert projection.papers[0].identifiers.doi == identifier
+    assert [(link.kind, link.url) for link in projection.papers[0].links] == [
+        ("doi", "https://doi.org/" + identifier)
+    ]
+
+
+def test_unsafe_doi_without_alternative_retains_title_and_every_public_citation():
+    identifier = "10.1234/a/../b"
+    document = source(
+        identifier="doi:" + identifier,
+        url="https://doi.org/" + identifier,
+        bibliography=SourceBibliography(doi=identifier),
+    )
+    projection = build_public_projection(bridge_result((document, source("other"))))
+    assert projection.papers[0].identifiers.model_dump(mode="json") == {}
+    assert projection.papers[0].links == ()
+    assert projection.papers[0].title == document.title
+    assert len(projection.citations) == 2
+    assert (
+        PublicFindingProjection.model_validate_json(canonical_projection_json(projection))
+        == projection
+    )

@@ -38,6 +38,7 @@ from polymath.sharing_contracts import (
     PublicPaper,
     PublicQuoteExcerpt,
     PublicScholarlyLink,
+    canonical_public_doi,
 )
 
 
@@ -110,7 +111,15 @@ def _identifiers(documents):
                 ("openalex:", "openalex_id"),
             ):
                 if alias.startswith(prefix) and key not in selected:
-                    selected[key] = alias[len(prefix) :]
+                    value = alias[len(prefix) :]
+                    if key == "doi":
+                        try:
+                            value = canonical_public_doi(value)
+                        except ValueError:
+                            # Keep private identifiers and their alias grouping,
+                            # but never emit a URL browsers resolve differently.
+                            continue
+                    selected[key] = value
     base = selected.get("arxiv_id")
     versions = set()
     for document in documents:
