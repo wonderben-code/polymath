@@ -44,10 +44,11 @@ The implementation baseline is recorded in `docs/ARCHITECTURE.md`. The target is
 - [x] E1–E3: Ask and Surprise Me implementation, verified through synthetic worker/browser journeys
 - [ ] E4: live Meta/source evaluation and scientific quality review
 - [ ] F: growing knowledge base, map, and connections between connections
-- [ ] G: Formalise, Write, and approval-gated Publish
+- [x] G1–G2: Formalise and Write implementation with bounded checks and exact source-backed exports
+- [ ] G3–G6: authenticated approval, Zenodo publication, live/deployed verification
 - [ ] H: complete-product validation, polish, and submission
 
-Explore, Ask, and Surprise Me now share the worker, budget controls, immutable evidence, and session-owned activity/history APIs. Ask shows classified, individually cited claims; Surprise Me records model-chosen fields. A private knowledge search/map opens saved findings and evidence relationships. The intelligence can search those saved findings and reread their original sources, with immutable provenance and safe restart replay. Selecting 2–4 bridges launches a higher-level investigation whose citations must trace to original evidence from every selected bridge. These paths are tested with synthetic models/sources. Full-text retrieval, live Meta verification, public execution, and later product features remain incomplete; paid calls stay disabled. See the [development guide](docs/DEVELOPMENT.md) and [progress tracker](docs/PROGRESS.md).
+Explore, Ask, and Surprise Me now share the worker, budget controls, immutable evidence, and session-owned activity/history APIs. Ask shows classified, individually cited claims; Surprise Me records model-chosen fields. A private knowledge search/map opens saved findings and evidence relationships. The intelligence can search those saved findings and reread their original sources, with immutable provenance and safe restart replay. Selecting 2–4 bridges launches a higher-level investigation whose citations must trace to original evidence from every selected bridge. Saved findings can become model-generated conjectures, summaries, and papers with original citations, bounded mathematical checks, preview/history, and exact Markdown exports. These paths are tested with synthetic models/sources. Publication, full-text retrieval, live Meta verification, public execution, and later product features remain incomplete; paid calls stay disabled. See the [development guide](docs/DEVELOPMENT.md) and [progress tracker](docs/PROGRESS.md).
 
 ## Licence
 Apache 2.0. See [LICENSE](LICENSE).

@@ -14,6 +14,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 from polymath import __version__
+from polymath.artifact_api import create_artifact_router
 from polymath.config import Settings, get_settings
 from polymath.database import build_engine
 from polymath.knowledge import create_knowledge_router
@@ -45,6 +46,9 @@ def create_app(
         create_run_router(application.state.engine, availability=research_availability)
     )
     application.include_router(create_knowledge_router(application.state.engine))
+    application.include_router(
+        create_artifact_router(application.state.engine, availability=research_availability)
+    )
 
     @application.middleware("http")
     async def private_api_responses(request: Request, call_next):

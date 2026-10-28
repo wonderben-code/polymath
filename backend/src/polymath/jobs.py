@@ -65,6 +65,7 @@ class RunSnapshot:
     external_request_in_flight: bool
     external_request_id: str | None
     interruption_reason: str | None
+    task_kind: str = "research"
 
 
 @dataclass(frozen=True)
@@ -138,6 +139,7 @@ def _snapshot(run: ResearchRun) -> RunSnapshot:
         external_request_in_flight=run.external_request_in_flight,
         external_request_id=run.external_request_id,
         interruption_reason=run.interruption_reason,
+        task_kind=run.task_kind,
     )
 
 
@@ -215,15 +217,17 @@ class JobRepository:
     def __init__(self, engine: Engine):
         self.engine = engine
 
-    def create(self, *, mode: str, goal: str) -> RunSnapshot:
+    def create(self, *, mode: str, goal: str, task_kind: str = "research") -> RunSnapshot:
         if mode not in {"explore", "ask", "surprise"}:
             raise ValueError("Unsupported research mode")
+        if task_kind not in {"research", "formalise", "write_summary", "write_paper"}:
+            raise ValueError("Unsupported task kind")
         if not isinstance(goal, str):
             raise ValueError("Research goal must be a string")
-        if mode != "surprise" or goal:
+        if task_kind != "research" or mode != "surprise" or goal:
             _bounded_text(goal, 4000, "Research goal")
         with Session(self.engine) as session, session.begin():
-            run = ResearchRun(mode=mode, goal=goal)
+            run = ResearchRun(mode=mode, goal=goal, task_kind=task_kind)
             session.add(run)
             session.flush()
             _event(session, run, "created", "queued", "Investigation queued")

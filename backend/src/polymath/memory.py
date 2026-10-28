@@ -84,6 +84,7 @@ def _eligible(run: ResearchRun, owner_hash: str):
         .where(
             ResearchRunAccess.session_hash == owner_hash,
             ResearchRun.status == "succeeded",
+            ResearchRun.task_kind == "research",
             EvidenceResult.status.in_(("bridge", "answer")),
             EvidenceResult.run_id != run.id,
             EvidenceResult.created_at < run.created_at,

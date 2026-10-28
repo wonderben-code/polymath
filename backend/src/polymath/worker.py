@@ -17,11 +17,20 @@ from typing import Any
 
 from sqlalchemy import Engine
 
+from polymath.artifact_contracts import ArtifactBasis
+from polymath.artifact_controller import ArtifactController, ArtifactLimits
+from polymath.artifacts import ArtifactStore
 from polymath.budget import BudgetError, BudgetService
 from polymath.dispatch import DispatchCoordinator, DispatchError
 from polymath.evidence import EvidenceStore
 from polymath.jobs import JobLease, JobRepository, LeaseLost, RunSnapshot
 from polymath.lineage import get_parent_refs
+from polymath.math_checks import (
+    FiniteCheckResult,
+    FiniteConjecture,
+    check_conjecture,
+    validate_check,
+)
 from polymath.memory import MemoryError as ResearchMemoryError
 from polymath.memory import ResearchMemory
 from polymath.research.controller import LiteratureTools, ResearchController, ResearchLimits
@@ -103,6 +112,7 @@ class WorkerOutcome:
     status: str
     run_id: str | None = None
     result_id: str | None = None
+    artifact_id: str | None = None
 
 
 class _RunContext:
@@ -168,7 +178,7 @@ class _RecordedModel:
         request_id = f"model-{self.step:04d}"
         request_hash = _digest(
             {
-                "protocol": "polymath-worker-lineage-v4",
+                "protocol": "polymath-worker-artifacts-v5",
                 "model_identity": self.policy.model_identity,
                 "endpoint": META_COMPLETIONS_URL,
                 "stream": False,
@@ -437,6 +447,32 @@ class _RecordedMemory:
         return document
 
 
+class _RecordedChecks:
+    """Only the bounded integer checker is callable; there is no execution tool."""
+
+    def __init__(self, context: _RunContext):
+        self.context = context
+        self.step = 0
+
+    async def check(self, conjecture: FiniteConjecture) -> FiniteCheckResult:
+        self.step += 1
+        key = f"math-{self.step:04d}"
+        digest = _digest(conjecture.model_dump(mode="json"))
+        snapshot = await self.context.checkpoint()
+        cached = snapshot.checkpoint.get("tool_observations", {}).get(key)
+        if cached is not None:
+            if cached["hash"] != digest:
+                raise ExecutionStopped("math_replay_conflict")
+            result = FiniteCheckResult.model_validate_json(json.dumps(cached["payload"]))
+            validate_check(result, conjecture)
+            return result
+        result = await asyncio.to_thread(check_conjecture, conjecture)
+        await self.context.save_cache(
+            key, {"hash": digest, "payload": result.model_dump(mode="json")}
+        )
+        return result
+
+
 class ResearchWorker:
     def __init__(
         self,
@@ -446,6 +482,7 @@ class ResearchWorker:
         tools_factory: Callable[[RunSnapshot], LiteratureTools],
         policy: WorkerPolicy,
         limits: ResearchLimits | None = None,
+        artifact_limits: ArtifactLimits | None = None,
         execution_enabled: bool = False,
     ):
         if type(execution_enabled) is not bool:
@@ -453,6 +490,7 @@ class ResearchWorker:
         self.engine, self.policy = engine, policy
         self.model_factory, self.tools_factory = model_factory, tools_factory
         self.limits = limits or ResearchLimits()
+        self.artifact_limits = artifact_limits or ArtifactLimits()
         self.execution_enabled = execution_enabled
         self.jobs, self.budget = JobRepository(engine), BudgetService(engine)
 
@@ -525,7 +563,7 @@ class ResearchWorker:
                 await asyncio.to_thread(
                     self.jobs.append_event,
                     lease,
-                    event_key=f"controller:v4:{item.sequence}",
+                    event_key=f"controller:v5:{item.sequence}",
                     kind=item.kind,
                     summary=item.summary,
                 )
@@ -543,13 +581,21 @@ class ResearchWorker:
         try:
             snapshot = await context.checkpoint()
             parents = await asyncio.to_thread(get_parent_refs, self.engine, lease)
+            basis: ArtifactBasis | None = None
+            if snapshot.task_kind != "research":
+                basis = await asyncio.to_thread(ArtifactStore(self.engine).load_basis, lease)
             fingerprint = _digest(
                 {
-                    "protocol": "polymath-worker-lineage-v4",
+                    "protocol": "polymath-worker-artifacts-v5",
                     "mode": snapshot.mode,
+                    "task_kind": snapshot.task_kind,
                     "parents": [parent.model_dump(mode="json") for parent in parents],
+                    "artifact_basis": (
+                        _digest(basis.model_dump(mode="json")) if basis is not None else None
+                    ),
                     "policy": asdict(self.policy),
                     "limits": asdict(self.limits),
+                    "artifact_limits": asdict(self.artifact_limits),
                 }
             )
             existing = snapshot.checkpoint.get("worker_protocol")
@@ -569,13 +615,43 @@ class ResearchWorker:
                 cap_microdollars=self.policy.run_cap_microdollars,
                 max_calls=self.limits.max_model_calls,
             )
+            model = _RecordedModel(
+                context,
+                DispatchCoordinator(self.engine),
+                self.model_factory(snapshot),
+                self.policy,
+            )
+            if basis is not None:
+                controller = ArtifactController(
+                    model,
+                    self.artifact_limits,
+                    on_event=public_event,
+                    check_tool=_RecordedChecks(context),
+                )
+                artifact = await controller.generate(snapshot.task_kind, basis)
+                await context.check_owner()
+                current = await asyncio.to_thread(self.jobs.get, lease.run_id)
+                if current.external_request_in_flight:
+                    raise ExecutionStopped("external_outcome_unknown")
+                saved_artifact = await asyncio.to_thread(
+                    ArtifactStore(self.engine).save, lease, artifact
+                )
+                status = "failed" if artifact.status == "failed" else "succeeded"
+                await stop_heartbeat()
+                await asyncio.to_thread(
+                    self.jobs.finish,
+                    lease,
+                    status=status,
+                    outcome={
+                        "artifact_id": str(saved_artifact.id),
+                        "artifact_status": artifact.status,
+                        "error_code": artifact.error_code,
+                    },
+                    evidence_refs=[saved_artifact.artifact_ref],
+                )
+                return WorkerOutcome(status, str(lease.run_id), artifact_id=str(saved_artifact.id))
             controller = ResearchController(
-                _RecordedModel(
-                    context,
-                    DispatchCoordinator(self.engine),
-                    self.model_factory(snapshot),
-                    self.policy,
-                ),
+                model,
                 _RecordedTools(context, self.tools_factory(snapshot)),
                 self.limits,
                 on_event=public_event,

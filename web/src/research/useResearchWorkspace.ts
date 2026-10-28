@@ -373,11 +373,14 @@ export function useResearchWorkspace(enabled: boolean, researchAvailable: boolea
     parentResultIds,
   ), [submit])
 
+  const invalidateSession = useCallback(() => invalidate('session_expired'), [invalidate])
+
   return {
     phase, runs, nextCursor, loadingMore, error, detailError, selectedId, activeRun, events, result,
     connection, submitting, cancelling: cancellingId === activeRun?.id,
     canCancel: !submitting && (!cancellingId || cancellingId === activeRun?.id),
     canSubmit: enabled && researchAvailable && phase === 'ready' && !!csrf && !submitting && !cancellingId,
+    csrfToken: csrf, invalidateSession,
     refresh, selectRun, loadMore, cancel, submit, investigateBridges,
   }
 }

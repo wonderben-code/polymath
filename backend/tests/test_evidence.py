@@ -374,9 +374,19 @@ def test_evidence_migration_repeats_reverses_and_matches_metadata(evidence):
     command.check(config)
     command.downgrade(config, "0004_dispatch_binding")
     assert "evidence_source_versions" not in inspect(engine).get_table_names()
-    assert jobs.get(lease.run_id).status == "running"
+    # The current ORM includes columns added after this historical schema.
+    # Check preserved job data through the schema's actual columns until upgrade.
+    with engine.connect() as connection:
+        assert (
+            connection.scalar(
+                text("SELECT status FROM research_runs WHERE id = :run_id"),
+                {"run_id": lease.run_id},
+            )
+            == "running"
+        )
     command.upgrade(config, "head")
     command.check(config)
+    assert jobs.get(lease.run_id).status == "running"
 
 
 @pytest.mark.parametrize(

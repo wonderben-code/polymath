@@ -158,10 +158,15 @@ def _owned(session: Session, owner: BrowserSession, run_id: uuid.UUID) -> Resear
 
 def _summary(run: ResearchRun) -> dict:
     result_id = None
+    artifact_id = None
     error_code = None
     if isinstance(run.outcome, dict):
         try:
             result_id = str(uuid.UUID(run.outcome["result_id"]))
+        except (KeyError, TypeError, ValueError, AttributeError):
+            pass
+        try:
+            artifact_id = str(uuid.UUID(run.outcome["artifact_id"]))
         except (KeyError, TypeError, ValueError, AttributeError):
             pass
         code = run.outcome.get("error_code")
@@ -170,11 +175,13 @@ def _summary(run: ResearchRun) -> dict:
     return {
         "id": str(run.id),
         "mode": run.mode,
+        "task_kind": run.task_kind,
         "goal": run.goal,
         "status": run.status,
         "created_at": run.created_at.isoformat(),
         "updated_at": run.updated_at.isoformat(),
-        "result_id": result_id,
+        "result_id": result_id if run.task_kind == "research" else None,
+        "artifact_id": artifact_id if run.task_kind != "research" else None,
         "error_code": error_code,
         "external_outcome_unknown": run.external_request_in_flight,
     }
@@ -296,6 +303,7 @@ def create_run_router(
                     select(ResearchRun)
                     .join(ResearchRunAccess, ResearchRunAccess.run_id == ResearchRun.id)
                     .where(ResearchRunAccess.session_hash == owner.token_hash)
+                    .where(ResearchRun.task_kind == "research")
                 )
                 if before is not None:
                     anchor = _owned(session, owner, before)

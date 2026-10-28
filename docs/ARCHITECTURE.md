@@ -114,6 +114,14 @@ Memory scope derives from the current run’s active browser session, never mode
 
 Map follow-ups pin 2–4 owned completed bridge versions during enqueue, preserving order, IDs, and hashes in append-only records. The worker fingerprint binds those references for restart. A positive higher-level bridge must revisit every parent and cite at least one of each parent’s original quoted source versions. Controller and storage validate this separately. Earlier-only parents prevent cycles; combining parents does not establish independence or greater certainty. The graph labels parent relationships as investigations based on earlier work, separately from direct source evidence. The implementation is fixture/browser verified; real Meta quality and public deployment remain separate gates.
 
+### Implemented conjecture and document boundary
+
+ResearchRun.task_kind separates research, Formalise, summary writing, and paper writing while preserving the same queue, leases, event stream, dispatch journal, and spending ledger. A document request pins one completed owned source finding and optionally an exact prior conjecture. Source quote versions are copied under the new lease before generation. Scientific findings and generated artifacts use separate tables and identifiers; a generated document cannot enter the scientific finding graph as evidence.
+
+Meta generates typed, individually cited prose and may choose bounded mathematical checks for Formalise. Paragraph citations must refer to actual original passage ordinals; bridge artifacts cover both sides, and inherited Ask uncertainty cannot be upgraded. Finite integer checks have fixed AST/domain/arithmetic bounds and no arbitrary code execution. Their exact encodings, outcomes and counterexamples persist, including when a later document uses the conjecture. Model proof attempts remain unverified.
+
+Small generated versions are immutable PostgreSQL records capped at262KiB, preserving structured payload, input basis, escaped Markdown and separate SHA-256 hashes. Export returns the exact saved UTF-8 bytes without rerendering. Future publication approval must bind these bytes and metadata; generation itself cannot authorize publication. Live scientific support and Meta compatibility remain separate acceptance gates.
+
 ## 7. Durable jobs and live activity
 
 Use explicit states: queued, running, waiting_retry, cancel_requested, cancelled, succeeded, failed, and interrupted. Jobs use transactional claims and expiring leases with heartbeats; checkpoints carry a version/fencing token so an expired worker cannot overwrite its replacement. Deduplicate tool outputs and events where possible.

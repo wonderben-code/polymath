@@ -29,6 +29,10 @@ class ResearchRun(Base):
     __table_args__ = (
         CheckConstraint("mode IN ('explore', 'ask', 'surprise')", name="ck_research_runs_mode"),
         CheckConstraint(
+            "task_kind IN ('research', 'formalise', 'write_summary', 'write_paper')",
+            name="ck_research_runs_task_kind",
+        ),
+        CheckConstraint(
             "status IN ('queued', 'running', 'waiting_retry', 'cancel_requested', "
             "'cancelled', 'succeeded', 'failed', 'interrupted')",
             name="ck_research_runs_status",
@@ -41,6 +45,9 @@ class ResearchRun(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     mode: Mapped[str] = mapped_column(String(32))
+    task_kind: Mapped[str] = mapped_column(
+        String(32), default="research", server_default="research"
+    )
     status: Mapped[str] = mapped_column(String(32), default="queued", server_default="queued")
     goal: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

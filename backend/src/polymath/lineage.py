@@ -76,7 +76,11 @@ def bind_parents(
     identifiers = validate_parent_ids(parent_result_ids, run.mode)
     if not identifiers:
         return ()
-    if run.status != "queued" or _owner_hash(session, run.id) != owner_hash:
+    if (
+        run.status != "queued"
+        or run.task_kind != "research"
+        or _owner_hash(session, run.id) != owner_hash
+    ):
         raise LineageError("research_basis_not_found")
     if session.scalar(select(ResearchRunParent.run_id).where(ResearchRunParent.run_id == run.id)):
         raise LineageError("research_basis_already_bound")

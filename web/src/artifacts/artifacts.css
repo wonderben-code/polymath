@@ -1,0 +1,116 @@
+.artifact-workspace { margin-top: 36px; border: 1px solid var(--line); background: #faf9f5; padding: 32px 36px; min-width: 0; }
+.artifact-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 28px; }
+.artifact-heading h2 { font: 400 32px/1.2 Georgia, serif; letter-spacing: -.9px; margin: 12px 0; }
+.artifact-heading p { font-size: 12px; color: var(--muted); line-height: 1.9; max-width: 680px; margin: 0; }
+.artifact-heading > button { flex-shrink: 0; }
+.artifact-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 26px 0 16px; }
+.artifact-actions button { position: relative; text-align: left; border: 1px solid #b9c7b6; background: #f3f5ee; color: var(--ink); padding: 19px 18px; border-radius: 3px; }
+.artifact-actions button > span { color: #72826d; display: block; font: italic 12px Georgia, serif; margin-bottom: 16px; }
+.artifact-actions strong { display: block; font-size: 13px; font-weight: 550; }
+.artifact-actions small { display: block; font-size: 10px; line-height: 1.8; margin-top: 7px; color: var(--muted); }
+.artifact-actions button:hover:not(:disabled) { background: #e7eee2; border-color: var(--accent); }
+.artifact-actions button:disabled { background: #f3f3ed; color: #7f877d; border-color: var(--line); }
+.artifact-availability, .artifact-scope { font-size: 11px; color: var(--muted); line-height: 1.8; }
+.artifact-include-conjecture { display: flex; align-items: flex-start; gap: 10px; font-size: 11px; padding: 16px 0; }
+.artifact-include-conjecture input { accent-color: var(--accent); margin: 2px 0 0; flex: 0 0 auto; }
+.artifact-include-conjecture small { display: block; color: var(--muted); font-size: 10px; margin-top: 5px; }
+.artifact-message { padding: 18px 0; color: var(--muted); font-size: 12px; line-height: 1.8; }
+.artifact-error { border-left: 2px solid #a07b5e; padding: 12px 16px; background: #f5efe6; }
+.artifact-error p { margin: 0 0 8px; }
+.artifact-error button { border: 0; background: transparent; padding: 3px 0; text-decoration: underline; color: var(--accent); font-size: 11px; }
+.artifact-history { margin-top: 24px; border-top: 1px solid var(--line); padding-top: 18px; }
+.artifact-history ul { display: flex; flex-wrap: wrap; gap: 8px; padding: 0; margin: 0; list-style: none; }
+.artifact-history button { text-align: left; color: var(--ink); background: #f8f8f2; border: 1px solid var(--line); padding: 10px 13px; border-radius: 3px; }
+.artifact-history strong { font-size: 11px; font-weight: 550; display: block; }
+.artifact-history span { color: var(--muted); font-size: 10px; display: block; margin-top: 5px; }
+.artifact-history button[aria-pressed=true] { background: #e7eee2; border-color: #8fa58c; }
+.artifact-job-status { margin: 24px 0 0; padding: 18px 0; display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; border-bottom: 1px solid var(--line); }
+.artifact-job-label { font-size: 12px; font-weight: 600; }
+.artifact-job-status p { font-size: 11px; line-height: 1.8; color: var(--muted); margin: 7px 0 0; }
+.artifact-job-status button { background: transparent; border: 1px solid #c7cdbf; color: var(--ink); font-size: 10px; padding: 9px 12px; flex-shrink: 0; }
+.artifact-activity { border-bottom: 1px solid var(--line); padding: 16px 0; margin-bottom: 24px; color: var(--muted); font-size: 11px; }
+.artifact-activity summary { cursor: pointer; color: var(--ink); }
+.artifact-activity summary > span { float: right; color: var(--muted); font-size: 10px; margin-left: 16px; }
+.artifact-activity ol { margin: 16px 0 0; padding-left: 24px; }
+.artifact-activity li { padding: 4px 0; line-height: 1.8; }
+.artifact-activity p { margin-top: 18px; }
+.artifact-preview { max-width: 790px; margin: 32px auto 0; min-width: 0; }
+.artifact-preview-heading { border-bottom: 1px solid var(--line); padding: 0 0 22px; }
+.artifact-preview h3 { font: 400 35px/1.25 Georgia, serif; letter-spacing: -.8px; margin: 13px 0; overflow-wrap: anywhere; }
+.artifact-preview-heading > p { font-size: 11px; color: var(--muted); }
+.artifact-document-section { margin-top: 28px; }
+.artifact-document-section h4 { font: 400 23px/1.3 Georgia, serif; margin: 0 0 16px; }
+.artifact-document-section > ul { color: var(--muted); padding-left: 20px; font-size: 12px; line-height: 1.9; }
+.artifact-document-section > ul li { margin-top: 8px; }
+.artifact-paragraph { margin: 14px 0; }
+.artifact-label { display: inline-block; font-size: 9px; line-height: 1.5; padding: 3px 7px; border-radius: 2px; letter-spacing: .03em; background: #e5eddf; color: #4d6b49; }
+.artifact-claim-postulated .artifact-label { background: #eeead9; color: #7a6942; }
+.artifact-claim-speculative .artifact-label { background: #ece6ed; color: #79677e; }
+.artifact-paragraph p { margin: 8px 0 0; font-size: 13px; line-height: 1.95; white-space: pre-wrap; overflow-wrap: anywhere; }
+.artifact-citations { display: inline-flex; gap: 4px; margin-left: 6px; font-size: 10px; vertical-align: super; }
+.artifact-citations a { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
+.artifact-open-status { position: relative; padding: 20px; border-left: 2px solid #9b8f62; background: #f0eee2; margin: 24px 0; }
+.artifact-open-status strong { font-size: 12px; font-weight: 550; }
+.artifact-open-status p { color: #746e57; font-size: 11px; line-height: 1.8; margin: 9px 0 0; }
+.artifact-status-dot { display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: #a19463; vertical-align: middle; margin-right: 9px; }
+.artifact-definitions { margin: 0; }
+.artifact-definitions > div { display: grid; grid-template-columns: minmax(60px, 100px) minmax(0, 1fr); gap: 16px; border-top: 1px solid var(--line); padding: 16px 0; }
+.artifact-definitions dt { font: italic 18px Georgia, serif; padding-top: 2px; overflow-wrap: anywhere; }
+.artifact-definitions dd { margin: 0; min-width: 0; }
+.artifact-definitions .artifact-paragraph { margin: 0; }
+.artifact-conjecture { background: #eef2e8; padding: 22px; border: 1px solid #d8dfcf; }
+.artifact-check { border: 1px solid var(--line); padding: 19px 20px; margin-top: 14px; background: #f5f5ed; }
+.artifact-check h5 { font-size: 12px; font-weight: 550; margin: 0; }
+.artifact-check h6 { font-size: 11px; font-weight: 550; margin: 0 0 9px; }
+.artifact-check > p { color: var(--muted); font-size: 11px; line-height: 1.8; }
+.check-counterexample_found { border-color: #c8a98d; background: #f4eee4; }
+.artifact-domain { display: flex; flex-wrap: wrap; gap: 10px 24px; font-size: 11px; margin: 16px 0; }
+.artifact-domain > div { display: flex; gap: 10px; }
+.artifact-domain dt { font-family: Georgia, serif; font-style: italic; }
+.artifact-domain dd { margin: 0; color: var(--muted); }
+.artifact-check-scope { border-top: 1px solid var(--line); padding-top: 14px; }
+.artifact-check details { font-size: 10px; line-height: 1.8; color: var(--muted); }
+.artifact-check pre { font-size: 10px; overflow-x: auto; background: #eeeee5; padding: 12px; max-height: 300px; }
+.artifact-hash { overflow-wrap: anywhere; }
+.artifact-witness { padding: 14px; background: #fffaf3; margin-top: 14px; }
+.artifact-witness dl { display: flex; gap: 20px; font-size: 12px; }
+.artifact-witness dl > div { display: flex; gap: 8px; }
+.artifact-witness dd { margin: 0; }
+.artifact-witness p { font-size: 11px; line-height: 1.9; overflow-wrap: anywhere; }
+.artifact-references { border-top: 1px solid var(--line); padding-top: 25px; }
+.artifact-references > ol { padding-left: 23px; margin: 0; }
+.artifact-references li { padding: 12px 0 22px 7px; font-size: 12px; scroll-margin-top: 24px; }
+.artifact-reference-heading { display: flex; justify-content: space-between; gap: 20px; align-items: flex-start; }
+.artifact-reference-heading a { color: var(--accent); font-weight: 550; line-height: 1.7; text-underline-offset: 3px; }
+.artifact-reference-heading > span { flex-shrink: 0; color: var(--muted); font-size: 9px; padding-top: 4px; }
+.artifact-references blockquote { margin: 16px 0 12px; border-left: 2px solid #a5b69b; padding-left: 14px; font: 400 14px/1.8 Georgia, serif; white-space: pre-wrap; overflow-wrap: anywhere; }
+.artifact-reference-support { color: var(--muted); font-size: 10px; line-height: 1.8; }
+.artifact-references details { color: var(--muted); font-size: 10px; margin-top: 15px; }
+.artifact-references dl, .artifact-export dl { display: grid; grid-template-columns: minmax(80px, max-content) minmax(0, 1fr); gap: 7px 14px; }
+.artifact-references dd, .artifact-export dd { margin: 0; overflow-wrap: anywhere; }
+.artifact-export { margin-top: 35px; border-top: 1px solid var(--line); padding-top: 25px; }
+.artifact-download { display: inline-block; padding: 12px 16px; background: var(--accent); color: white; border-radius: 3px; text-decoration: none; font-size: 11px; }
+.artifact-download span { padding-left: 14px; }
+.artifact-export > p, .artifact-export details { font-size: 10px; color: var(--muted); line-height: 1.8; }
+.artifact-empty-outcome { padding: 28px 0 8px; }
+.artifact-empty-outcome h3 { font: 400 25px Georgia, serif; margin: 0 0 14px; }
+.artifact-empty-outcome p { font-size: 12px; color: var(--muted); line-height: 1.9; }
+@media (max-width: 700px) {
+  .artifact-workspace { padding: 23px 20px; margin-top: 25px; }
+  .artifact-heading { display: block; }
+  .artifact-heading h2 { font-size: 28px; }
+  .artifact-heading > button { margin-top: 12px; }
+  .artifact-actions { grid-template-columns: minmax(0, 1fr); }
+  .artifact-actions button { padding: 16px 18px; }
+  .artifact-actions button > span { float: right; margin: 0; }
+  .artifact-actions small { margin-top: 5px; }
+  .artifact-job-status { display: block; }
+  .artifact-job-status button { margin-top: 13px; }
+  .artifact-preview h3 { font-size: 29px; }
+  .artifact-conjecture { padding: 17px; }
+  .artifact-definitions > div { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  .artifact-reference-heading { display: block; }
+  .artifact-reference-heading > span { display: block; }
+  .artifact-activity summary > span { float: none; display: block; margin: 7px 0 0 15px; }
+  .artifact-references dl, .artifact-export dl { grid-template-columns: minmax(0, 1fr); }
+}

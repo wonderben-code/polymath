@@ -248,6 +248,8 @@ class EvidenceStore:
         self._validate_result_shape(result)
         with Session(self.engine) as session, session.begin():
             run = _owned(session, lease)
+            if run.task_kind != "research":
+                raise EvidenceError("research_result_wrong_task_kind")
             self._validate_memory_reads(session, run, result)
             if result.mode != run.mode:
                 raise EvidenceError("result_mode_mismatch")

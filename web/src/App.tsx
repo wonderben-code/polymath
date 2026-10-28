@@ -5,6 +5,7 @@ import type { SystemStatus } from './api'
 import { ResearchRunView } from './research'
 import { useResearchWorkspace } from './research/useResearchWorkspace'
 import { KnowledgeBrowser } from './knowledge'
+import { ArtifactWorkspace } from './artifacts/ArtifactWorkspace'
 
 type Mode = 'explore' | 'ask' | 'surprise'
 
@@ -69,6 +70,7 @@ export function App() {
   const [connection, setConnection] = useState<'loading' | 'connected' | 'offline'>('loading')
   const [retry, setRetry] = useState(0)
   const [notice, setNotice] = useState('')
+  const [artifactBusy, setArtifactBusy] = useState(false)
   const content = copy[mode]
   const workspace = useResearchWorkspace(
     connection === 'connected' && !!system?.database && system.migrations,
@@ -105,7 +107,7 @@ export function App() {
 
   // The server defaults to unavailable. A real cookie-owned session and healthy
   // storage are required as well; a capability flag alone cannot create a job.
-  const researchConnected = workspace.canSubmit && (mode === 'surprise' || !!prompts[mode].trim())
+  const researchConnected = workspace.canSubmit && !artifactBusy && (mode === 'surprise' || !!prompts[mode].trim())
   const unavailable = connection === 'offline'
     ? 'The research service could not be reached. Check the connection and try again.'
     : 'Live investigations are not available yet. The research engine is being connected.'
@@ -182,7 +184,7 @@ export function App() {
 
               <div className="availability-note" id="research-availability" role="status">
                 <span className="small-star" aria-hidden="true">✳︎</span>
-                <p>{connection === 'loading' ? 'Checking the research service…' : workspace.canSubmit ? 'Research is available. Your investigation will be saved to this browser session.' : unavailable}</p>
+                <p>{connection === 'loading' ? 'Checking the research service…' : artifactBusy ? 'A formalisation or writing task is active. Follow its progress below.' : workspace.canSubmit ? 'Research is available. Your investigation will be saved to this browser session.' : unavailable}</p>
               </div>
               {notice && <p role="alert">{notice}</p>}
             </section>
@@ -230,7 +232,9 @@ export function App() {
           {workspace.detailError && <div className="research-detail-error" role="alert"><p>{workspace.detailError}</p>{workspace.selectedId && <button type="button" className="text-button" onClick={() => workspace.selectRun(workspace.selectedId!)}>Reload investigation</button>}</div>}
           {workspace.activeRun && <ResearchRunView run={workspace.activeRun} events={workspace.events} result={workspace.result} connection={workspace.connection} onCancel={workspace.canCancel ? () => void workspace.cancel() : undefined} cancelling={workspace.cancelling} onOpenRun={workspace.selectRun} />}
 
-          <KnowledgeBrowser enabled={workspace.phase === 'ready'} onOpenRun={workspace.selectRun} refreshToken={workspace.activeRun?.result_id} canInvestigate={workspace.canSubmit} investigating={workspace.submitting} onInvestigateBridges={workspace.investigateBridges} />
+          {workspace.phase === 'ready' && workspace.activeRun?.status === 'succeeded' && workspace.activeRun.result_id && workspace.result?.finding && (workspace.result.finding.outcome === 'bridge' || workspace.result.finding.outcome === 'answer') && <ArtifactWorkspace key={workspace.activeRun.result_id} sourceResultId={workspace.activeRun.result_id} sourceKind={workspace.result.finding.outcome} csrfToken={workspace.csrfToken} enabled={workspace.phase === 'ready'} canGenerate={workspace.canSubmit} onSessionExpired={workspace.invalidateSession} onBusyChange={setArtifactBusy} />}
+
+          <KnowledgeBrowser enabled={workspace.phase === 'ready'} onOpenRun={workspace.selectRun} refreshToken={workspace.activeRun?.result_id} canInvestigate={workspace.canSubmit && !artifactBusy} investigating={workspace.submitting} onInvestigateBridges={workspace.investigateBridges} />
 
           <section className="approach-section" id="approach" aria-labelledby="approach-title">
             <div className="approach-heading"><span className="eyebrow">HOW WE INVESTIGATE</span><h2 id="approach-title">Follow the evidence.<br /> <em>Keep the questions open.</em></h2></div>
