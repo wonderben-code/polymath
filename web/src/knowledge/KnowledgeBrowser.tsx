@@ -14,6 +14,9 @@ export interface KnowledgeBrowserProps {
   onInvestigateBridges?: (resultIds: string[]) => void | Promise<void>
   csrfToken?: string | null
   onSessionExpired?: () => void
+  onAssessmentApplied?: () => void
+  onAssessmentBusyChange?: (busy: boolean) => void
+  onOpenFinding?: (id: string) => void
 }
 
 const kinds: Record<KnowledgeKind, string> = { field: 'Field', source: 'Source', finding: 'Finding' }
@@ -28,7 +31,7 @@ function sourceKind(value: string | null) {
   return value === 'full_text' ? 'Full-text snapshot' : value === 'abstract' ? 'Abstract snapshot' : null
 }
 
-function NodeDetail({ node, data, onSelect, onOpenRun, onOpenSource }: { node: KnowledgeNode; data: KnowledgeData; onSelect: (id: string) => void; onOpenRun: (id: string) => void; onOpenSource: (watchId: string, sourceId: string) => void }) {
+function NodeDetail({ node, data, onSelect, onOpenRun, onOpenSource, onOpenFinding }: { node: KnowledgeNode; data: KnowledgeData; onSelect: (id: string) => void; onOpenRun: (id: string) => void; onOpenSource: (watchId: string, sourceId: string) => void; onOpenFinding?: (id: string) => void }) {
   const related = data.edges.filter((edge) => edge.source === node.id || edge.target === node.id).map((edge) => ({
     edge,
     node: data.nodes.find((item) => item.id === (edge.source === node.id ? edge.target : edge.source))!,
@@ -38,13 +41,15 @@ function NodeDetail({ node, data, onSelect, onOpenRun, onOpenSource }: { node: K
     <h4>{node.label}</h4>
     {sourceKind(node.content_kind) && <p>{sourceKind(node.content_kind)}</p>}
     {node.source_id && <p className="knowledge-source-id">{node.source_id}</p>}
+    {node.assessment && (!node.assessment.is_current || !node.assessment.is_supported) && <p className="knowledge-limit">{node.assessment.state === 'unsupported' ? 'Unsupported by the latest model assessment.' : 'Historical finding; a newer version is current.'} Saved text remains available. New source-based generation requires the current supported version.</p>}
+    {node.assessment_status === 'unapplied_reassessment' && <p className="knowledge-limit">A saved source copy from an unapplied reassessment. It does not establish a current finding.</p>}
     <p>{node.kind === 'field' ? 'A field named in saved research. Its links show recorded research relationships.' : node.kind === 'source' ? node.task_kind === 'ingest_literature' ? 'An unassessed source version collected by a literature watch. Read its saved text before starting a separate investigation.' : 'A source version saved during an investigation. Open its research record to inspect the evidence.' : 'A saved research finding. Its links preserve the recorded mapping and source associations.'}</p>
     {related.length > 0 && <><h5>Recorded relationships</h5><ul className="knowledge-related" aria-label="Connected records">{related.map(({ edge, node: target }) => <li key={edge.id}><span>{edge.kind === 'supported_by' ? 'Evidence association' : edge.kind === 'selected_field' ? 'Research direction' : edge.kind === 'investigated_from' ? edge.source === node.id ? 'Earlier bridge investigated' : 'Follow-up investigation' : 'Proposed mapping'}</span><button type="button" onClick={() => onSelect(target.id)}>{target.label}</button></li>)}</ul></>}
-    {node.task_kind === 'ingest_literature' && node.watch_id && node.source_version_id ? <button type="button" className="knowledge-open" onClick={() => onOpenSource(node.watch_id!, node.source_version_id!)}>Read unassessed source</button> : node.run_id && <button type="button" className="knowledge-open" onClick={() => onOpenRun(node.run_id!)}>Open research record</button>}
+    {node.task_kind === 'ingest_literature' && node.watch_id && node.source_version_id ? <button type="button" className="knowledge-open" onClick={() => onOpenSource(node.watch_id!, node.source_version_id!)}>Read unassessed source</button> : node.task_kind === 'reassess_finding' ? (node.assessment_result_id || node.kind === 'finding' && node.result_id) && onOpenFinding && <button type="button" className="knowledge-open" onClick={() => onOpenFinding((node.assessment_result_id || node.result_id)!)}>Open saved finding version</button> : node.run_id && <button type="button" className="knowledge-open" onClick={() => onOpenRun(node.run_id!)}>Open research record</button>}
   </section>
 }
 
-function MapView({ data, selected, onSelect, onOpenRun, onOpenSource }: { data: KnowledgeData; selected: string | null; onSelect: (id: string) => void; onOpenRun: (id: string) => void; onOpenSource: (watchId: string, sourceId: string) => void }) {
+function MapView({ data, selected, onSelect, onOpenRun, onOpenSource, onOpenFinding }: { data: KnowledgeData; selected: string | null; onSelect: (id: string) => void; onOpenRun: (id: string) => void; onOpenSource: (watchId: string, sourceId: string) => void; onOpenFinding?: (id: string) => void }) {
   const columns: KnowledgeKind[] = ['field', 'finding', 'source']
   const visible = columns.flatMap((kind) => data.nodes.filter((node) => node.kind === kind).slice(0, DIAGRAM_RECORDS_PER_KIND))
   const locations = new Map<string, { x: number; y: number }>()
@@ -77,14 +82,14 @@ function MapView({ data, selected, onSelect, onOpenRun, onOpenSource }: { data: 
           })}
         </svg>
       </div>
-      {selectedNode ? <NodeDetail node={selectedNode} data={data} onSelect={onSelect} onOpenRun={onOpenRun} onOpenSource={onOpenSource} /> : <p className="knowledge-select-note">Choose a map node or a record below to inspect its saved relationships.</p>}
+      {selectedNode ? <NodeDetail node={selectedNode} data={data} onSelect={onSelect} onOpenRun={onOpenRun} onOpenSource={onOpenSource} onOpenFinding={onOpenFinding} /> : <p className="knowledge-select-note">Choose a map node or a record below to inspect its saved relationships.</p>}
     </div>
     <p className="knowledge-map-note">The diagram can be scrolled horizontally. {visible.length < data.nodes.length ? `It shows ${visible.length} of ${data.nodes.length} records. ` : ''}All returned records are available in the keyboard-accessible list below.</p>
     <ul className="knowledge-node-list" aria-label="Saved knowledge records">{data.nodes.map((node) => <li key={node.id}><button type="button" aria-pressed={selected === node.id} onClick={() => onSelect(node.id)}><span>{kinds[node.kind]}</span>{' '}{node.label}</button></li>)}</ul>
   </>
 }
 
-export function KnowledgeBrowser({ enabled, onOpenRun, refreshToken, canInvestigate = false, investigating = false, onInvestigateBridges, csrfToken = null, onSessionExpired }: KnowledgeBrowserProps) {
+export function KnowledgeBrowser({ enabled, onOpenRun, refreshToken, canInvestigate = false, investigating = false, onInvestigateBridges, csrfToken = null, onSessionExpired, onOpenFinding, onAssessmentApplied, onAssessmentBusyChange }: KnowledgeBrowserProps) {
   const inputId = useId()
   const [draft, setDraft] = useState('')
   const [query, setQuery] = useState('')
@@ -95,14 +100,18 @@ export function KnowledgeBrowser({ enabled, onOpenRun, refreshToken, canInvestig
   const [parentResultIds, setParentResultIds] = useState<string[]>([])
   const [openWatchSource, setOpenWatchSource] = useState<{ watchId: string; sourceId: string; requestId: number } | null>(null)
   const sessionBlocked = useRef(false)
+  const lastCsrf = useRef(csrfToken)
   const expireSession = useCallback(() => {
     sessionBlocked.current = true
     setData(null); setSelected(null); setParentResultIds([]); setOpenWatchSource(null); setDraft(''); setQuery(''); setPhase('expired')
     onSessionExpired?.()
   }, [onSessionExpired])
   const refreshCollectedSources = useCallback(() => setRefresh((previous) => previous + 1), [])
+  const assessmentChanged = useCallback(() => { setRefresh((previous) => previous + 1); onAssessmentApplied?.() }, [onAssessmentApplied])
 
   useEffect(() => {
+    const changedSession = lastCsrf.current !== csrfToken
+    if (changedSession) { lastCsrf.current = csrfToken; sessionBlocked.current = false; setDraft(''); setQuery(''); setOpenWatchSource(null) }
     setData(null)
     setSelected(null)
     setParentResultIds([])
@@ -119,13 +128,13 @@ export function KnowledgeBrowser({ enabled, onOpenRun, refreshToken, canInvestig
     let current = true
     const timer = window.setTimeout(() => {
       controller.abort()
-      if (current) { setData(null); setPhase('error') }
+      if (current && !sessionBlocked.current) { setData(null); setPhase('error') }
     }, 10000)
     setPhase('loading')
-    loadKnowledge(query, controller.signal).then((found) => {
-      if (current && !controller.signal.aborted) { setData(found); setPhase('ready') }
+    loadKnowledge(changedSession ? '' : query, controller.signal).then((found) => {
+      if (current && !controller.signal.aborted && !sessionBlocked.current) { setData(found); setPhase('ready') }
     }).catch((error: unknown) => {
-      if (current && !controller.signal.aborted) {
+      if (current && !controller.signal.aborted && !sessionBlocked.current) {
         setData(null)
         setSelected(null)
         if (error instanceof KnowledgeError && error.code === 'session_expired') {
@@ -134,7 +143,7 @@ export function KnowledgeBrowser({ enabled, onOpenRun, refreshToken, canInvestig
       }
     }).finally(() => window.clearTimeout(timer))
     return () => { current = false; controller.abort(); window.clearTimeout(timer) }
-  }, [enabled, query, refresh, refreshToken, expireSession])
+  }, [enabled, query, refresh, refreshToken, expireSession, csrfToken])
 
   useEffect(() => {
     if (!canInvestigate) setParentResultIds([])
@@ -144,12 +153,12 @@ export function KnowledgeBrowser({ enabled, onOpenRun, refreshToken, canInvestig
   const canChoose = enabled && phase === 'ready' && canInvestigate && !investigating && !!onInvestigateBridges
 
   function chooseBridge(resultId: string) {
-    if (!canChoose || !bridges.some((node) => node.result_id === resultId)) return
+    if (!canChoose || !bridges.some((node) => node.result_id === resultId && node.assessment?.is_current && node.assessment.is_supported)) return
     setParentResultIds((previous) => previous.includes(resultId) ? previous.filter((id) => id !== resultId) : previous.length < 4 ? [...previous, resultId] : previous)
   }
 
   function investigateBridges() {
-    if (!canChoose || parentResultIds.length < 2 || parentResultIds.length > 4 || !parentResultIds.every((id) => bridges.some((node) => node.result_id === id))) return
+    if (!canChoose || parentResultIds.length < 2 || parentResultIds.length > 4 || !parentResultIds.every((id) => bridges.some((node) => node.result_id === id && node.assessment?.is_current && node.assessment.is_supported))) return
     void onInvestigateBridges!(parentResultIds)
     setParentResultIds([])
   }
@@ -180,16 +189,16 @@ export function KnowledgeBrowser({ enabled, onOpenRun, refreshToken, canInvestig
       <p className="knowledge-coverage">Current browser session only · {data.findingsConsidered} saved {data.findingsConsidered === 1 ? 'finding' : 'findings'} considered</p>
       {data.truncated && <p className="knowledge-limit" role="status">This is a bounded view of your library. Narrow the search to inspect more specific records.</p>}
       {data.items.length === 0 && data.nodes.length === 0 ? <p className="knowledge-message">No saved knowledge matches this search. Completed investigations will build the library.</p> : <>
-        <div className="knowledge-search-results"><h3>Matching records</h3>{data.items.length ? <ul aria-label="Matching saved research">{data.items.map((item) => <li key={item.id}><div><span className="knowledge-record-kind">{item.task_kind === 'ingest_literature' ? 'Unassessed source version' : item.type === 'source' ? sourceKind(item.content_kind) || 'Source' : 'Finding'}</span><h4>{item.title}</h4>{item.summary && <p>{item.summary}</p>}</div>{item.task_kind === 'ingest_literature' && item.watch_id && item.source_version_id ? <button type="button" aria-label={`Read unassessed source: ${item.title}`} onClick={() => readWatchSource(item.watch_id!, item.source_version_id!)} disabled={!csrfToken}>Read unassessed source<span className="knowledge-sr-only">: {item.title}</span></button> : <button type="button" onClick={() => onOpenRun(item.run_id)}>Open investigation<span className="knowledge-sr-only">: {item.title}</span></button>}</li>)}</ul> : <p className="knowledge-message">No matching record summaries were returned. Saved relationships remain available below.</p>}</div>
-        {data.nodes.length > 0 && <div className="knowledge-graph-section"><h3>Saved relationships</h3><p className="knowledge-map-note">Field links describe a saved mapping or model-selected research direction. Source links identify evidence associated with a finding. Curved links show earlier bridges investigated by a follow-up; they do not provide independent support. Collected sources without finding links remain unassessed.</p><MapView data={data} selected={selected} onSelect={setSelected} onOpenRun={onOpenRun} onOpenSource={readWatchSource} /></div>}
+        <div className="knowledge-search-results"><h3>Matching records</h3>{data.items.length ? <ul aria-label="Matching saved research">{data.items.map((item) => <li key={item.id}><div><span className="knowledge-record-kind">{item.task_kind === 'ingest_literature' ? 'Unassessed source version' : item.type === 'source' ? sourceKind(item.content_kind) || 'Source' : 'Finding'}</span><h4>{item.title}</h4>{item.summary && <p>{item.summary}</p>}</div>{item.task_kind === 'ingest_literature' && item.watch_id && item.source_version_id ? <button type="button" aria-label={`Read unassessed source: ${item.title}`} onClick={() => readWatchSource(item.watch_id!, item.source_version_id!)} disabled={!csrfToken}>Read unassessed source<span className="knowledge-sr-only">: {item.title}</span></button> : item.task_kind === 'reassess_finding' ? (item.assessment_result_id || item.type === 'finding' && item.result_id) && onOpenFinding ? <button type="button" aria-label={`Open saved finding version: ${item.title}`} onClick={() => onOpenFinding((item.assessment_result_id || item.result_id)!)}>Open saved finding version</button> : <span className="knowledge-record-kind">Unapplied reassessment material</span> : <button type="button" onClick={() => onOpenRun(item.run_id)}>Open investigation<span className="knowledge-sr-only">: {item.title}</span></button>}</li>)}</ul> : <p className="knowledge-message">No matching record summaries were returned. Saved relationships remain available below.</p>}</div>
+        {data.nodes.length > 0 && <div className="knowledge-graph-section"><h3>Saved relationships</h3><p className="knowledge-map-note">Field links describe a saved mapping or model-selected research direction. Source links identify evidence associated with a finding. Curved links show earlier bridges investigated by a follow-up; they do not provide independent support. Collected sources without finding links remain unassessed.</p><MapView data={data} selected={selected} onSelect={setSelected} onOpenRun={onOpenRun} onOpenSource={readWatchSource} onOpenFinding={onOpenFinding} /></div>}
         {bridges.length > 0 && <fieldset className="knowledge-bridge-selection">
           <legend>Investigate connections between bridges</legend>
           <p>Choose two to four saved bridges. Polymath will revisit their original evidence and test whether a shared structure holds up.</p>
-          <div className="knowledge-bridge-choices">{bridges.map((node) => <label key={node.result_id}><input type="checkbox" checked={parentResultIds.includes(node.result_id!)} onChange={() => chooseBridge(node.result_id!)} disabled={!canChoose || parentResultIds.length >= 4 && !parentResultIds.includes(node.result_id!)} aria-label={`Use bridge: ${node.label}`} /><span>{node.label}</span></label>)}</div>
+          <div className="knowledge-bridge-choices">{bridges.map((node) => <label key={node.result_id}><input type="checkbox" checked={parentResultIds.includes(node.result_id!)} onChange={() => chooseBridge(node.result_id!)} disabled={!canChoose || !node.assessment?.is_current || !node.assessment.is_supported || parentResultIds.length >= 4 && !parentResultIds.includes(node.result_id!)} aria-label={`Use bridge: ${node.label}`} /><span>{node.label}</span></label>)}</div>
           <div className="knowledge-bridge-actions"><p role="status">{investigating ? 'Queuing the follow-up investigation…' : canChoose ? `${parentResultIds.length} of 4 bridges selected. ${parentResultIds.length < 2 ? 'Select at least two to continue.' : 'Ready to investigate the shared structure.'}` : 'New investigations are unavailable. You can still inspect saved research.'}</p><button type="button" onClick={investigateBridges} disabled={!canChoose || parentResultIds.length < 2}>{investigating ? 'Queuing investigation…' : 'Investigate these bridges'}</button></div>
         </fieldset>}
       </>}
     </>}
-    {csrfToken !== null && <WatchWorkspace enabled={enabled && phase !== 'expired'} csrfToken={csrfToken} findings={data ? [...new Map(data.nodes.filter((node) => node.kind === 'finding' && node.result_id && (node.finding_outcome === 'bridge' || node.finding_outcome === 'answer')).map((node) => [node.result_id!, { id: node.result_id!, title: node.label }])).values()] : []} onSessionExpired={expireSession} openSource={openWatchSource} onSourcesChanged={refreshCollectedSources} />}
+    {csrfToken !== null && <WatchWorkspace enabled={enabled && phase !== 'expired'} csrfToken={csrfToken} findings={data ? [...new Map(data.nodes.filter((node) => node.kind === 'finding' && node.result_id && (node.finding_outcome === 'bridge' || node.finding_outcome === 'answer') && node.assessment?.is_current && node.assessment.is_supported).map((node) => [node.result_id!, { id: node.result_id!, title: node.label }])).values()] : []} onSessionExpired={expireSession} openSource={openWatchSource} onSourcesChanged={refreshCollectedSources} canReassess={canInvestigate && !investigating} onAssessmentApplied={assessmentChanged} onAssessmentBusyChange={onAssessmentBusyChange} onOpenFinding={onOpenFinding} />}
   </section>
 }

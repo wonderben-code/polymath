@@ -12,6 +12,7 @@ interface ArtifactWorkspaceProps {
   csrfToken: string | null
   enabled: boolean
   canGenerate: boolean
+  sourceCurrent: boolean
   onSessionExpired: () => void
   onBusyChange?: (busy: boolean) => void
 }
@@ -98,9 +99,9 @@ function Preview({ artifact }: { artifact: SavedArtifact }) {
   </article>
 }
 
-export function ArtifactWorkspace({ sourceResultId, sourceKind, csrfToken, enabled, canGenerate, onSessionExpired, onBusyChange }: ArtifactWorkspaceProps) {
+export function ArtifactWorkspace({ sourceResultId, sourceKind, csrfToken, enabled, canGenerate, sourceCurrent, onSessionExpired, onBusyChange }: ArtifactWorkspaceProps) {
   const headingId = useId()
-  const workspace = useArtifactWorkspace({ sourceResultId, csrfToken, enabled, canGenerate, onSessionExpired })
+  const workspace = useArtifactWorkspace({ sourceResultId, csrfToken, enabled, canGenerate: canGenerate && sourceCurrent, onSessionExpired })
   const [formalisationId, setFormalisationId] = useState<string | null>(null)
   const [includeConjecture, setIncludeConjecture] = useState(true)
   const visibleArtifact = workspace.artifact?.source_result_id === sourceResultId ? workspace.artifact : null
@@ -130,6 +131,7 @@ export function ArtifactWorkspace({ sourceResultId, sourceKind, csrfToken, enabl
     </div>
     {sourceKind === 'answer' && <p className="artifact-scope">Summaries and papers are available for answers. Formalise starts from a saved bridge.</p>}
     {!canGenerate && <p className="artifact-availability">Generation is currently unavailable. Saved documents can still be inspected and downloaded.</p>}
+    {!sourceCurrent && <p className="artifact-availability">This finding is historical, unsupported, or awaiting a current-version check. Saved drafts remain readable. New generation requires the current supported finding.</p>}
     {formalisationId && <label className="artifact-include-conjecture"><input type="checkbox" checked={includeConjecture} disabled={workspace.busy} onChange={(event) => setIncludeConjecture(event.target.checked)} /><span>Include the saved conjecture in writing<small>Its assumptions and proof attempt will remain explicitly unverified.</small></span></label>}
     {workspace.phase === 'loading' && <p className="artifact-message" role="status">Loading saved conjectures and documents…</p>}
     {workspace.error && <div className="artifact-message artifact-error" role="alert"><p>{workspace.error}</p>{workspace.phase !== 'expired' && <button type="button" onClick={workspace.refresh}>Reload saved work to check</button>}</div>}
@@ -139,6 +141,6 @@ export function ArtifactWorkspace({ sourceResultId, sourceKind, csrfToken, enabl
     {(workspace.activeJob || activity.length > 0) && <details className="artifact-activity" open={!visibleArtifact}><summary>Recorded generation activity<span>{connectionNames[workspace.connection]}</span></summary>{activity.length ? <ol aria-label="Recorded generation activity">{activity.map((event) => <li key={event.sequence}>{event.summary}</li>)}</ol> : <p>No recorded generation activity yet.</p>}</details>}
     {workspace.selectedId && !workspace.activeJob && workspace.phase === 'ready' && <p className="artifact-message" role="status">Loading this saved task…</p>}
     {visibleArtifact && <Preview artifact={visibleArtifact} />}
-    {visibleArtifact?.status === 'ready' && visibleArtifact.kind !== 'formalise' && <PublicationPanel key={visibleArtifact.id} artifact={visibleArtifact} csrfToken={csrfToken} enabled={enabled} onSessionExpired={onSessionExpired} />}
+    {visibleArtifact?.status === 'ready' && visibleArtifact.kind !== 'formalise' && <PublicationPanel key={visibleArtifact.id} artifact={visibleArtifact} csrfToken={csrfToken} enabled={enabled} sourceCurrent={sourceCurrent} onSessionExpired={onSessionExpired} />}
   </section>
 }

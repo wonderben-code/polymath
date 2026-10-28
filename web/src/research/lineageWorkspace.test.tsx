@@ -32,7 +32,7 @@ function fixtureServer(available = true) {
     if (path === `/api/v1/runs/${CREATED_RUN}`) return Response.json(created)
     if (path === `/api/v1/runs/${PRIOR_RUN}`) return Response.json(run(PRIOR_RUN, 'Older synthetic investigation', 'succeeded'))
     if (path.startsWith('/api/v1/knowledge/graph')) return Response.json({
-      nodes: PARENTS.map((resultId, index) => ({ id: `finding:${resultId}`, kind: 'finding', label: `Synthetic bridge ${index + 1}`, run_id: PRIOR_RUN, result_id: resultId, source_id: null, content_kind: null, finding_outcome: 'bridge' })),
+      nodes: PARENTS.map((resultId, index) => ({ id: `finding:${resultId}`, kind: 'finding', label: `Synthetic bridge ${index + 1}`, run_id: PRIOR_RUN, result_id: resultId, source_id: null, content_kind: null, finding_outcome: 'bridge', assessment: { root_result_id: resultId, current_result_id: resultId, state: 'supported', revision: 0, last_assessment_id: null, is_current: true, is_supported: true, is_historical: false } })),
       edges: [], truncated: false, coverage: { scope: 'current_browser_session', findings_considered: 2 },
     })
     if (path.startsWith('/api/v1/knowledge?')) return Response.json({ items: [], truncated: false, coverage: { scope: 'current_browser_session' } })

@@ -14,6 +14,7 @@ interface Props {
   operatorAuthenticated: boolean
   enabled: boolean
   blocked: boolean
+  sourceCurrent: boolean
   onAuthorizationError: (error: PublicationError) => void
 }
 type Action = 'publish' | 'cancel' | 'reconcile' | 'resume'
@@ -44,7 +45,7 @@ function latest(previous: PublicationJob | undefined, incoming: PublicationJob):
   return incoming
 }
 
-export function PublicationDelivery({ record, csrfToken, operatorCsrf, operatorAuthenticated, enabled, blocked, onAuthorizationError }: Props) {
+export function PublicationDelivery({ record, csrfToken, operatorCsrf, operatorAuthenticated, enabled, blocked, sourceCurrent, onAuthorizationError }: Props) {
   const headingId = useId()
   const [execution, setExecution] = useState<PublicationExecution | null>(null)
   const [jobs, setJobs] = useState<PublicationJob[]>([])
@@ -110,6 +111,7 @@ export function PublicationDelivery({ record, csrfToken, operatorCsrf, operatorA
 
   useEffect(() => { setConfirmed(false) }, [record.id, record.manifest_sha256, record.approval?.id, operatorCsrf, operatorAuthenticated, job?.id, job?.status, job?.can_resume, job?.external_outcome_unknown, job?.verified])
   useEffect(() => { setPrivilegeLost(false) }, [operatorCsrf, operatorAuthenticated])
+  useEffect(() => { setConfirmed(false) }, [sourceCurrent])
 
   useEffect(() => {
     if (!enabled || phase !== 'ready' || !selectedId) return
@@ -149,8 +151,8 @@ export function PublicationDelivery({ record, csrfToken, operatorCsrf, operatorA
   const approval = record.approval
   const approvalValid = !!approval?.valid && !approval.revoked_at && Date.parse(approval.expires_at) > Date.now()
   const authorized = enabled && phase === 'ready' && !!csrfToken && !!operatorCsrf && operatorAuthenticated && !privilegeLost && !blocked && !busy && !uncertain
-  const canPublish = authorized && !!execution?.execution_available && approvalValid && confirmed && jobs.length === 0
-  const canResume = authorized && !!execution?.execution_available && approvalValid && confirmed && !!job?.can_resume && !job.external_outcome_unknown && !job.publication_reported && !job.frozen && !job.verified
+  const canPublish = sourceCurrent && authorized && !!execution?.execution_available && approvalValid && confirmed && jobs.length === 0
+  const canResume = sourceCurrent && authorized && !!execution?.execution_available && approvalValid && confirmed && !!job?.can_resume && !job.external_outcome_unknown && !job.publication_reported && !job.frozen && !job.verified
   const canVerify = authorized && !!execution?.execution_available && !!job?.can_reconcile && !job.verified
   const canCancel = authorized && !!job?.can_cancel && !job.verified
 
@@ -199,7 +201,7 @@ export function PublicationDelivery({ record, csrfToken, operatorCsrf, operatorA
       {!operatorAuthenticated && <p className="publication-field-note">Unlock publisher approval to start publication, verify remote status, or continue an existing job.</p>}
       {!approvalValid && !job?.verified && <p className="publication-field-note">A current approval of this exact preview is required before publishing or continuing. Review and approve the version above.</p>}
       {needsConfirmation && !job?.verified && <>
-        <label className="publication-consent publication-send-consent"><input type="checkbox" checked={confirmed} disabled={!authorized || !execution?.execution_available || !approvalValid || !!job && (!job.can_resume || job.external_outcome_unknown || job.frozen)} onChange={(event) => setConfirmed(event.target.checked)} /><span>{job ? 'I want to continue this existing publication job using the current exact approval.' : record.manifest.destination === 'sandbox' ? 'I want to publish this exact approved version to the Zenodo sandbox.' : 'I want to publish this exact approved version publicly on Zenodo production.'}<small>{record.manifest.destination === 'sandbox' ? 'This creates a sandbox test record.' : 'This creates a public production record with a DOI.'}</small></span></label>
+        <label className="publication-consent publication-send-consent"><input type="checkbox" checked={confirmed} disabled={!sourceCurrent || !authorized || !execution?.execution_available || !approvalValid || !!job && (!job.can_resume || job.external_outcome_unknown || job.frozen)} onChange={(event) => setConfirmed(event.target.checked)} /><span>{job ? 'I want to continue this existing publication job using the current exact approval.' : record.manifest.destination === 'sandbox' ? 'I want to publish this exact approved version to the Zenodo sandbox.' : 'I want to publish this exact approved version publicly on Zenodo production.'}<small>{record.manifest.destination === 'sandbox' ? 'This creates a sandbox test record.' : 'This creates a public production record with a DOI.'}</small></span></label>
         <button type="button" className="publication-primary" disabled={job ? !canResume : !canPublish} onClick={() => void perform(job ? 'resume' : 'publish')}>{busy === 'publish' ? 'Queuing publication…' : busy === 'resume' ? 'Queuing continuation…' : job ? 'Continue this publication' : record.manifest.destination === 'sandbox' ? 'Publish to sandbox' : 'Publish public record'}</button>
       </>}
     </>}

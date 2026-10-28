@@ -8,6 +8,7 @@ from sqlalchemy import Engine, func, select
 from sqlalchemy.orm import Session
 
 from polymath.access_models import BrowserSession, ResearchRunAccess
+from polymath.assessment_eligibility import current_supported_condition
 from polymath.evidence_models import EvidenceResult
 from polymath.jobs import JobLease, _owned
 from polymath.lineage_models import ResearchRunParent
@@ -64,6 +65,8 @@ def _parent(session: Session, run: ResearchRun, owner_hash: str, result_id: uuid
             EvidenceResult.run_id != run.id,
             EvidenceResult.created_at < run.created_at,
             EvidenceResult.status == "bridge",
+            current_supported_condition(),
+            ResearchRun.task_kind.in_(("research", "reassess_finding")),
             ResearchRun.status == "succeeded",
         )
     )

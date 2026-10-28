@@ -17,7 +17,14 @@ from sqlalchemy.orm import Session
 from polymath.models import ResearchEvent, ResearchExternalRequest, ResearchRun
 
 TASK_KINDS = frozenset(
-    {"research", "formalise", "write_summary", "write_paper", "ingest_literature"}
+    {
+        "research",
+        "formalise",
+        "write_summary",
+        "write_paper",
+        "ingest_literature",
+        "reassess_finding",
+    }
 )
 
 

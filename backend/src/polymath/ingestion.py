@@ -17,6 +17,11 @@ from sqlalchemy import Engine, func, select, text, tuple_
 from sqlalchemy.orm import Session
 
 from polymath.access_models import BrowserSession, ResearchRunAccess
+from polymath.assessment_eligibility import (
+    assessment_version_status,
+    current_supported_condition,
+    result_assessment_state,
+)
 from polymath.evidence import EvidenceError, SourceArtifact, _canonical, _document, _hash
 from polymath.evidence_models import (
     EvidenceResult,
@@ -239,6 +244,8 @@ class SourceSnapshot:
     content_sha256: str
     first_seen_at: datetime
     run_id: uuid.UUID
+    assessment_status: str = "unassessed"
+    assessment_root_result_id: uuid.UUID | None = None
 
     def to_response(self) -> dict:
         return {
@@ -250,7 +257,15 @@ class SourceSnapshot:
             "content_sha256": self.content_sha256,
             "first_seen_at": self.first_seen_at.isoformat(),
             "run_id": str(self.run_id),
-            "assessment_status": "unassessed",
+            "assessment_status": self.assessment_status,
+            "assessment_root_result_id": (
+                str(self.assessment_root_result_id) if self.assessment_root_result_id else None
+            ),
+            "assessment_history_url": (
+                f"/api/v1/assessments/heads/{self.assessment_root_result_id}/history"
+                if self.assessment_root_result_id
+                else None
+            ),
         }
 
 
@@ -462,6 +477,8 @@ class IngestionRepository:
                     .where(
                         EvidenceResult.id == source_result_id,
                         EvidenceResult.status.in_(("bridge", "answer")),
+                        current_supported_condition(),
+                        ResearchRun.task_kind.in_(("research", "reassess_finding")),
                         ResearchRun.status == "succeeded",
                         ResearchRunAccess.session_hash == owner_hash,
                     )
@@ -1030,7 +1047,16 @@ class IngestionRepository:
     ) -> tuple[SourceSnapshot, ...]:
         _integer(limit, 1, 21)
         with Session(self.engine) as session:
-            _owned_watch(session, owner_hash, watch_id)
+            watch = _owned_watch(session, owner_hash, watch_id)
+            root_id = (
+                uuid.UUID(
+                    result_assessment_state(session, owner_hash, watch.source_result_id)[
+                        "root_result_id"
+                    ]
+                )
+                if watch.source_result_id is not None
+                else None
+            )
             statement = (
                 select(WatchSeenSourceVersion, SourceVersion, SourceRetrieval)
                 .join(SourceVersion, SourceVersion.id == WatchSeenSourceVersion.version_id)
@@ -1061,6 +1087,10 @@ class IngestionRepository:
                     version.content_sha256,
                     seen.first_seen_at,
                     seen.run_id,
+                    assessment_version_status(session, root_id, version.id)
+                    if root_id is not None
+                    else "unassessed",
+                    root_id,
                 )
                 for seen, version, retrieval in rows
             )
@@ -1069,7 +1099,7 @@ class IngestionRepository:
         self, owner_hash: str, watch_id: uuid.UUID, version_id: uuid.UUID
     ) -> dict:
         with Session(self.engine) as session:
-            _owned_watch(session, owner_hash, watch_id)
+            watch = _owned_watch(session, owner_hash, watch_id)
             seen = session.get(WatchSeenSourceVersion, (watch_id, version_id))
             if seen is None:
                 raise IngestionError("watch_not_found")
@@ -1086,6 +1116,15 @@ class IngestionRepository:
             if rows is None:
                 raise IngestionError("watch_not_found")
             version, retrieval = rows
+            root_id = (
+                uuid.UUID(
+                    result_assessment_state(session, owner_hash, watch.source_result_id)[
+                        "root_result_id"
+                    ]
+                )
+                if watch.source_result_id is not None
+                else None
+            )
             return {
                 "id": str(version.id),
                 "watch_id": str(watch_id),
@@ -1095,5 +1134,11 @@ class IngestionRepository:
                 "content_sha256": version.content_sha256,
                 "metadata_sha256": retrieval.metadata_sha256,
                 "document": _document(version, retrieval).model_dump(mode="json"),
-                "assessment_status": "unassessed",
+                "assessment_status": assessment_version_status(session, root_id, version.id)
+                if root_id is not None
+                else "unassessed",
+                "assessment_root_result_id": str(root_id) if root_id else None,
+                "assessment_history_url": (
+                    f"/api/v1/assessments/heads/{root_id}/history" if root_id else None
+                ),
             }

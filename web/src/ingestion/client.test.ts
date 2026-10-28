@@ -28,6 +28,13 @@ describe('owned literature watch protocol', () => {
   it('preserves bibliographic metadata on the exact owned source snapshot', () => {
     expect(parseSourceDetail({ ...detail(), document: { ...detail().document, bibliography: BIBLIOGRAPHY } }).document.bibliography).toEqual(BIBLIOGRAPHY)
   })
+  it('preserves contextual consumed-source status without calling it a confirmed finding', () => {
+    const root = RESULT, context = { assessment_status: 'assessed', assessment_root_result_id: root, assessment_history_url: `/api/v1/assessments/heads/${root}/history` }
+    expect(parseSourceDetail({ ...detail(), ...context }).assessment_status).toBe('assessed')
+    expect(() => parseSourceDetail({ ...detail(), ...context, assessment_history_url: 'https://foreign.invalid/private' })).toThrow()
+    expect(() => parseSourceDetail({ ...detail(), ...context, assessment_root_result_id: null })).toThrow()
+    expect(() => parseSourceDetail({ ...detail(), ...context, assessment_status: 'confirmed' })).toThrow()
+  })
   it('uses browser-owned cookies and CSRF only; never creates a browser or operator session', async () => {
     const fetch = vi.fn(async (_path: RequestInfo | URL, _init?: RequestInit) => Response.json(watch()))
     vi.stubGlobal('fetch', fetch)

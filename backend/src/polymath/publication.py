@@ -22,6 +22,11 @@ from polymath.access_models import BrowserSession, ResearchRunAccess
 from polymath.artifact_models import GeneratedArtifact
 from polymath.artifacts import ArtifactError, StoredArtifact
 from polymath.artifacts import _stored as _stored_artifact
+from polymath.assessment_eligibility import (
+    EligibilityError,
+    lock_current_source,
+    require_current_supported,
+)
 from polymath.evidence import EvidenceError, _canonical, _hash
 from polymath.models import ResearchRun
 from polymath.operator_auth import OperatorPolicy
@@ -141,6 +146,18 @@ def _artifact(session: Session, owner_hash: str, artifact_id: uuid.UUID) -> Stor
         raise PublicationError("invalid_publication_manifest") from None
 
 
+def _current_artifact_source(
+    session: Session, owner_hash: str, artifact: StoredArtifact, *, lock: bool = False
+) -> None:
+    """Check new publication authority without changing historical export/readback."""
+    try:
+        source_id = uuid.UUID(artifact.basis["reference"]["result_id"])
+        check = lock_current_source if lock else require_current_supported
+        check(session, owner_hash, source_id)
+    except (EligibilityError, ValueError, KeyError, TypeError):
+        raise PublicationError("publication_source_not_current") from None
+
+
 def _build_manifest(
     artifact: StoredArtifact,
     metadata: PublicationMetadata,
@@ -247,6 +264,7 @@ class PublicationStore:
     ) -> PublicationManifest:
         manifest = _manifest(row)
         artifact = _artifact(session, owner_hash, row.artifact_id)
+        _current_artifact_source(session, owner_hash, artifact)
         expected = _build_manifest(artifact, manifest.metadata, self.policy, manifest.destination)
         if expected != manifest or hash_manifest(expected) != row.manifest_sha256:
             raise PublicationError("publication_manifest_changed")
@@ -322,6 +340,7 @@ class PublicationStore:
         with Session(self.engine) as session, session.begin():
             _browser(session, owner_hash)
             artifact = _artifact(session, owner_hash, artifact_id)
+            _current_artifact_source(session, owner_hash, artifact)
             manifest = _build_manifest(artifact, metadata, self.policy, destination)
             digest = hash_manifest(manifest)
             session.execute(
@@ -507,6 +526,12 @@ class PublicationStore:
         except PublicationError:
             raise PublicationError("publication_manifest_changed") from None
         row = _owned_manifest(session, owner_hash, approval.manifest_id, lock=True)
+        # Authority order is operator -> manifest -> finding head -> publication
+        # job. The head lock survives through the dispatch grant transaction.
+        # Readback/late remote facts never acquire this authority lock.
+        _current_artifact_source(
+            session, owner_hash, _artifact(session, owner_hash, row.artifact_id), lock=True
+        )
         _browser(session, owner_hash)
         record = self._approval_record(session, owner_hash, row, approval)
         if (

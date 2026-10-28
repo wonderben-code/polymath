@@ -264,8 +264,19 @@ class EvidenceStore:
         self._validate_result_shape(result)
         with Session(self.engine) as session, session.begin():
             run = _owned(session, lease)
-            if run.task_kind != "research":
+            if run.task_kind not in ("research", "reassess_finding"):
                 raise EvidenceError("research_result_wrong_task_kind")
+            if run.task_kind == "reassess_finding":
+                from polymath.assessment_models import AssessmentRequest
+
+                request = session.get(AssessmentRequest, run.id)
+                if (
+                    request is None
+                    or result.status not in ("bridge", "answer")
+                    or [item.model_dump(mode="json") for item in result.field_selections]
+                    != request.basis.get("field_selections", [])
+                ):
+                    raise EvidenceError("invalid_reassessment_candidate")
             self._validate_memory_reads(session, run, result)
             if result.mode != run.mode:
                 raise EvidenceError("result_mode_mismatch")
@@ -361,11 +372,16 @@ class EvidenceStore:
         )
         if owner is None:
             raise EvidenceError("memory_read_provenance_mismatch")
-        parents = session.execute(
+        parent_query = (
             select(EvidenceResult, ResearchRunAccess.session_hash)
             .join(ResearchRunAccess, ResearchRunAccess.run_id == EvidenceResult.run_id)
             .where(EvidenceResult.id.in_([row.parent_result_id for row in recorded]))
-        ).all()
+        )
+        if run.task_kind == "research" and result.status in ("bridge", "answer"):
+            from polymath.assessment_eligibility import current_supported_condition
+
+            parent_query = parent_query.where(current_supported_condition())
+        parents = session.execute(parent_query).all()
         bound = {
             (str(parent.id), str(parent.run_id), parent.content_sha256)
             for parent, parent_owner in parents
@@ -411,7 +427,7 @@ class EvidenceStore:
             for row in selected
         }
         identifiers = [row.parent_result_id for row in selected]
-        actual = session.scalars(
+        parent_query = (
             select(EvidenceResult)
             .join(ResearchRunAccess, ResearchRunAccess.run_id == EvidenceResult.run_id)
             .join(ResearchRun, ResearchRun.id == EvidenceResult.run_id)
@@ -423,7 +439,12 @@ class EvidenceStore:
                 EvidenceResult.created_at < run.created_at,
                 EvidenceResult.status == "bridge",
             )
-        ).all()
+        )
+        if run.task_kind == "research" and result.status in ("bridge", "answer"):
+            from polymath.assessment_eligibility import current_supported_condition
+
+            parent_query = parent_query.where(current_supported_condition())
+        actual = session.scalars(parent_query).all()
         actual_keys = {(str(row.id), str(row.run_id), row.content_sha256) for row in actual}
         if owner is None or actual_keys != selected_keys:
             raise EvidenceError("invalid_parent_basis")

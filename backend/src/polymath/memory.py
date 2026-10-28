@@ -17,6 +17,7 @@ from sqlalchemy import Engine, func, or_, select
 from sqlalchemy.orm import Session
 
 from polymath.access_models import BrowserSession, ResearchRunAccess
+from polymath.assessment_eligibility import current_supported_condition
 from polymath.evidence import _canonical, _document, _hash
 from polymath.evidence_models import EvidenceQuote, EvidenceResult, SourceRetrieval, SourceVersion
 from polymath.jobs import JobLease, _owned
@@ -84,8 +85,9 @@ def _eligible(run: ResearchRun, owner_hash: str):
         .where(
             ResearchRunAccess.session_hash == owner_hash,
             ResearchRun.status == "succeeded",
-            ResearchRun.task_kind == "research",
+            ResearchRun.task_kind.in_(("research", "reassess_finding")),
             EvidenceResult.status.in_(("bridge", "answer")),
+            current_supported_condition(),
             EvidenceResult.run_id != run.id,
             EvidenceResult.created_at < run.created_at,
         )
@@ -145,13 +147,23 @@ class ResearchMemory:
         return self.scope_fingerprint() is not None
 
     def scope_fingerprint(self) -> str | None:
-        """Opaque run/owner binding for cached observations; never a browser credential."""
+        """Bind replay to ownership and the currently eligible finding versions."""
         with Session(self.engine) as session, session.begin():
             run = _owned(session, self.lease)
             owner = _session_hash(session, run.id)
             if owner is None:
                 return None
-            return hashlib.sha256(f"polymath-memory-scope-v1:{run.id}:{owner}".encode()).hexdigest()
+            digest = hashlib.sha256(f"polymath-memory-scope-v2:{run.id}:{owner}".encode())
+            # A cached search must not revive a finding after its assessment
+            # changes. Stream stable identifiers, never source or finding text.
+            versions = session.execute(
+                _eligible(run, owner)
+                .with_only_columns(EvidenceResult.id, EvidenceResult.content_sha256)
+                .order_by(EvidenceResult.id)
+            )
+            for identifier, content_sha256 in versions:
+                digest.update(f":{identifier}:{content_sha256}".encode())
+            return digest.hexdigest()
 
     def search(self, query: str) -> MemorySearchResults:
         query = _query(query)

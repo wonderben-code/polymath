@@ -1,10 +1,12 @@
 import type { SourceBibliography } from './bibliography'
+import type { FindingVersionNoticeProps } from '../assessments/FindingVersionNotice'
 
 export interface ResearchRunSummary {
   id: string
   mode: 'explore' | 'ask' | 'surprise'
   goal: string
   status: string
+  task_kind?: string
 }
 
 export interface ResearchActivityEvent {
@@ -122,4 +124,5 @@ export interface ResearchRunViewProps {
   onCancel?: () => void
   cancelling?: boolean
   onOpenRun?: (id: string) => void
+  findingVersion?: FindingVersionNoticeProps
 }

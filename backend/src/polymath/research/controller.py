@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import math
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -165,7 +165,11 @@ SAFE_MODEL_ERRORS = {
 
 
 def _verify_evidence(
-    finding: BridgeFinding, sources: dict[str, SourceDocument], search_purposes: set[str]
+    finding: BridgeFinding,
+    sources: dict[str, SourceDocument],
+    search_purposes: set[str],
+    *,
+    alias_context: Iterable[SourceReference] | None = None,
 ) -> tuple[VerifiedQuote, ...]:
     if not {"counterevidence", "prior_work"}.issubset(search_purposes):
         raise ValueError("missing_required_searches")
@@ -193,18 +197,24 @@ def _verify_evidence(
         )
     if not sides["left"] or not sides["right"]:
         raise ValueError("missing_evidence_side")
-    if distinct_paper_count((*sides["left"], *sides["right"]), context=sources.values()) < 2:
+    context = tuple(sources.values() if alias_context is None else alias_context)
+    if distinct_paper_count((*sides["left"], *sides["right"]), context=context) < 2:
         raise ValueError("distinct_sources_required")
     return tuple(verified)
 
 
 def _verify_answer_evidence(
-    finding: AnswerFinding, sources: dict[str, SourceDocument], search_purposes: set[str]
+    finding: AnswerFinding,
+    sources: dict[str, SourceDocument],
+    search_purposes: set[str],
+    *,
+    alias_context: Iterable[SourceReference] | None = None,
 ) -> tuple[VerifiedQuote, ...]:
     """Validate citation linkage and inference disclosure, not semantic truth."""
     if not {"counterevidence", "prior_work"}.issubset(search_purposes):
         raise ValueError("missing_required_searches")
     verified = []
+    context = tuple(sources.values() if alias_context is None else alias_context)
     for claim in finding.claims:
         distinct_sources = []
         for item in claim.evidence:
@@ -230,7 +240,7 @@ def _verify_answer_evidence(
             )
         if (
             claim.label == "postulated"
-            and distinct_paper_count(distinct_sources, context=sources.values()) < 2
+            and distinct_paper_count(distinct_sources, context=context) < 2
         ):
             raise ValueError("postulated_requires_distinct_sources")
     return tuple(verified)

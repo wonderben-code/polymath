@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { Bibliography } from './bibliography'
+import { FindingVersionNotice } from '../assessments/FindingVersionNotice'
 import type {
   AnswerClaim,
   AnswerFinding,
@@ -219,14 +220,15 @@ function Evidence({ result }: { result: ResearchResult }) {
   )
 }
 
-export function ResearchRunView({ run, events, result, connection, onCancel, cancelling = false, onOpenRun }: ResearchRunViewProps) {
+export function ResearchRunView({ run, events, result, connection, onCancel, cancelling = false, onOpenRun, findingVersion }: ResearchRunViewProps) {
   const state = states[run.status] ?? { label: 'Status unavailable', description: 'The investigation status could not be identified. Recorded material remains below.' }
   const activity = orderedEvents(events)
   const canCancel = onCancel && ['queued', 'running', 'waiting_retry'].includes(run.status)
   return (
     <section className="research-run-view" aria-labelledby="research-run-title">
-      <header className="research-run-heading"><div><span className="eyebrow accent">{modeNames[run.mode].toUpperCase()} / RESEARCH RECORD</span><h2 id="research-run-title">{run.goal || 'An open discovery'}</h2></div><span className={`research-run-state state-${run.status}`} role="status">{state.label}</span></header>
+      <header className="research-run-heading"><div><span className="eyebrow accent">{run.task_kind === 'reassess_finding' ? 'EVIDENCE REASSESSMENT' : modeNames[run.mode].toUpperCase()} / RESEARCH RECORD</span><h2 id="research-run-title">{run.goal || 'An open discovery'}</h2></div><span className={`research-run-state state-${run.status}`} role="status">{state.label}</span></header>
       <div className="research-run-summary"><p>{state.description}</p>{canCancel && <button type="button" className="research-cancel" onClick={onCancel} disabled={cancelling}>{cancelling ? 'Requesting cancellation…' : 'Cancel investigation'}</button>}</div>
+      {findingVersion && <FindingVersionNotice {...findingVersion} />}
       <div className="research-run-layout">
         <section className="research-activity" aria-labelledby="research-activity-title"><div className="research-section-heading"><h3 id="research-activity-title">Research activity</h3><span className={`research-connection connection-${connection}`} aria-live="polite">{connectionNames[connection]}</span></div>{activity.length ? <ol className="research-timeline" aria-label="Recorded research activity" aria-live="polite" aria-relevant="additions">{activity.map((event, index) => <li key={event.sequence}><span className="research-event-number" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span><p>{event.summary}</p></li>)}</ol> : <p className="research-empty">No recorded activity yet.</p>}</section>
         <section className="research-results" aria-labelledby="research-outcome-title"><h3 className="research-sr-only" id="research-outcome-title">Research outcome</h3>{result ? <>{run.mode === 'surprise' && <SelectedFields selections={result.field_selections ?? []} />}<Outcome result={result} /><ResearchMemory result={result} onOpenRun={onOpenRun} /><Evidence result={result} /></> : <PendingOutcome status={run.status} />}</section>

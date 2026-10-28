@@ -25,6 +25,9 @@ export interface LiteratureWatch {
 export interface WatchSource {
   id: string; source_id: string; title: string; url: string; content_kind: 'abstract' | 'full_text'
   content_sha256: string; first_seen_at: string; run_id: string
+  assessment_status?: 'unassessed' | 'already_cited' | 'assessed'
+  assessment_root_result_id?: string | null
+  assessment_history_url?: string | null
 }
 export interface ProviderDiagnostic { status: 'succeeded' | 'failed'; code?: string; sources_seen: number; added_sources: number; exhausted: boolean; since?: string; until?: string }
 export interface WatchTick {
@@ -35,7 +38,9 @@ export interface WatchTick {
 }
 export interface WatchSourceDetail {
   id: string; watch_id: string; run_id: string; version_id: string; retrieval_id: string
-  content_sha256: string; metadata_sha256: string; document: SourceDocument; assessment_status: 'unassessed'
+  content_sha256: string; metadata_sha256: string; document: SourceDocument; assessment_status: 'unassessed' | 'already_cited' | 'assessed'
+  assessment_root_result_id?: string | null
+  assessment_history_url?: string | null
 }
 export interface Page<T> { items: T[]; next_cursor: string | null }
 export interface CreateWatch { label: string; query: string; interval_seconds: number; source_result_id: string | null }
@@ -93,7 +98,14 @@ export function parseWatch(value: unknown): LiteratureWatch {
 }
 export function parseSource(value: unknown): WatchSource {
   const item = object(value)
-  return { id: id(item.id), source_id: text(item.source_id, 200), title: text(item.title, 1000), url: safeUrl(item.url), content_kind: member(item.content_kind, ['abstract', 'full_text']), content_sha256: hash(item.content_sha256), first_seen_at: date(item.first_seen_at), run_id: id(item.run_id) }
+  return { id: id(item.id), source_id: text(item.source_id, 200), title: text(item.title, 1000), url: safeUrl(item.url), content_kind: member(item.content_kind, ['abstract', 'full_text']), content_sha256: hash(item.content_sha256), first_seen_at: date(item.first_seen_at), run_id: id(item.run_id), ...assessmentContext(item) }
+}
+function assessmentContext(item: Record<string, unknown>) {
+  const status = item.assessment_status === undefined ? 'unassessed' : member(item.assessment_status, ['unassessed', 'already_cited', 'assessed'] as const)
+  const root = item.assessment_root_result_id === undefined ? null : nullableId(item.assessment_root_result_id)
+  const history = item.assessment_history_url === undefined || item.assessment_history_url === null ? null : text(item.assessment_history_url, 150)
+  if (status !== 'unassessed' && !root || (root === null ? history !== null : history !== `/api/v1/assessments/heads/${root}/history`)) return invalid()
+  return { assessment_status: status, assessment_root_result_id: root, assessment_history_url: history }
 }
 export function parseTick(value: unknown): WatchTick {
   const item = object(value), runId = id(item.run_id)
@@ -106,8 +118,8 @@ export function parseTick(value: unknown): WatchTick {
 }
 export function parseSourceDetail(value: unknown): WatchSourceDetail {
   const item = object(value), doc = object(item.document)
-  if (item.assessment_status !== 'unassessed' || item.id !== item.version_id) return invalid()
-  return { id: id(item.id), watch_id: id(item.watch_id), run_id: id(item.run_id), version_id: id(item.version_id), retrieval_id: id(item.retrieval_id), content_sha256: hash(item.content_sha256), metadata_sha256: hash(item.metadata_sha256), assessment_status: 'unassessed', document: {
+  if (item.id !== item.version_id) return invalid()
+  return { id: id(item.id), watch_id: id(item.watch_id), run_id: id(item.run_id), version_id: id(item.version_id), retrieval_id: id(item.retrieval_id), content_sha256: hash(item.content_sha256), metadata_sha256: hash(item.metadata_sha256), ...assessmentContext(item), document: {
     source_id: text(doc.source_id, 200), title: text(doc.title, 1000), url: safeUrl(doc.url), text: text(doc.text, 20000), content_kind: member(doc.content_kind, ['abstract', 'full_text']), retrieved_at: date(doc.retrieved_at), extraction_method: text(doc.extraction_method, 100),
     ...(doc.bibliography === undefined || doc.bibliography === null ? {} : { bibliography: parseBibliography(doc.bibliography, invalid) }),
   } }

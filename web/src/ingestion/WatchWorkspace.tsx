@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Bibliography } from '../research/bibliography'
+import { AssessmentWorkspace } from '../assessments/AssessmentWorkspace'
+import type { AssessmentRecord } from '../assessments/types'
 import { changeWatch, checkWatch, createWatch, getWatch, getWatchSource, IngestionError, listWatches, listWatchSources, listWatchTicks, loadWatchCapabilities } from './client'
 import type { LiteratureWatch, Page, Provider, WatchCapabilities, WatchSource, WatchSourceDetail, WatchTick } from './client'
 import './ingestion.css'
@@ -13,6 +15,10 @@ export interface WatchWorkspaceProps {
   onSessionExpired: () => void
   openSource?: { watchId: string; sourceId: string; requestId: number } | null
   onSourcesChanged?: () => void
+  canReassess?: boolean
+  onAssessmentApplied?: () => void
+  onAssessmentBusyChange?: (busy: boolean) => void
+  onOpenFinding?: (id: string) => void
 }
 const PROVIDER_NAMES: Record<Provider, string> = { openalex: 'OpenAlex', arxiv: 'arXiv' }
 const INTERVALS = [[21600, 'Every 6 hours'], [43200, 'Every 12 hours'], [86400, 'Every day'], [259200, 'Every 3 days'], [604800, 'Every 7 days']] as const
@@ -20,6 +26,7 @@ const EMPTY_SOURCES: Page<WatchSource> = { items: [], next_cursor: null }
 const EMPTY_TICKS: Page<WatchTick> = { items: [], next_cursor: null }
 function when(value: string | null): string { return value ? new Date(value).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : 'Not checked yet' }
 function status(value: string): string { return value.replaceAll('_', ' ') }
+function assessmentLabel(value?: WatchSource['assessment_status']): string { return value === 'already_cited' ? 'Already cited in the finding' : value === 'assessed' ? 'Included in an applied model assessment' : 'Awaiting model assessment' }
 function merge<T extends { id: string }>(newItems: T[], oldItems: T[]): T[] { const fresh = new Set(newItems.map((item) => item.id)); return [...newItems, ...oldItems.filter((item) => !fresh.has(item.id))] }
 function message(error: unknown): string {
   if (!(error instanceof IngestionError)) return 'The literature service could not be reached. Refresh the saved watches to check their current state.'
@@ -56,7 +63,7 @@ function TickCard({ tick }: { tick: WatchTick }) {
   </li>
 }
 
-export function WatchWorkspace({ enabled, csrfToken, findings = [], onSessionExpired, openSource, onSourcesChanged }: WatchWorkspaceProps) {
+export function WatchWorkspace({ enabled, csrfToken, findings = [], onSessionExpired, openSource, onSourcesChanged, canReassess = false, onAssessmentApplied, onAssessmentBusyChange, onOpenFinding }: WatchWorkspaceProps) {
   const uid = useId()
   const [capabilities, setCapabilities] = useState<WatchCapabilities | null>(null)
   const [watches, setWatches] = useState<LiteratureWatch[]>([])
@@ -87,6 +94,8 @@ export function WatchWorkspace({ enabled, csrfToken, findings = [], onSessionExp
   const polls = useRef(0)
   const knownCounts = useRef(new Map<string, number>())
   const notifyExpired = useRef(onSessionExpired)
+  const selectedWatch = useRef<string | null>(null)
+  selectedWatch.current = selectedId
   notifyExpired.current = onSessionExpired
 
   const clear = useCallback(() => {
@@ -183,6 +192,25 @@ export function WatchWorkspace({ enabled, csrfToken, findings = [], onSessionExp
   const formValid = !!label.trim() && Array.from(label.trim()).length <= 120 && !!query.trim() && Array.from(query.trim()).length <= 500
 
   function refresh() { refreshRequested.current = true; polls.current = 0; setPollStopped(false); setRevision((previous) => previous + 1) }
+  function assessmentChanged(record: AssessmentRecord) {
+    polls.current = 0; setPollStopped(false); setRevision((previous) => previous + 1); onAssessmentApplied?.()
+    if (!selectedId) return
+    const watchId = selectedId, generation = scope.current, controller = new AbortController()
+    requests.current.add(controller)
+    const sourceIds = new Set(record.applied ? record.new_source_version_ids.filter((id) => sources.items.some((source) => source.id === id)) : [])
+    if (inspection) sourceIds.add(inspection.id)
+    void Promise.allSettled([...sourceIds].map((id) => getWatchSource(watchId, id, controller.signal))).then((outcomes) => {
+      if (controller.signal.aborted || generation !== scope.current || selectedWatch.current !== watchId) return
+      for (const outcome of outcomes) {
+        if (controller.signal.aborted || generation !== scope.current || selectedWatch.current !== watchId) return
+        if (outcome.status === 'rejected') { fail(outcome.reason); continue }
+        const detail = outcome.value, original = sources.items.find((source) => source.id === detail.id)
+        if (detail.assessment_root_result_id && detail.assessment_root_result_id !== record.root_result_id || original && (detail.content_sha256 !== original.content_sha256 || detail.document.source_id !== original.source_id)) { fail(new IngestionError('invalid_response')); continue }
+        setSources((previous) => ({ ...previous, items: previous.items.map((source) => source.id === detail.id ? { ...source, assessment_status: detail.assessment_status, assessment_root_result_id: detail.assessment_root_result_id, assessment_history_url: detail.assessment_history_url } : source) }))
+        setInspection((previous) => previous?.id === detail.id ? detail : previous)
+      }
+    }).finally(() => requests.current.delete(controller))
+  }
   function select(watchId: string) {
     inspectionRequest.current?.abort(); setInspection(null); setInspecting(null); setSelected(null); setSources(EMPTY_SOURCES); setTicks(EMPTY_TICKS); setError(null); setSelectedId(watchId); polls.current = 0; setPollStopped(false)
   }
@@ -255,9 +283,10 @@ export function WatchWorkspace({ enabled, csrfToken, findings = [], onSessionExp
           <div className="watch-actions"><button type="button" onClick={() => { void mutate(selected.enabled ? 'pause' : 'resume') }} disabled={!canMutate || (!selected.enabled && !canRead)}>{busy === 'pause' ? 'Pausing…' : busy === 'resume' ? 'Resuming…' : selected.enabled ? 'Pause reading' : 'Resume reading'}</button><button type="button" onClick={() => { void mutate('check') }} disabled={!canMutate || !canRead || !selected.enabled || active}>{busy === 'check' ? 'Queuing check…' : 'Check providers now'}</button></div>
           <p className="watch-note">Checks are throttled. Pausing stops future checks and fences an active check; provider requests already sent may still finish.</p>
           <details className="watch-windows"><summary>Provider windows and coverage</summary><p>Each check reads bounded provider pages. Windows can overlap, and continuation pages may remain. This is not a complete literature review.</p>{(Object.entries(selected.cursors) as [Provider, NonNullable<LiteratureWatch['cursors'][Provider]>][]).map(([provider, cursor]) => <p key={provider}><strong>{PROVIDER_NAMES[provider]}</strong>: {when(cursor.since)} – {when(cursor.until)}. {cursor.exhausted ? 'This recorded window was exhausted.' : cursor.cursor !== null ? 'Continuation pages remain for this window.' : 'This window has not been exhausted.'}</p>)}</details>
-          <section className="watch-sources" aria-label="Unassessed watch sources"><h5>Saved sources · unassessed</h5><p>These are saved source versions, not confirmed findings. A changed abstract can create another version of the same paper.</p>{sources.items.length ? <ul>{sources.items.map((source) => <li key={source.id}><span className="watch-badge">Unassessed {source.content_kind === 'abstract' ? 'abstract' : 'full text'}</span><h6>{source.title}</h6><p>First observed {when(source.first_seen_at)}</p><div className="watch-actions"><button type="button" aria-label={`${inspecting === source.id ? 'Loading saved text' : 'Read saved source'}: ${source.title}`} onClick={() => { void inspect(source) }} disabled={!!inspecting}>{inspecting === source.id ? 'Loading saved text…' : 'Read saved source'}<span className="watch-sr">: {source.title}</span></button><a href={source.url} target="_blank" rel="noopener noreferrer">Provider page<span className="watch-sr">: {source.title}</span></a></div></li>)}</ul> : <p>No saved source versions are shown for this watch. Check history and provider coverage before drawing any conclusion.</p>}{sources.next_cursor && <button type="button" onClick={() => { void older('sources') }} disabled={!!busy}>Load older sources</button>}</section>
-          {inspection && <section className="watch-inspection" aria-label="Saved unassessed source text"><div className="watch-row"><h5>{inspection.document.title}</h5><button type="button" onClick={() => setInspection(null)}>Close saved source</button></div><p className="watch-warning">Unassessed source text. Its statements have not been assessed by a research investigation.</p><p className="watch-source-text">{inspection.document.text}</p><p>Retrieved {when(inspection.document.retrieved_at)} · {inspection.document.content_kind === 'abstract' ? 'Abstract' : 'Full text'} · {inspection.document.extraction_method}</p><Bibliography value={inspection.document.bibliography} /><details><summary>Saved source integrity</summary><dl><dt>Content SHA-256</dt><dd>{inspection.content_sha256}</dd><dt>Metadata SHA-256</dt><dd>{inspection.metadata_sha256}</dd></dl></details></section>}
+          <section className="watch-sources" aria-label="Watch source versions"><h5>Saved source versions</h5><p>These are saved source versions, not confirmed findings. A changed abstract can create another version of the same paper.</p>{sources.items.length ? <ul>{sources.items.map((source) => <li key={source.id}><span className="watch-badge">{assessmentLabel(source.assessment_status)} · {source.content_kind === 'abstract' ? 'abstract' : 'full text'}</span><h6>{source.title}</h6><p>First observed {when(source.first_seen_at)}</p><div className="watch-actions"><button type="button" aria-label={`${inspecting === source.id ? 'Loading saved text' : 'Read saved source'}: ${source.title}`} onClick={() => { void inspect(source) }} disabled={!!inspecting}>{inspecting === source.id ? 'Loading saved text…' : 'Read saved source'}<span className="watch-sr">: {source.title}</span></button><a href={source.url} target="_blank" rel="noopener noreferrer">Provider page<span className="watch-sr">: {source.title}</span></a></div></li>)}</ul> : <p>No saved source versions are shown for this watch. Check history and provider coverage before drawing any conclusion.</p>}{sources.next_cursor && <button type="button" onClick={() => { void older('sources') }} disabled={!!busy}>Load older sources</button>}</section>
+          {inspection && <section className="watch-inspection" aria-label="Saved source text"><div className="watch-row"><h5>{inspection.document.title}</h5><button type="button" onClick={() => setInspection(null)}>Close saved source</button></div><p className="watch-warning">{assessmentLabel(inspection.assessment_status)}. Collected source text is not a confirmed finding. Inspect cited assessments separately before drawing conclusions.</p><p className="watch-source-text">{inspection.document.text}</p><p>Retrieved {when(inspection.document.retrieved_at)} · {inspection.document.content_kind === 'abstract' ? 'Abstract' : 'Full text'} · {inspection.document.extraction_method}</p><Bibliography value={inspection.document.bibliography} /><details><summary>Saved source integrity</summary><dl><dt>Content SHA-256</dt><dd>{inspection.content_sha256}</dd><dt>Metadata SHA-256</dt><dd>{inspection.metadata_sha256}</dd></dl></details></section>}
           <section className="watch-history" aria-label="Literature check history"><h5>Check history</h5>{ticks.items.length ? <ol>{ticks.items.map((tick) => <TickCard key={tick.id} tick={tick} />)}</ol> : <p>No provider checks have been recorded yet.</p>}{ticks.next_cursor && <button type="button" onClick={() => { void older('ticks') }} disabled={!!busy}>Load older checks</button>}</section>
+          {selected.source_result_id && onOpenFinding && <AssessmentWorkspace key={`${selected.id}:${selected.source_result_id}`} watchId={selected.id} sourceResultId={selected.source_result_id} sources={sources.items.filter((source) => !source.assessment_status || source.assessment_status === 'unassessed')} csrfToken={csrfToken} enabled={available} canSubmit={canReassess} onSessionExpired={expire} onAssessmentChanged={assessmentChanged} onBusyChange={onAssessmentBusyChange} onOpenFinding={onOpenFinding} />}
         </section> : <p className="watch-note">{selectedId ? 'Loading the selected watch…' : 'Choose a watch to inspect saved sources, check history, and provider coverage.'}</p>}
       </div> : phase === 'ready' && <p>No literature watches have been saved in this browser session.</p>}
     </>}

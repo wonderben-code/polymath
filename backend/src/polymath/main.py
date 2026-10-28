@@ -15,6 +15,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from polymath import __version__
 from polymath.artifact_api import create_artifact_router
+from polymath.assessment_api import create_assessment_router
 from polymath.config import Settings, get_settings
 from polymath.database import build_engine
 from polymath.ingestion_api import create_ingestion_router
@@ -82,6 +83,9 @@ def create_app(
     )
     application.include_router(
         create_artifact_router(application.state.engine, availability=research_availability)
+    )
+    application.include_router(
+        create_assessment_router(application.state.engine, availability=research_availability)
     )
     application.include_router(
         create_operator_router(application.state.engine, policy=operator_policy)

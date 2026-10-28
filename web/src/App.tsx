@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { loadSystemStatus } from './api'
 import type { SystemStatus } from './api'
@@ -6,6 +6,8 @@ import { ResearchRunView } from './research'
 import { useResearchWorkspace } from './research/useResearchWorkspace'
 import { KnowledgeBrowser } from './knowledge'
 import { ArtifactWorkspace } from './artifacts/ArtifactWorkspace'
+import { useFindingHead } from './assessments/useFindingHead'
+import { FindingVersionWorkspace } from './assessments/FindingVersionWorkspace'
 
 type Mode = 'explore' | 'ask' | 'surprise'
 
@@ -71,11 +73,21 @@ export function App() {
   const [retry, setRetry] = useState(0)
   const [notice, setNotice] = useState('')
   const [artifactBusy, setArtifactBusy] = useState(false)
+  const [assessmentBusy, setAssessmentBusy] = useState(false)
+  const [assessmentRefresh, setAssessmentRefresh] = useState(0)
+  const [selectedFindingId, setSelectedFindingId] = useState<string | null>(null)
   const content = copy[mode]
   const workspace = useResearchWorkspace(
     connection === 'connected' && !!system?.database && system.migrations,
     !!system?.researchAvailable,
   )
+  const findingResultId = workspace.activeRun?.status === 'succeeded' && (workspace.result?.finding?.outcome === 'bridge' || workspace.result?.finding?.outcome === 'answer') ? workspace.activeRun.result_id : null
+  const findingHead = useFindingHead({ resultId: findingResultId, enabled: workspace.phase === 'ready' && selectedFindingId === null, onSessionExpired: workspace.invalidateSession, refreshToken: assessmentRefresh })
+  const assessmentChanged = useCallback(() => setAssessmentRefresh((previous) => previous + 1), [])
+  const openFinding = useCallback((id: string) => { if (/^[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}$/.test(id)) setSelectedFindingId(id) }, [])
+  const openRun = useCallback((id: string) => { setSelectedFindingId(null); workspace.selectRun(id) }, [workspace.selectRun])
+  useEffect(() => { if (workspace.phase !== 'ready') { setSelectedFindingId(null); setAssessmentBusy(false) } }, [workspace.phase])
+  useEffect(() => setSelectedFindingId(null), [workspace.selectedId])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -107,7 +119,7 @@ export function App() {
 
   // The server defaults to unavailable. A real cookie-owned session and healthy
   // storage are required as well; a capability flag alone cannot create a job.
-  const researchConnected = workspace.canSubmit && !artifactBusy && (mode === 'surprise' || !!prompts[mode].trim())
+  const researchConnected = workspace.canSubmit && !artifactBusy && !assessmentBusy && (mode === 'surprise' || !!prompts[mode].trim())
   const unavailable = connection === 'offline'
     ? 'The research service could not be reached. Check the connection and try again.'
     : 'Live investigations are not available yet. The research engine is being connected.'
@@ -184,7 +196,7 @@ export function App() {
 
               <div className="availability-note" id="research-availability" role="status">
                 <span className="small-star" aria-hidden="true">✳︎</span>
-                <p>{connection === 'loading' ? 'Checking the research service…' : artifactBusy ? 'A formalisation or writing task is active. Follow its progress below.' : workspace.canSubmit ? 'Research is available. Your investigation will be saved to this browser session.' : unavailable}</p>
+                <p>{connection === 'loading' ? 'Checking the research service…' : artifactBusy ? 'A formalisation or writing task is active. Follow its progress below.' : assessmentBusy ? 'An evidence reassessment is active. Follow its saved progress in the literature watch.' : workspace.canSubmit ? 'Research is available. Your investigation will be saved to this browser session.' : unavailable}</p>
               </div>
               {notice && <p role="alert">{notice}</p>}
             </section>
@@ -206,7 +218,7 @@ export function App() {
               <section className="research-history" aria-labelledby="history-title">
                 <div className="system-heading"><h3 id="history-title">Saved investigations</h3><button type="button" className="text-button" disabled={workspace.phase === 'loading' || connection !== 'connected' || !system?.database || !system.migrations} onClick={workspace.refresh}>Reload saved research</button></div>
                 {workspace.phase === 'ready' && workspace.runs.length === 0 && <p className="history-note">No saved investigations in this browser session.</p>}
-                {workspace.runs.length > 0 && <ul aria-label="Your saved investigations">{workspace.runs.map((run) => <li key={run.id}><button type="button" aria-pressed={workspace.selectedId === run.id} onClick={() => workspace.selectRun(run.id)}><span className="history-mode">{run.mode === 'surprise' ? 'Surprise me' : run.mode === 'ask' ? 'Ask' : 'Explore'} · {run.status.replaceAll('_', ' ')}</span><span className="history-goal">{run.goal || 'An open discovery'}</span></button></li>)}</ul>}
+                {workspace.runs.length > 0 && <ul aria-label="Your saved investigations">{workspace.runs.map((run) => <li key={run.id}><button type="button" aria-pressed={workspace.selectedId === run.id} onClick={() => openRun(run.id)}><span className="history-mode">{run.mode === 'surprise' ? 'Surprise me' : run.mode === 'ask' ? 'Ask' : 'Explore'} · {run.status.replaceAll('_', ' ')}</span><span className="history-goal">{run.goal || 'An open discovery'}</span></button></li>)}</ul>}
                 {workspace.nextCursor && <button className="history-more" type="button" disabled={workspace.loadingMore} onClick={() => void workspace.loadMore()}>{workspace.loadingMore ? 'Loading more…' : 'Load earlier investigations'}</button>}
                 {workspace.error && <p className="history-error" role="alert">{workspace.error}</p>}
               </section>
@@ -230,11 +242,12 @@ export function App() {
 
           {workspace.selectedId && !workspace.activeRun && <p className="history-note" role="status">Loading the saved investigation…</p>}
           {workspace.detailError && <div className="research-detail-error" role="alert"><p>{workspace.detailError}</p>{workspace.selectedId && <button type="button" className="text-button" onClick={() => workspace.selectRun(workspace.selectedId!)}>Reload investigation</button>}</div>}
-          {workspace.activeRun && <ResearchRunView run={workspace.activeRun} events={workspace.events} result={workspace.result} connection={workspace.connection} onCancel={workspace.canCancel ? () => void workspace.cancel() : undefined} cancelling={workspace.cancelling} onOpenRun={workspace.selectRun} />}
+          {!selectedFindingId && workspace.activeRun && <ResearchRunView run={workspace.activeRun} events={workspace.events} result={workspace.result} connection={workspace.connection} onCancel={workspace.canCancel ? () => void workspace.cancel() : undefined} cancelling={workspace.cancelling} onOpenRun={openRun} findingVersion={findingResultId ? { head: findingHead.head, phase: findingHead.phase, pollPaused: findingHead.pollPaused, onRefresh: findingHead.refresh, onOpenFinding: openFinding } : undefined} />}
 
-          {workspace.phase === 'ready' && workspace.activeRun?.status === 'succeeded' && workspace.activeRun.result_id && workspace.result?.finding && (workspace.result.finding.outcome === 'bridge' || workspace.result.finding.outcome === 'answer') && <ArtifactWorkspace key={workspace.activeRun.result_id} sourceResultId={workspace.activeRun.result_id} sourceKind={workspace.result.finding.outcome} csrfToken={workspace.csrfToken} enabled={workspace.phase === 'ready'} canGenerate={workspace.canSubmit} onSessionExpired={workspace.invalidateSession} onBusyChange={setArtifactBusy} />}
+          {!selectedFindingId && workspace.phase === 'ready' && workspace.activeRun?.status === 'succeeded' && workspace.activeRun.result_id && workspace.result?.finding && (workspace.result.finding.outcome === 'bridge' || workspace.result.finding.outcome === 'answer') && <ArtifactWorkspace key={workspace.activeRun.result_id} sourceResultId={workspace.activeRun.result_id} sourceKind={workspace.result.finding.outcome} csrfToken={workspace.csrfToken} enabled={workspace.phase === 'ready'} canGenerate={workspace.canSubmit && findingHead.canGenerate && !assessmentBusy} sourceCurrent={findingHead.canGenerate} onSessionExpired={workspace.invalidateSession} onBusyChange={setArtifactBusy} />}
+          {selectedFindingId && <FindingVersionWorkspace key={selectedFindingId} resultId={selectedFindingId} enabled={workspace.phase === 'ready'} csrfToken={workspace.csrfToken} canGenerate={workspace.canSubmit && !assessmentBusy} refreshToken={assessmentRefresh} onSessionExpired={workspace.invalidateSession} onOpenFinding={openFinding} onOpenRun={openRun} onBusyChange={setArtifactBusy} onClose={() => setSelectedFindingId(null)} />}
 
-          <KnowledgeBrowser enabled={workspace.phase === 'ready'} onOpenRun={workspace.selectRun} refreshToken={workspace.activeRun?.result_id} canInvestigate={workspace.canSubmit && !artifactBusy} investigating={workspace.submitting} onInvestigateBridges={workspace.investigateBridges} csrfToken={workspace.csrfToken} onSessionExpired={workspace.invalidateSession} />
+          <KnowledgeBrowser enabled={workspace.phase === 'ready'} onOpenRun={openRun} onOpenFinding={openFinding} refreshToken={`${workspace.activeRun?.result_id ?? ''}:${assessmentRefresh}`} canInvestigate={workspace.canSubmit && !artifactBusy && !assessmentBusy} investigating={workspace.submitting} onInvestigateBridges={workspace.investigateBridges} csrfToken={workspace.csrfToken} onSessionExpired={workspace.invalidateSession} onAssessmentApplied={assessmentChanged} onAssessmentBusyChange={setAssessmentBusy} />
 
           <section className="approach-section" id="approach" aria-labelledby="approach-title">
             <div className="approach-heading"><span className="eyebrow">HOW WE INVESTIGATE</span><h2 id="approach-title">Follow the evidence.<br /> <em>Keep the questions open.</em></h2></div>

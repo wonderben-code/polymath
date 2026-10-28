@@ -14,9 +14,10 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 
-from sqlalchemy import Engine
+from sqlalchemy import Engine, func, select
 from sqlalchemy.orm import Session
 
+from polymath.access_models import BrowserSession, ResearchRunAccess
 from polymath.budget import (
     BudgetService,
     Reservation,
@@ -69,6 +70,28 @@ def _call_key(run_id: uuid.UUID, request_id: str) -> str:
     return "dispatch:" + hashlib.sha256(f"{run_id}:{request_id}".encode()).hexdigest()
 
 
+def _live_dispatch_owner(session: Session, run: ResearchRun) -> None:
+    """A browser-bound operation cannot acquire fresh authority after expiry.
+
+    Trusted internal jobs historically have no browser binding. Reassessment
+    always requires one. Query the database clock on each check rather than an
+    ORM-cached browser row, without acquiring any additional owner/head locks.
+    Recorded responses and their accounting remain available after expiry.
+    """
+    owner = session.execute(
+        select(
+            ResearchRunAccess.session_hash,
+            BrowserSession.expires_at > func.clock_timestamp(),
+        )
+        .outerjoin(BrowserSession, BrowserSession.token_hash == ResearchRunAccess.session_hash)
+        .where(ResearchRunAccess.run_id == run.id)
+    ).one_or_none()
+    if (owner is None and run.task_kind == "reassess_finding") or (
+        owner is not None and owner[1] is not True
+    ):
+        raise DispatchError("dispatch_owner_expired")
+
+
 class DispatchCoordinator:
     def __init__(self, engine: Engine, *, clock: Callable[[], datetime] | None = None):
         self.engine = engine
@@ -96,6 +119,7 @@ class DispatchCoordinator:
             # account-lock wait so an expired/cancelled worker cannot dispatch.
             self.budget._account(session, account_id)
             run = _owned(session, lease)
+            _live_dispatch_owner(session, run)
             prior = session.get(ResearchExternalRequest, (run.id, request_id))
             if prior is not None:
                 reservation = session.get(BudgetReservation, prior.reservation_id)
@@ -140,6 +164,9 @@ class DispatchCoordinator:
                 "external_started",
                 "Model operation authorized and recorded before dispatch; outcome pending",
             )
+            # Reservation/claim/event persistence may themselves wait. Expiry
+            # before this final grant boundary rolls the entire transaction back.
+            _live_dispatch_owner(session, run)
             return DispatchGrant(
                 run.id, request_id, account_id, reservation.id, lease.token, request_hash
             )

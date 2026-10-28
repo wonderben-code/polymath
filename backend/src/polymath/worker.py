@@ -13,13 +13,15 @@ import uuid
 from collections.abc import Callable
 from contextlib import suppress
 from dataclasses import asdict, dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import Engine
 
 from polymath.artifact_contracts import ArtifactBasis
 from polymath.artifact_controller import ArtifactController, ArtifactLimits
 from polymath.artifacts import ArtifactStore
+from polymath.assessment_contracts import AssessmentBasis, AssessmentSourceSnapshot
+from polymath.assessments import AssessmentStore
 from polymath.budget import BudgetError, BudgetService
 from polymath.dispatch import DispatchCoordinator, DispatchError
 from polymath.evidence import EvidenceStore
@@ -42,6 +44,9 @@ from polymath.research.models import (
     SearchResults,
     SourceDocument,
 )
+
+if TYPE_CHECKING:
+    from polymath.assessment_controller import AssessmentLimits
 
 
 class ExecutionStopped(BaseException):
@@ -113,6 +118,7 @@ class WorkerOutcome:
     run_id: str | None = None
     result_id: str | None = None
     artifact_id: str | None = None
+    assessment_id: str | None = None
 
 
 class _RunContext:
@@ -178,7 +184,7 @@ class _RecordedModel:
         request_id = f"model-{self.step:04d}"
         request_hash = _digest(
             {
-                "protocol": "polymath-worker-sources-v6",
+                "protocol": "polymath-worker-assessments-v7",
                 "model_identity": self.policy.model_identity,
                 "endpoint": META_COMPLETIONS_URL,
                 "stream": False,
@@ -447,6 +453,107 @@ class _RecordedMemory:
         return document
 
 
+class _RecordedAssessmentTools:
+    """Deliver exact version handles and durable searches to the assessment model.
+
+    A committed read with a lost response is interrupted rather than cached as
+    failure. Resume repeats that free immutable read without another model call.
+    """
+
+    def __init__(self, context: _RunContext, store: AssessmentStore, tools: LiteratureTools):
+        self.context, self.store = context, store
+        self.literature = _RecordedTools(context, tools)
+
+    async def read_source_by_retrieval(self, retrieval_id: str) -> SourceDocument:
+        await self.context.check_owner()
+        key = f"assessment-source:{retrieval_id}"
+        digest = _digest({"kind": "assessment_source", "retrieval_id": retrieval_id})
+        snapshot = await self.context.checkpoint()
+        cached = snapshot.checkpoint.get("tool_observations", {}).get(key)
+        if cached is not None and cached.get("hash") != digest:
+            raise ExecutionStopped("assessment_source_replay_conflict")
+        try:
+            document = await asyncio.to_thread(
+                self.store.read_source, self.context.lease, retrieval_id
+            )
+            if not isinstance(document, SourceDocument):
+                raise ValueError("Invalid pinned source observation")
+            if cached is None:
+                await self.context.save_cache(key, {"hash": digest, "retrieval_id": retrieval_id})
+            return document
+        except (Exception, asyncio.CancelledError):
+            raise ExecutionStopped("assessment_source_read_interrupted") from None
+
+    async def search(self, query: str, purpose: str) -> SearchResults:
+        try:
+            result = await self.literature.search(query, purpose)
+        except asyncio.CancelledError:
+            raise ExecutionStopped("assessment_search_receipt_interrupted") from None
+        # The successful tool receipt is saved before recording its purpose.
+        # Both writes are replayable; neither can authorize a second model call.
+        try:
+            snapshot = await self.context.checkpoint()
+            purposes = set(snapshot.checkpoint.get("assessment_search_purposes", []))
+            if purpose not in purposes:
+                await asyncio.to_thread(
+                    self.context.jobs.save_checkpoint,
+                    self.context.lease,
+                    expected_version=snapshot.checkpoint_version,
+                    checkpoint={
+                        **snapshot.checkpoint,
+                        "assessment_search_purposes": sorted((*purposes, purpose)),
+                    },
+                )
+        except (Exception, asyncio.CancelledError):
+            raise ExecutionStopped("assessment_search_receipt_interrupted") from None
+        return result
+
+    async def read_literature_source(self, source_id: str) -> AssessmentSourceSnapshot:
+        key, digest, cached = await self.literature._cached(
+            {"kind": "assessment_literature_source", "source_id": source_id}
+        )
+        if cached is not None:
+            try:
+                document = await asyncio.to_thread(
+                    self.context.evidence.get_document,
+                    self.context.lease.run_id,
+                    uuid.UUID(cached["retrieval_id"]),
+                )
+                return AssessmentSourceSnapshot(
+                    retrieval_id=cached["retrieval_id"],
+                    version_id=cached["version_id"],
+                    document=document,
+                )
+            except (Exception, asyncio.CancelledError):
+                raise ExecutionStopped("assessment_source_replay_unavailable") from None
+        try:
+            document = await self.literature.tools.read(source_id)
+            if not isinstance(document, SourceDocument) or document.source_id != source_id:
+                raise ValueError("Invalid literature source observation")
+        except Exception:
+            await self.context.save_cache(key, {"hash": digest, "error": True})
+            raise RuntimeError("source_retrieval_failed") from None
+        try:
+            stored = await asyncio.to_thread(
+                self.context.evidence.save_source, self.context.lease, document
+            )
+            await self.context.save_cache(
+                key,
+                {
+                    "hash": digest,
+                    "retrieval_id": str(stored.retrieval_id),
+                    "version_id": str(stored.version_id),
+                },
+            )
+            return AssessmentSourceSnapshot(
+                retrieval_id=str(stored.retrieval_id),
+                version_id=str(stored.version_id),
+                document=document,
+            )
+        except (Exception, asyncio.CancelledError):
+            raise ExecutionStopped("assessment_source_read_interrupted") from None
+
+
 class _RecordedChecks:
     """Only the bounded integer checker is callable; there is no execution tool."""
 
@@ -483,6 +590,7 @@ class ResearchWorker:
         policy: WorkerPolicy,
         limits: ResearchLimits | None = None,
         artifact_limits: ArtifactLimits | None = None,
+        assessment_limits: AssessmentLimits | None = None,
         execution_enabled: bool = False,
     ):
         if type(execution_enabled) is not bool:
@@ -491,6 +599,7 @@ class ResearchWorker:
         self.model_factory, self.tools_factory = model_factory, tools_factory
         self.limits = limits or ResearchLimits()
         self.artifact_limits = artifact_limits or ArtifactLimits()
+        self.assessment_limits = assessment_limits
         self.execution_enabled = execution_enabled
         self.jobs, self.budget = JobRepository(engine), BudgetService(engine)
 
@@ -533,7 +642,13 @@ class ResearchWorker:
         lease = await asyncio.to_thread(
             self.jobs.claim_next,
             worker_id,
-            task_kinds=("research", "formalise", "write_summary", "write_paper"),
+            task_kinds=(
+                "research",
+                "formalise",
+                "write_summary",
+                "write_paper",
+                "reassess_finding",
+            ),
             lease_seconds=self.policy.lease_seconds,
         )
         if lease is None:
@@ -565,7 +680,7 @@ class ResearchWorker:
                 await asyncio.to_thread(
                     self.jobs.append_event,
                     lease,
-                    event_key=f"controller:v6:{item.sequence}",
+                    event_key=f"controller:v7:{item.sequence}",
                     kind=item.kind,
                     summary=item.summary,
                 )
@@ -584,20 +699,37 @@ class ResearchWorker:
             snapshot = await context.checkpoint()
             parents = await asyncio.to_thread(get_parent_refs, self.engine, lease)
             basis: ArtifactBasis | None = None
-            if snapshot.task_kind != "research":
+            assessment_basis: AssessmentBasis | None = None
+            assessment_limits = None
+            if snapshot.task_kind in ("formalise", "write_summary", "write_paper"):
                 basis = await asyncio.to_thread(ArtifactStore(self.engine).load_basis, lease)
+            elif snapshot.task_kind == "reassess_finding":
+                from polymath.assessment_controller import AssessmentController, AssessmentLimits
+
+                assessment_basis = await asyncio.to_thread(
+                    AssessmentStore(self.engine).load_basis, lease
+                )
+                assessment_limits = self.assessment_limits or AssessmentLimits()
             fingerprint = _digest(
                 {
-                    "protocol": "polymath-worker-sources-v6",
+                    "protocol": "polymath-worker-assessments-v7",
                     "mode": snapshot.mode,
                     "task_kind": snapshot.task_kind,
                     "parents": [parent.model_dump(mode="json") for parent in parents],
                     "artifact_basis": (
                         _digest(basis.model_dump(mode="json")) if basis is not None else None
                     ),
+                    "assessment_basis": (
+                        _digest(assessment_basis.model_dump(mode="json"))
+                        if assessment_basis is not None
+                        else None
+                    ),
                     "policy": asdict(self.policy),
                     "limits": asdict(self.limits),
                     "artifact_limits": asdict(self.artifact_limits),
+                    "assessment_limits": (
+                        asdict(assessment_limits) if assessment_limits is not None else None
+                    ),
                 }
             )
             existing = snapshot.checkpoint.get("worker_protocol")
@@ -615,7 +747,12 @@ class ResearchWorker:
                 self.policy.account_id,
                 lease.run_id,
                 cap_microdollars=self.policy.run_cap_microdollars,
-                max_calls=self.limits.max_model_calls,
+                max_calls=min(
+                    self.limits.max_model_calls,
+                    assessment_limits.max_model_calls
+                    if assessment_limits
+                    else self.limits.max_model_calls,
+                ),
             )
             model = _RecordedModel(
                 context,
@@ -623,6 +760,34 @@ class ResearchWorker:
                 self.model_factory(snapshot),
                 self.policy,
             )
+            if assessment_basis is not None:
+                store = AssessmentStore(self.engine)
+                controller = AssessmentController(
+                    model,
+                    _RecordedAssessmentTools(context, store, self.tools_factory(snapshot)),
+                    assessment_limits,
+                    on_event=public_event,
+                )
+                assessment = await controller.reassess(assessment_basis)
+                await context.check_owner()
+                current = await asyncio.to_thread(self.jobs.get, lease.run_id)
+                if current.external_request_in_flight:
+                    raise ExecutionStopped("external_outcome_unknown")
+                await stop_heartbeat()
+                saved_assessment = await asyncio.to_thread(store.save, lease, assessment)
+                # Final assessment, current head and terminal job commit together
+                # in the store. A second finish would split that boundary.
+                finished = await asyncio.to_thread(self.jobs.get, lease.run_id)
+                return WorkerOutcome(
+                    finished.status,
+                    str(lease.run_id),
+                    result_id=(
+                        str(saved_assessment.candidate_result_id)
+                        if saved_assessment.applied and saved_assessment.candidate_result_id
+                        else None
+                    ),
+                    assessment_id=str(saved_assessment.id),
+                )
             if basis is not None:
                 controller = ArtifactController(
                     model,
@@ -687,7 +852,7 @@ class ResearchWorker:
             await stop_heartbeat()
             await self._stop(lease)
             if not lost.is_set() and asyncio.current_task().cancelling():
-                raise
+                raise asyncio.CancelledError from None
             return WorkerOutcome(
                 (await asyncio.to_thread(self.jobs.get, lease.run_id)).status, str(lease.run_id)
             )

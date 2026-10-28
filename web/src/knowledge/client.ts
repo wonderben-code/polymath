@@ -1,4 +1,9 @@
 export type KnowledgeKind = 'field' | 'source' | 'finding'
+export interface KnowledgeAssessment {
+  root_result_id: string; current_result_id: string; state: 'supported' | 'unsupported'; revision: number
+  last_assessment_id: string | null; is_current: boolean; is_supported: boolean; is_historical: boolean
+}
+type SourceAssessment = 'current_supported' | 'saved_snapshot' | 'unassessed' | 'unapplied_reassessment'
 
 export interface KnowledgeItem {
   id: string
@@ -12,6 +17,9 @@ export interface KnowledgeItem {
   task_kind?: string | null
   watch_id?: string | null
   source_version_id?: string | null
+  assessment?: KnowledgeAssessment | null
+  assessment_status?: SourceAssessment | null
+  assessment_result_id?: string | null
 }
 
 export interface KnowledgeNode {
@@ -26,6 +34,9 @@ export interface KnowledgeNode {
   task_kind?: string | null
   watch_id?: string | null
   source_version_id?: string | null
+  assessment?: KnowledgeAssessment | null
+  assessment_status?: SourceAssessment | null
+  assessment_result_id?: string | null
 }
 
 export interface KnowledgeEdge {
@@ -101,7 +112,18 @@ function sourceNavigation(entry: Record<string, unknown>, source: boolean) {
   const versionId = entry.source_version_id === undefined ? null : identity(entry.source_version_id, true)
   if (task === 'ingest_literature' && (!source || !watchId || !versionId || entry.result_id !== null)) throw new KnowledgeError('invalid_response')
   if (!source && (watchId || versionId)) throw new KnowledgeError('invalid_response')
-  return { task_kind: task, watch_id: watchId, source_version_id: versionId }
+  const resultId = entry.assessment_result_id === undefined ? null : identity(entry.assessment_result_id, true)
+  const sourceStatus = entry.assessment_status === undefined || entry.assessment_status === null ? null : text(entry.assessment_status, 40)
+  if (sourceStatus !== null && (!source || !['current_supported', 'saved_snapshot', 'unassessed', 'unapplied_reassessment'].includes(sourceStatus))) throw new KnowledgeError('invalid_response')
+  if (sourceStatus === 'current_supported' && !resultId || !source && resultId) throw new KnowledgeError('invalid_response')
+  let assessment: KnowledgeAssessment | null = null
+  if (entry.assessment !== undefined && entry.assessment !== null) {
+    const item = record(entry.assessment), current = identity(item.current_result_id)!, isCurrent = boolean(item.is_current), supported = boolean(item.is_supported), historical = boolean(item.is_historical)
+    if (source || item.state !== 'supported' && item.state !== 'unsupported' || !Number.isSafeInteger(item.revision) || (item.revision as number) < 0 || isCurrent !== (current === entry.result_id) || supported !== (isCurrent && item.state === 'supported') || historical !== (!isCurrent || item.state === 'unsupported')) throw new KnowledgeError('invalid_response')
+    assessment = { root_result_id: identity(item.root_result_id)!, current_result_id: current, state: item.state, revision: item.revision as number, last_assessment_id: identity(item.last_assessment_id, true), is_current: isCurrent, is_supported: supported, is_historical: historical }
+    if (entry.history_url !== undefined && entry.history_url !== `/api/v1/assessments/heads/${assessment.root_result_id}/history`) throw new KnowledgeError('invalid_response')
+  }
+  return { task_kind: task, watch_id: watchId, source_version_id: versionId, assessment_status: sourceStatus as SourceAssessment | null, assessment_result_id: resultId, assessment }
 }
 
 async function response(path: string, signal: AbortSignal): Promise<unknown> {

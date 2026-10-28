@@ -46,13 +46,36 @@ function server(initial: PublicationJob | null = null) {
 }
 function mount(changes: Partial<Parameters<typeof PublicationDelivery>[0]> = {}) {
   const onAuthorizationError = vi.fn()
-  const props = { record: manifestFixture(true), csrfToken: BROWSER_CSRF, operatorCsrf: OPERATOR_CSRF, operatorAuthenticated: true, enabled: true, blocked: false, onAuthorizationError, ...changes }
+  const props = { record: manifestFixture(true), csrfToken: BROWSER_CSRF, operatorCsrf: OPERATOR_CSRF, operatorAuthenticated: true, enabled: true, blocked: false, sourceCurrent: true, onAuthorizationError, ...changes }
   return { ...render(<PublicationDelivery {...props} />), onAuthorizationError, props }
 }
 const sandboxConsent = /I want to publish this exact approved version to the Zenodo sandbox/
 afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers() })
 
 describe('explicit exact-version publishing', () => {
+  it('blocks fresh publishing of a stale finding but retains explicit read-only verification and local cancellation', async () => {
+    const { requests } = server(publicationJobFixture({ status: 'interrupted', external_outcome_unknown: true, can_reconcile: true, can_cancel: true }))
+    mount({ sourceCurrent: false })
+    expect(await screen.findByRole('button', { name: 'Verify remote status' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Cancel publication job' })).toBeEnabled()
+    await userEvent.click(screen.getByRole('button', { name: 'Verify remote status' }))
+    expect(await screen.findByRole('status')).toHaveTextContent('Remote verification queued')
+    expect(requests.mock.calls.filter(([, init]) => init?.method === 'POST').map(([path]) => path)).toEqual([`/api/v1/publication-jobs/${PUBLICATION_JOB}/reconcile`])
+  })
+
+  it('clears a checked publication decision when the exact finding basis becomes historical', async () => {
+    const { requests } = server()
+    const view = mount()
+    const consent = await screen.findByRole('checkbox', { name: sandboxConsent })
+    await userEvent.click(consent)
+    expect(screen.getByRole('button', { name: 'Publish to sandbox' })).toBeEnabled()
+    view.rerender(<PublicationDelivery {...view.props} sourceCurrent={false} />)
+    expect(consent).not.toBeChecked()
+    expect(consent).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Publish to sandbox' })).toBeDisabled()
+    expect(requests.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false)
+  })
+
   it('keeps publishing disabled by default and never enqueues on approval or load', async () => {
     const { state, requests } = server()
     state.execution = false

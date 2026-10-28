@@ -34,6 +34,7 @@ def test_credentials_alone_never_enable_research_submission() -> None:
     )
     with TestClient(application) as client:
         capabilities = client.get("/api/v1/capabilities").json()
+        assert client.get("/api/v1/assessments/capabilities").json()["execution_available"] is False
         assert (
             client.get("/api/v1/knowledge/watches/capabilities").json()["execution_available"]
             is False

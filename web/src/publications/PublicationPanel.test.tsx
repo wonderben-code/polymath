@@ -50,7 +50,7 @@ function server({ configured = true, authenticated = false, records = [] as Publ
 
 function mount() {
   const expired = vi.fn()
-  const result = render(<PublicationPanel artifact={artifactFixture()} csrfToken={BROWSER_CSRF} enabled onSessionExpired={expired} />)
+  const result = render(<PublicationPanel artifact={artifactFixture()} csrfToken={BROWSER_CSRF} enabled sourceCurrent onSessionExpired={expired} />)
   return { ...result, expired }
 }
 async function fillCreator() { await userEvent.type(await screen.findByRole('textbox', { name: 'Creator 1 name' }), 'Synthetic Creator') }
@@ -70,6 +70,22 @@ const consentName = /I approve this exact document, metadata, publisher, and des
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); vi.useRealTimers() })
 
 describe('human approval of exact saved publication versions', () => {
+  it('clears fresh approval consent and blocks stale-basis preparation while preserving saved review and revoke access', async () => {
+    const { requests } = server({ authenticated: true, records: [manifestFixture()] })
+    const expired = vi.fn(), artifact = artifactFixture()
+    const { rerender } = render(<PublicationPanel artifact={artifact} csrfToken={BROWSER_CSRF} enabled sourceCurrent onSessionExpired={expired} />)
+    await userEvent.click(await screen.findByRole('checkbox', { name: consentName }))
+    expect(screen.getByRole('button', { name: 'Approve this exact version' })).toBeEnabled()
+    rerender(<PublicationPanel artifact={artifact} csrfToken={BROWSER_CSRF} enabled sourceCurrent={false} onSessionExpired={expired} />)
+    expect(screen.getByRole('checkbox', { name: consentName })).not.toBeChecked()
+    expect(screen.getByRole('checkbox', { name: consentName })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Approve this exact version' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Prepare publication preview' })).toBeDisabled()
+    expect(screen.getByRole('region', { name: 'Exact publication preview' })).toBeVisible()
+    expect(screen.getByRole('alert')).toHaveTextContent('historical, unsupported, or awaiting a current-version check')
+    expect(requests.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false)
+  })
+
   it('keeps default preparation disabled while displaying a previously saved owned preview', async () => {
     const { requests } = server({ configured: false, records: [manifestFixture(true)] })
     mount()

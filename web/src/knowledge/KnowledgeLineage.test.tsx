@@ -11,7 +11,7 @@ const resultId = (index: number) => `${String(index).padStart(8, '0')}-2222-4222
 function records(count = 2) {
   const nodes = Array.from({ length: count }, (_, index) => ({
     id: `finding:${index + 1}`, kind: 'finding', label: `Synthetic bridge ${index + 1}`,
-    run_id: RUN, result_id: resultId(index + 1), source_id: null, content_kind: null, finding_outcome: 'bridge',
+    run_id: RUN, result_id: resultId(index + 1), source_id: null, content_kind: null, finding_outcome: 'bridge', assessment: { root_result_id: resultId(index + 1), current_result_id: resultId(index + 1), state: 'supported', revision: 0, last_assessment_id: null as string | null, is_current: true, is_supported: true, is_historical: false },
   }))
   return {
     search: { items: [], truncated: false, coverage: { scope: 'current_browser_session' } },
@@ -28,6 +28,19 @@ function server(data = records()) {
 afterEach(() => vi.unstubAllGlobals())
 
 describe('investigating connections between saved bridges', () => {
+  it('keeps historical or unsupported bridge versions inspectable but excludes them from new investigations', async () => {
+    const data = records(3)
+    data.graph.nodes[0].assessment = { ...data.graph.nodes[0].assessment, current_result_id: resultId(3), revision: 1, last_assessment_id: resultId(9), is_current: false, is_supported: false, is_historical: true }
+    data.graph.nodes[1].assessment = { ...data.graph.nodes[1].assessment, state: 'unsupported', revision: 1, last_assessment_id: resultId(9), is_supported: false, is_historical: true }
+    server(data)
+    render(<KnowledgeBrowser enabled canInvestigate onOpenRun={vi.fn()} onInvestigateBridges={vi.fn()} />)
+    expect(await screen.findByRole('checkbox', { name: 'Use bridge: Synthetic bridge 1' })).toBeDisabled()
+    expect(screen.getByRole('checkbox', { name: 'Use bridge: Synthetic bridge 2' })).toBeDisabled()
+    expect(screen.getByRole('checkbox', { name: 'Use bridge: Synthetic bridge 3' })).toBeEnabled()
+    await userEvent.click(screen.getByRole('button', { name: 'Select map node: Finding Synthetic bridge 1' }))
+    expect(screen.getByRole('region', { name: 'Selected knowledge record' })).toHaveTextContent('Historical finding')
+    expect(screen.getByRole('button', { name: 'Open research record' })).toBeEnabled()
+  })
   it('requires two to four saved bridges and passes exact selected versions once', async () => {
     server()
     const investigate = vi.fn()
@@ -47,8 +60,8 @@ describe('investigating connections between saved bridges', () => {
 
   it('caps the selection and excludes saved answers or untyped older findings', async () => {
     const data = records(5)
-    data.graph.nodes.push({ ...data.graph.nodes[0], id: 'finding:answer', result_id: resultId(6), label: 'Synthetic answer', finding_outcome: 'answer' })
-    const { finding_outcome: _outcome, ...legacy } = data.graph.nodes[0]
+    data.graph.nodes.push({ ...data.graph.nodes[0], id: 'finding:answer', result_id: resultId(6), label: 'Synthetic answer', finding_outcome: 'answer', assessment: { ...data.graph.nodes[0].assessment, root_result_id: resultId(6), current_result_id: resultId(6) } })
+    const { finding_outcome: _outcome, assessment: _assessment, ...legacy } = data.graph.nodes[0]
     data.graph.nodes.push({ ...legacy, id: 'finding:legacy', result_id: resultId(7), label: 'Legacy saved record' } as typeof data.graph.nodes[number])
     server(data)
     render(<KnowledgeBrowser enabled canInvestigate onOpenRun={vi.fn()} onInvestigateBridges={vi.fn()} />)

@@ -18,6 +18,10 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, aliased
 
 from polymath.access_models import ResearchRunAccess
+from polymath.assessment_eligibility import (
+    current_supported_condition,
+    result_assessment_state,
+)
 from polymath.evidence_models import (
     EvidenceQuote,
     EvidenceResult,
@@ -72,7 +76,7 @@ def _text(value: object, maximum: int = 3000) -> str | None:
     return value.strip()
 
 
-def _finding_item(row: EvidenceResult) -> dict | None:
+def _finding_item(row: EvidenceResult, session: Session, owner_hash: str) -> dict | None:
     found = _finding(row.payload)
     if found is None:
         return None
@@ -85,6 +89,7 @@ def _finding_item(row: EvidenceResult) -> dict | None:
         summary = _text(finding.get("summary"), 6000)
     if title is None:
         return None
+    assessment = result_assessment_state(session, owner_hash, row.id)
     return {
         "id": f"finding:{row.id}",
         "type": "finding",
@@ -94,10 +99,29 @@ def _finding_item(row: EvidenceResult) -> dict | None:
         "source_id": None,
         "content_kind": None,
         "summary": (summary or "Saved research finding")[:240],
+        "task_kind": session.get(ResearchRun, row.run_id).task_kind,
+        "assessment": assessment,
+        "history_url": f"/api/v1/assessments/heads/{assessment['root_result_id']}/history",
     }
 
 
 def _sources(owner_hash: str, query: str = ""):
+    assessed = aliased(EvidenceResult)
+    assessed_result_id = (
+        select(assessed.id)
+        .join(EvidenceQuote, EvidenceQuote.result_id == assessed.id)
+        .where(
+            assessed.run_id == RunEvidenceSource.run_id,
+            EvidenceQuote.run_id == RunEvidenceSource.run_id,
+            EvidenceQuote.retrieval_id == SourceRetrieval.id,
+            EvidenceQuote.version_id == SourceVersion.id,
+            current_supported_condition(assessed),
+            ResearchRun.status == "succeeded",
+        )
+        .correlate(RunEvidenceSource, ResearchRun, SourceRetrieval, SourceVersion)
+        .limit(1)
+        .scalar_subquery()
+    )
     statement = (
         select(
             SourceVersion.id,
@@ -107,11 +131,18 @@ def _sources(owner_hash: str, query: str = ""):
             RunEvidenceSource.run_id,
             ResearchRun.task_kind,
             WatchSeenSourceVersion.watch_id,
+            assessed_result_id.label("assessment_result_id"),
             func.row_number()
             .over(
                 partition_by=SourceVersion.id,
                 order_by=(
-                    case((ResearchRun.task_kind == "research", 0), else_=1),
+                    case(
+                        (assessed_result_id.is_not(None), 0),
+                        (ResearchRun.task_kind == "research", 1),
+                        (ResearchRun.task_kind == "ingest_literature", 2),
+                        (ResearchRun.task_kind == "reassess_finding", 4),
+                        else_=3,
+                    ),
                     SourceRetrieval.retrieved_at.desc(),
                     RunEvidenceSource.run_id,
                     SourceRetrieval.id,
@@ -155,6 +186,7 @@ def _sources(owner_hash: str, query: str = ""):
             ranked.c.run_id,
             ranked.c.task_kind,
             ranked.c.watch_id,
+            ranked.c.assessment_result_id,
         )
         .where(ranked.c.version_rank == 1)
         .order_by(ranked.c.id)
@@ -183,15 +215,20 @@ def _finding_match(query: str):
     )
 
 
-def _findings(owner_hash: str, query: str = ""):
+def _findings(owner_hash: str, query: str = "", *, current_only: bool = True):
     statement = (
         select(EvidenceResult)
         .join(ResearchRunAccess, ResearchRunAccess.run_id == EvidenceResult.run_id)
+        .join(ResearchRun, ResearchRun.id == EvidenceResult.run_id)
         .where(
             ResearchRunAccess.session_hash == owner_hash,
             EvidenceResult.status.in_(POSITIVE_STATUSES),
+            ResearchRun.status == "succeeded",
+            ResearchRun.task_kind.in_(("research", "reassess_finding")),
         )
     )
+    if current_only:
+        statement = statement.where(current_supported_condition())
     if query:
         matching_quotes = (
             select(EvidenceQuote.result_id)
@@ -222,6 +259,18 @@ def _source_item(row) -> dict:
         "task_kind": row.task_kind,
         "watch_id": str(row.watch_id) if row.watch_id is not None else None,
         "source_version_id": str(row.id),
+        "assessment_result_id": (
+            str(row.assessment_result_id) if row.assessment_result_id else None
+        ),
+        "assessment_status": (
+            "current_supported"
+            if row.assessment_result_id is not None
+            else "unassessed"
+            if row.task_kind == "ingest_literature"
+            else "unapplied_reassessment"
+            if row.task_kind == "reassess_finding"
+            else "saved_snapshot"
+        ),
         "summary": (
             f"Collected {row.content_kind.replace('_', ' ')}; unassessed source version"
             if row.task_kind == "ingest_literature"
@@ -314,7 +363,7 @@ def _graph(session: Session, owner_hash: str, query: str) -> dict:
         for record in records[: MAX_CANDIDATES * 64]:
             quoted.setdefault(record.result_id, []).append(record)
     for row in candidates[:MAX_CANDIDATES]:
-        item = _finding_item(row)
+        item = _finding_item(row, session, owner_hash)
         found = _finding(row.payload)
         if item is None or found is None:
             continue
@@ -328,6 +377,9 @@ def _graph(session: Session, owner_hash: str, query: str) -> dict:
             "source_id": None,
             "content_kind": None,
             "finding_outcome": finding["outcome"],
+            "task_kind": item["task_kind"],
+            "assessment": item["assessment"],
+            "history_url": item["history_url"],
         }
         proposed_nodes = {node["id"]: node}
         proposed_edges = {}
@@ -335,7 +387,7 @@ def _graph(session: Session, owner_hash: str, query: str) -> dict:
         # Parent links record the selected research basis, never independent
         # scientific support. The child still has its own direct quote links.
         for parent in parent_findings.get(row.run_id, []):
-            parent_item = _finding_item(parent)
+            parent_item = _finding_item(parent, session, owner_hash)
             if parent_item is None:
                 continue
             parent_id = parent_item["id"]
@@ -348,6 +400,9 @@ def _graph(session: Session, owner_hash: str, query: str) -> dict:
                 "source_id": None,
                 "content_kind": None,
                 "finding_outcome": "bridge",
+                "task_kind": parent_item["task_kind"],
+                "assessment": parent_item["assessment"],
+                "history_url": parent_item["history_url"],
             }
             edge_id = f"investigated_from:{node['id']}:{parent_id}"
             proposed_edges[edge_id] = {
@@ -382,6 +437,9 @@ def _graph(session: Session, owner_hash: str, query: str) -> dict:
                 "result_id": str(row.id),
                 "source_id": source.source_id,
                 "content_kind": source.content_kind,
+                "task_kind": item["task_kind"],
+                "assessment_result_id": str(row.id),
+                "assessment_status": "current_supported",
             }
             edge_id = f"supported_by:{node['id']}:{source_node_id}"
             proposed_edges[edge_id] = {
@@ -416,6 +474,10 @@ def _graph(session: Session, owner_hash: str, query: str) -> dict:
                 "task_kind": row.task_kind,
                 "watch_id": str(row.watch_id) if row.watch_id is not None else None,
                 "source_version_id": str(row.id),
+                "assessment_result_id": (
+                    str(row.assessment_result_id) if row.assessment_result_id else None
+                ),
+                "assessment_status": _source_item(row)["assessment_status"],
             }
     return {
         "nodes": list(nodes.values()),
@@ -453,7 +515,11 @@ def create_knowledge_router(engine: Engine) -> APIRouter:
                     _findings(owner.token_hash, query).limit(limit + 1)
                 ).all()
                 items = [_source_item(row) for row in sources]
-                items.extend(item for row in findings if (item := _finding_item(row)) is not None)
+                items.extend(
+                    item
+                    for row in findings
+                    if (item := _finding_item(row, session, owner.token_hash)) is not None
+                )
                 items.sort(key=lambda item: (item["title"].casefold(), item["type"], item["id"]))
                 return {
                     "items": items[:limit],
@@ -483,9 +549,11 @@ def create_knowledge_router(engine: Engine) -> APIRouter:
             with Session(engine) as session:
                 owner = _authenticated(session, request)
                 row = session.scalar(
-                    _findings(owner.token_hash).where(EvidenceResult.id == result_id)
+                    _findings(owner.token_hash, current_only=False).where(
+                        EvidenceResult.id == result_id
+                    )
                 )
-                item = _finding_item(row) if row is not None else None
+                item = _finding_item(row, session, owner.token_hash) if row is not None else None
                 if item is None:
                     raise _PrivateHTTPException(404, "knowledge_finding_not_found")
                 return item

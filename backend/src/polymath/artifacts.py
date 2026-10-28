@@ -31,6 +31,7 @@ from polymath.artifact_contracts import (
     validate_artifact_result,
 )
 from polymath.artifact_models import ArtifactRequest, GeneratedArtifact
+from polymath.assessment_eligibility import current_supported_condition
 from polymath.evidence import EvidenceError, EvidenceStore, _canonical, _document, _hash, _metadata
 from polymath.evidence_models import (
     EvidenceQuote,
@@ -131,8 +132,9 @@ def source_for_request(
         .where(
             EvidenceResult.id == identifier,
             EvidenceResult.status.in_(("bridge", "answer")),
+            current_supported_condition(),
             ResearchRun.status == "succeeded",
-            ResearchRun.task_kind == "research",
+            ResearchRun.task_kind.in_(("research", "reassess_finding")),
             ResearchRunAccess.session_hash == owner_hash,
             BrowserSession.expires_at > func.clock_timestamp(),
         )

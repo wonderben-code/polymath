@@ -86,7 +86,11 @@ def _publication_error(error: PublicationError) -> _PrivateHTTPException:
         return _PublicationHTTPException(503, code)
     if code in ("publication_not_found", "publication_approval_not_found"):
         return _PublicationHTTPException(404, "publication_not_found")
-    if code in ("invalid_publication_manifest", "publication_manifest_changed"):
+    if code in (
+        "invalid_publication_manifest",
+        "publication_manifest_changed",
+        "publication_source_not_current",
+    ):
         return _PublicationHTTPException(409, code)
     if code == "operator_session_required":
         return _PublicationHTTPException(401, code)

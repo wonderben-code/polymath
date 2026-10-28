@@ -62,7 +62,7 @@ describe('session-owned knowledge browser', () => {
     const open = vi.fn()
     render(<KnowledgeBrowser enabled onOpenRun={open} csrfToken="csrf" />)
     await userEvent.click(await screen.findByRole('button', { name: `Read unassessed source: ${source.title}` }))
-    expect(await screen.findByRole('region', { name: 'Saved unassessed source text' })).toHaveTextContent('Synthetic original abstract')
+    expect(await screen.findByRole('region', { name: 'Saved source text' })).toHaveTextContent('Synthetic original abstract')
     expect(open).not.toHaveBeenCalled()
     expect(fetch.mock.calls.every(([path]) => !String(path).startsWith('/api/v1/runs'))).toBe(true)
     await userEvent.click(screen.getByRole('button', { name: 'Close saved source' }))
@@ -70,7 +70,7 @@ describe('session-owned knowledge browser', () => {
     const node = screen.getByRole('region', { name: 'Selected knowledge record' })
     expect(node).toHaveTextContent('An unassessed source version collected by a literature watch')
     await userEvent.click(within(node).getByRole('button', { name: 'Read unassessed source' }))
-    expect(await screen.findByRole('region', { name: 'Saved unassessed source text' })).toBeInTheDocument()
+    expect(await screen.findByRole('region', { name: 'Saved source text' })).toBeInTheDocument()
     expect(open).not.toHaveBeenCalled()
   })
 

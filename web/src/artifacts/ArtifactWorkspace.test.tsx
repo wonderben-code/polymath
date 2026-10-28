@@ -86,7 +86,7 @@ function server(initial: ArtifactJob[] = [], initialArtifacts: SavedArtifact[] =
 function renderWorkspace(changes: Partial<Parameters<typeof ArtifactWorkspace>[0]> = {}) {
   const expired = vi.fn()
   const busy = vi.fn()
-  const props = { sourceResultId: SOURCE, sourceKind: 'bridge' as const, csrfToken: HASH, enabled: true, canGenerate: true, onSessionExpired: expired, onBusyChange: busy, ...changes }
+  const props = { sourceResultId: SOURCE, sourceKind: 'bridge' as const, csrfToken: HASH, enabled: true, canGenerate: true, sourceCurrent: true, onSessionExpired: expired, onBusyChange: busy, ...changes }
   return { ...render(<ArtifactWorkspace {...props} />), expired, busy }
 }
 
@@ -103,6 +103,16 @@ async function finish(state: ReturnType<typeof server>['state'], artifact: Saved
 afterEach(() => { FixtureEventSource.instances = []; vi.unstubAllGlobals(); vi.useRealTimers() })
 
 describe('source-bound Formalise and Write workspace', () => {
+  it('blocks new generation from a stale finding even when model execution is available', async () => {
+    const { requests } = server()
+    renderWorkspace({ canGenerate: true, sourceCurrent: false })
+    await screen.findByText('No conjecture or document has been generated from this finding yet.')
+    expect(screen.getByRole('button', { name: /Formalise/ })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /Write summary/ })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /Write paper/ })).toBeDisabled()
+    expect(screen.getByText(/New generation requires the current supported finding/)).toBeVisible()
+    expect(requests.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false)
+  })
   it('keeps generation disabled by default while allowing owned saved previews', async () => {
     const artifact = saved('write_summary')
     const complete = { ...job('write_summary'), status: 'succeeded' as const, artifact_id: artifact.id }

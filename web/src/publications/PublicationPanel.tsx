@@ -10,7 +10,7 @@ import type { Destination, OperatorSession, PublicationCapabilities, Publication
 import './publications.css'
 import { PublicationDelivery } from './PublicationDelivery'
 
-interface Props { artifact: SavedArtifact; csrfToken: string | null; enabled: boolean; onSessionExpired: () => void }
+interface Props { artifact: SavedArtifact; csrfToken: string | null; enabled: boolean; onSessionExpired: () => void; sourceCurrent: boolean }
 type Action = 'prepare' | 'approve' | 'revoke' | 'login' | 'logout'
 const UNAUTHENTICATED: OperatorSession = { configured: false, authenticated: false, actor_id: null, display_name: null, expires_at: null, csrf_token: null }
 
@@ -41,7 +41,7 @@ function errorMessage(error: unknown): string {
   }
 }
 
-export function PublicationPanel({ artifact, csrfToken, enabled, onSessionExpired }: Props) {
+export function PublicationPanel({ artifact, csrfToken, enabled, onSessionExpired, sourceCurrent }: Props) {
   const headingId = useId()
   const [capabilities, setCapabilities] = useState<PublicationCapabilities | null>(null)
   const [operator, setOperator] = useState<OperatorSession>(UNAUTHENTICATED)
@@ -126,6 +126,7 @@ export function PublicationPanel({ artifact, csrfToken, enabled, onSessionExpire
     }, Math.min(Math.max(1, Math.min(...deadlines) - Date.now() + 25), 2147483647))
     return () => window.clearTimeout(timer)
   }, [operator.expires_at, record?.approval?.id, record?.approval?.expires_at, record?.approval?.revoked_at, now])
+  useEffect(() => { setReviewed(false) }, [sourceCurrent])
 
   function changed() { setRecord(null); setReviewed(false); setEdited(true); setError('') }
   function update(values: Partial<PublicationMetadata>) { changed(); setMetadata((previous) => ({ ...previous, ...values })) }
@@ -153,8 +154,8 @@ export function PublicationPanel({ artifact, csrfToken, enabled, onSessionExpire
   const authenticated = operator.authenticated && !!operator.csrf_token && !!operator.expires_at && Date.parse(operator.expires_at) > now
   const activeApproval = !!record?.approval?.valid && !record.approval.revoked_at && Date.parse(record.approval.expires_at) > now
   const matchesPolicy = !!record && !!capabilities?.publisher && record.manifest.publisher.identifier === capabilities.publisher.identifier && record.manifest.publisher.display_name === capabilities.publisher.display_name && capabilities.destinations.includes(record.manifest.destination)
-  const canPrepare = enabled && phase === 'ready' && !!csrfToken && !!capabilities?.can_prepare && destination !== '' && capabilities.destinations.includes(destination) && validMetadata && !busy && !uncertain
-  const canApprove = !!record && !!capabilities?.can_prepare && matchesPolicy && authenticated && reviewed && !activeApproval && !busy && !uncertain
+  const canPrepare = sourceCurrent && enabled && phase === 'ready' && !!csrfToken && !!capabilities?.can_prepare && destination !== '' && capabilities.destinations.includes(destination) && validMetadata && !busy && !uncertain
+  const canApprove = sourceCurrent && !!record && !!capabilities?.can_prepare && matchesPolicy && authenticated && reviewed && !activeApproval && !busy && !uncertain
 
   function prepare(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -193,6 +194,7 @@ export function PublicationPanel({ artifact, csrfToken, enabled, onSessionExpire
     {phase === 'error' && <p className="publication-message" role="status">Publication settings could not be checked. Reload publication details to try again.</p>}
     {error && phase !== 'error' && <p className="publication-message publication-error" role="alert">{error}</p>}
     {phase === 'ready' && <>
+      {!sourceCurrent && <p className="publication-message publication-error" role="alert">This document’s finding is historical, unsupported, or awaiting a current-version check. New preparation, approval, and publication are unavailable. Saved documents, approvals, and actual remote publication status remain inspectable.</p>}
       {!capabilities?.can_prepare && <p className="publication-message">Publication preparation is not configured yet. Saved previews remain available.</p>}
       <form className="publication-form" onSubmit={prepare}>
         <div className="publication-field"><label htmlFor={`${headingId}-title`}>Publication title</label><input id={`${headingId}-title`} maxLength={300} required value={metadata.title} disabled={!!busy || uncertain} onChange={(event) => update({ title: event.target.value })} /></div>
@@ -217,10 +219,10 @@ export function PublicationPanel({ artifact, csrfToken, enabled, onSessionExpire
         <details className="publication-fingerprint"><summary>Exact document and review version</summary><dl><dt>Document hash</dt><dd>{record.manifest.markdown_sha256}</dd><dt>Review hash</dt><dd>{record.manifest_sha256}</dd><dt>Publisher identity</dt><dd>{record.manifest.publisher.identifier}</dd><dt>Record marker</dt><dd>{record.manifest.remote_marker}</dd><dt>Saved at</dt><dd>{when(record.created_at)}</dd></dl></details>
         {record.approval && <p className="publication-field-note">Approval by {record.approval.actor_id} · {when(record.approval.approved_at)} · expires {when(record.approval.expires_at)}{record.approval.revoked_at && ` · revoked ${when(record.approval.revoked_at)}`}</p>}
         {!matchesPolicy && capabilities?.can_prepare && <p className="publication-field-note">This saved preview uses a different publisher or destination from the current settings. Prepare a new preview to approve current details.</p>}
-        <label className="publication-consent"><input type="checkbox" checked={reviewed} disabled={!authenticated || !!busy || uncertain || activeApproval || !matchesPolicy || !capabilities?.can_prepare} onChange={(event) => setReviewed(event.target.checked)} /><span>I approve this exact document, metadata, publisher, and destination.<small>{record.manifest.destination === 'sandbox' ? 'This approval is for a sandbox test record.' : 'This approval is for production publication of this exact version.'}</small></span></label>
+        <label className="publication-consent"><input type="checkbox" checked={reviewed} disabled={!sourceCurrent || !authenticated || !!busy || uncertain || activeApproval || !matchesPolicy || !capabilities?.can_prepare} onChange={(event) => setReviewed(event.target.checked)} /><span>I approve this exact document, metadata, publisher, and destination.<small>{record.manifest.destination === 'sandbox' ? 'This approval is for a sandbox test record.' : 'This approval is for production publication of this exact version.'}</small></span></label>
         <div className="publication-approval-actions"><button type="button" className="publication-primary" disabled={!canApprove} onClick={() => { if (record && csrfToken && operator.csrf_token && canApprove) void perform('approve', (signal) => approvePublication(record, csrfToken, operator.csrf_token!, signal), applyRecord) }}>{busy === 'approve' ? 'Recording approval…' : 'Approve this exact version'}</button>{record.approval && !record.approval.revoked_at && <button type="button" className="publication-revoke" disabled={!authenticated || !!busy || uncertain} onClick={() => { if (record && csrfToken && operator.csrf_token) void perform('revoke', (signal) => revokePublication(record, csrfToken, operator.csrf_token!, signal), applyRecord) }}>{busy === 'revoke' ? 'Revoking approval…' : 'Revoke this approval'}</button>}</div>
         <p className="publication-not-published">Approval records a human decision. Publishing requires the separate action below.</p>
-        <PublicationDelivery key={record.id} record={record} csrfToken={csrfToken} operatorCsrf={authenticated ? operator.csrf_token : null} operatorAuthenticated={authenticated} enabled={enabled} blocked={!!busy || uncertain || !matchesPolicy} onAuthorizationError={fail} />
+        <PublicationDelivery key={record.id} record={record} csrfToken={csrfToken} operatorCsrf={authenticated ? operator.csrf_token : null} operatorAuthenticated={authenticated} enabled={enabled} sourceCurrent={sourceCurrent} blocked={!!busy || uncertain || !matchesPolicy} onAuthorizationError={fail} />
       </section>}
       <section className="publication-operator" aria-label="Publisher approval access">
         <h4>Publisher approval</h4>{authenticated ? <div className="publication-operator-session"><p>Unlocked for {operator.display_name} until {operator.expires_at && when(operator.expires_at)}.</p><button type="button" className="text-button" disabled={!!busy || uncertain} onClick={() => { if (csrfToken && operator.csrf_token) { setCredential(''); setReviewed(false); void perform('logout', (signal) => logoutOperator(csrfToken, operator.csrf_token!, signal), setOperator) } }}>{busy === 'logout' ? 'Locking access…' : 'Lock publisher access'}</button></div> : operator.configured ? <form className="publication-login" onSubmit={login}><p>Only an authorized publisher can approve or revoke an exact version. Unlocking access does not approve anything.</p><label htmlFor={`${headingId}-access`}>Publisher access code</label><div><input id={`${headingId}-access`} type="password" autoComplete="off" maxLength={256} value={credential} disabled={!!busy || uncertain} onChange={(event) => setCredential(event.target.value)} /><button type="submit" disabled={!credential || !!busy || uncertain}>{busy === 'login' ? 'Unlocking…' : 'Unlock publisher approval'}</button></div></form> : <p>Publisher approval access has not been configured.</p>}

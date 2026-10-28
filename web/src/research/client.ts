@@ -91,6 +91,7 @@ export function parseRun(value: unknown): OwnedRun {
     created_at: date(run.created_at), updated_at: date(run.updated_at), result_id: nullableId(run.result_id),
     error_code: run.error_code === null ? null : text(run.error_code, 100),
     external_outcome_unknown: boolean(run.external_outcome_unknown),
+    ...(run.task_kind === undefined ? {} : { task_kind: requiredText(run.task_kind, 80) }),
   }
 }
 
