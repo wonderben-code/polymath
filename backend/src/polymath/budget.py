@@ -18,6 +18,7 @@ from sqlalchemy import Engine, case, func, or_, select
 from sqlalchemy.orm import Session
 
 from polymath.budget_models import BudgetAccount, BudgetReservation, BudgetRunLimit
+from polymath.models import ResearchRun
 
 MAX_MONEY = 9_000_000_000_000_000
 KEY_PATTERN = re.compile(r"[A-Za-z0-9_.:/-]+")
@@ -43,6 +44,21 @@ class Reservation:
     status: str
     reserved_day: date
     newly_reserved: bool = False
+
+
+@dataclass(frozen=True)
+class NativeProbePermit:
+    """Internal one-manifest capability, minted by the locked native dispatcher.
+
+    Never deserialize this from an HTTP/CLI request. The dispatcher validates
+    human consent and live configuration in the same transaction using it.
+    """
+
+    account_id: str
+    run_id: uuid.UUID
+    manifest_sha256: str
+    armed_epoch: int
+    request_hash: str
 
 
 @dataclass(frozen=True)
@@ -116,13 +132,42 @@ class BudgetService:
         return row
 
     @staticmethod
-    def _authorized(account: BudgetAccount) -> None:
+    def _authorized(
+        account: BudgetAccount, *, native_permit: NativeProbePermit | None = None
+    ) -> None:
         if account.kill_switch:
             raise BudgetError("operator_kill_switch")
         if account.frozen:
             raise BudgetError("account_frozen")
-        if not account.execution_enabled or not account.pricing_verified:
+        if native_permit is None and (
+            not account.execution_enabled or not account.pricing_verified
+        ):
             raise BudgetError("paid_execution_disabled")
+
+    @staticmethod
+    def _scope_authorized(
+        session: Session,
+        account: BudgetAccount,
+        run_id: uuid.UUID,
+        native_permit: NativeProbePermit | None = None,
+    ) -> None:
+        task_kind = session.scalar(select(ResearchRun.task_kind).where(ResearchRun.id == run_id))
+        if native_permit is None:
+            if account.native_scope is not None or task_kind == "verify_meta":
+                raise BudgetError("native_dispatch_scope_required")
+            return
+        if (
+            type(native_permit) is not NativeProbePermit
+            or native_permit.account_id != account.id
+            or native_permit.run_id != run_id
+            or account.native_scope != "probe_only"
+            or task_kind != "verify_meta"
+            or account.native_manifest_sha256 != native_permit.manifest_sha256
+            or account.native_control_epoch != native_permit.armed_epoch
+            or re.fullmatch(r"[0-9a-f]{64}", native_permit.manifest_sha256) is None
+            or re.fullmatch(r"[0-9a-f]{64}", native_permit.request_hash) is None
+        ):
+            raise BudgetError("native_dispatch_scope_mismatch")
 
     @staticmethod
     def _committed_expression():
@@ -228,19 +273,28 @@ class BudgetService:
         reference = _key(pricing_reference, "pricing_reference", maximum=200)
         with Session(self.engine) as session, session.begin():
             row = self._account(session, account_id)
+            if row.native_scope is not None:
+                raise BudgetError("native_dispatch_scope_required")
             row.pricing_reference = reference
             row.pricing_verified = True
             row.execution_enabled = True
 
     def disable_execution(self, account_id: str) -> None:
         with Session(self.engine) as session, session.begin():
-            self._account(session, _key(account_id, "account_id")).execution_enabled = False
+            row = self._account(session, _key(account_id, "account_id"))
+            row.execution_enabled = False
+            row.native_control_epoch += 1
 
     def set_kill_switch(self, account_id: str, *, active: bool) -> None:
         if type(active) is not bool:
             raise ValueError("active must be a bool")
         with Session(self.engine) as session, session.begin():
-            self._account(session, _key(account_id, "account_id")).kill_switch = active
+            row = self._account(session, _key(account_id, "account_id"))
+            if not active and row.native_scope is not None:
+                raise BudgetError("native_dispatch_scope_required")
+            row.kill_switch = active
+            if active:
+                row.native_control_epoch += 1
 
     def configure_run(
         self,
@@ -295,6 +349,7 @@ class BudgetService:
         *,
         call_key: str,
         estimated_microdollars: int,
+        native_permit: NativeProbePermit | None = None,
     ) -> Reservation:
         """Reserve inside an existing transaction; caller owns commit/rollback."""
         account_id = _key(account_id, "account_id")
@@ -302,6 +357,7 @@ class BudgetService:
         call_key = _key(call_key, "call_key")
         _integer(estimated_microdollars, "estimated_microdollars", minimum=1)
         account = self._account(session, account_id)
+        self._scope_authorized(session, account, run_id, native_permit)
         now = self._now()
         prior = session.scalar(
             select(BudgetReservation).where(
@@ -313,10 +369,14 @@ class BudgetService:
             if prior.run_id != run_id or prior.estimated_microdollars != estimated_microdollars:
                 raise BudgetError("reservation_idempotency_conflict")
             return _reservation(prior)
-        self._authorized(account)
+        self._authorized(account, native_permit=native_permit)
         limit = session.get(BudgetRunLimit, (account_id, run_id))
         if limit is None:
             raise BudgetError("run_budget_not_configured")
+        if native_permit is not None and (
+            limit.max_calls != 1 or limit.cap_microdollars != estimated_microdollars
+        ):
+            raise BudgetError("native_dispatch_limit_mismatch")
         usage = self._usage(session, account, now.date())
         run_committed, run_calls = self._run_usage(session, account_id, run_id)
         if usage.committed_microdollars + estimated_microdollars > account.hard_cap_microdollars:
@@ -359,14 +419,21 @@ class BudgetService:
         with Session(self.engine) as session, session.begin():
             return self.claim_dispatch_in_session(session, reservation_id)
 
-    def claim_dispatch_in_session(self, session: Session, reservation_id: uuid.UUID) -> bool:
+    def claim_dispatch_in_session(
+        self,
+        session: Session,
+        reservation_id: uuid.UUID,
+        *,
+        native_permit: NativeProbePermit | None = None,
+    ) -> bool:
         """Claim inside an existing transaction; caller owns commit/rollback."""
         row = self._locate(session, reservation_id)
         account = self._account(session, row.account_id)
         session.refresh(row)
+        self._scope_authorized(session, account, row.run_id, native_permit)
         if row.status != "reserved":
             return False
-        self._authorized(account)
+        self._authorized(account, native_permit=native_permit)
         row.status = "in_flight"
         row.dispatched_at = self._now()
         row.reserved_day = row.dispatched_at.date()

@@ -230,6 +230,9 @@ share, and never reinterpret a failed response as a new public grant.
 Budget readiness preparation/inspection/disable is documented in
 [META_READINESS.md](META_READINESS.md). It requires a separately allowed operator
 with both CSRF domains; proposals are not native proof or spending grants.
+The separate one-call Meta approval, job, cancellation, receipt and free
+finalization routes are specified in [META_VERIFICATION.md](META_VERIFICATION.md).
+They require the budget operator role and cannot activate ordinary research.
 
 Operator, scheduled collection, reassessment and exact Zenodo approval/delivery
 routes use separate contracts in [DEVELOPMENT.md](DEVELOPMENT.md),

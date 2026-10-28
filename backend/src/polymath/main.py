@@ -21,6 +21,8 @@ from polymath.config import Settings, get_settings
 from polymath.database import build_engine
 from polymath.ingestion_api import create_ingestion_router
 from polymath.knowledge import create_knowledge_router
+from polymath.meta_probe_api import create_meta_probe_router
+from polymath.meta_probe_contracts import MetaProbePolicy
 from polymath.meta_readiness_contracts import ReadinessPolicy
 from polymath.operator_auth import OperatorPolicy, create_operator_router
 from polymath.publication import PublicationStore
@@ -52,6 +54,7 @@ def create_app(
     ingestion_availability: Callable[[], bool] | None = None,
     sharing_availability: Callable[[], bool] | None = None,
     readiness_policy: ReadinessPolicy | None = None,
+    probe_policy: MetaProbePolicy | None = None,
 ) -> FastAPI:
     settings = settings or get_settings()
     configured_operator, configured_publication = configured_publication_policies(settings)
@@ -64,6 +67,13 @@ def create_app(
             preparation_enabled=settings.budget_readiness_enabled,
             allowed_actor_ids=settings.budget_admin_actor_ids,
             max_hard_cap_microdollars=settings.budget_max_hard_cap_microdollars,
+        )
+    if probe_policy is None:
+        probe_policy = MetaProbePolicy(
+            paid_probe_enabled=settings.paid_meta_probe_enabled,
+            native_account_id=settings.native_budget_account_id,
+            model_id=settings.meta_model,
+            api_key=settings.model_api_key,
         )
     if publication_availability is None:
 
@@ -97,6 +107,14 @@ def create_app(
     application.include_router(
         create_budget_admin_router(
             application.state.engine,
+            readiness_policy=readiness_policy,
+            operator_policy=operator_policy,
+        )
+    )
+    application.include_router(
+        create_meta_probe_router(
+            application.state.engine,
+            probe_policy=probe_policy,
             readiness_policy=readiness_policy,
             operator_policy=operator_policy,
         )

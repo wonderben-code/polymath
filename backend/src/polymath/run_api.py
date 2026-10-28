@@ -151,7 +151,7 @@ def _owned(session: Session, owner: BrowserSession, run_id: uuid.UUID) -> Resear
         .join(ResearchRunAccess, ResearchRunAccess.run_id == ResearchRun.id)
         .where(ResearchRun.id == run_id, ResearchRunAccess.session_hash == owner.token_hash)
     )
-    if run is None:
+    if run is None or run.task_kind == "verify_meta":
         raise _not_found()
     return run
 

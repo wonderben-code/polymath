@@ -28,6 +28,11 @@ class BudgetAccount(Base):
         CheckConstraint("hard_cap_microdollars >= 0", name="ck_budget_accounts_hard_cap"),
         CheckConstraint("daily_cap_microdollars >= 0", name="ck_budget_accounts_daily_cap"),
         CheckConstraint("max_in_flight > 0", name="ck_budget_accounts_concurrency"),
+        CheckConstraint("native_control_epoch >= 0", name="ck_budget_accounts_native_epoch"),
+        CheckConstraint(
+            "native_scope IS NULL OR native_scope = 'probe_only'",
+            name="ck_budget_accounts_native_scope",
+        ),
         CheckConstraint(
             "NOT pricing_verified OR pricing_reference IS NOT NULL",
             name="ck_budget_accounts_verified_pricing",
@@ -44,6 +49,9 @@ class BudgetAccount(Base):
     kill_switch: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     frozen: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     frozen_reason: Mapped[str | None] = mapped_column(String(64))
+    native_scope: Mapped[str | None] = mapped_column(String(24))
+    native_manifest_sha256: Mapped[str | None] = mapped_column(String(64))
+    native_control_epoch: Mapped[int] = mapped_column(BigInteger, default=0, server_default="0")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 

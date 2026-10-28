@@ -11,6 +11,7 @@ from polymath import (  # noqa: F401
     ingestion_models,
     lineage_models,
     memory_models,
+    meta_probe_models,
     models,
     operator_models,
     publication_job_models,

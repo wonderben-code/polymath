@@ -24,6 +24,7 @@ TASK_KINDS = frozenset(
         "write_paper",
         "ingest_literature",
         "reassess_finding",
+        "verify_meta",
     }
 )
 
@@ -231,7 +232,7 @@ class JobRepository:
     def create(self, *, mode: str, goal: str, task_kind: str = "research") -> RunSnapshot:
         if mode not in {"explore", "ask", "surprise"}:
             raise ValueError("Unsupported research mode")
-        if task_kind not in TASK_KINDS:
+        if task_kind not in TASK_KINDS or task_kind == "verify_meta":
             raise ValueError("Unsupported task kind")
         if not isinstance(goal, str):
             raise ValueError("Research goal must be a string")
@@ -273,6 +274,8 @@ class JobRepository:
             eligible = select(ResearchRun).where(ResearchRun.status == "queued")
             if task_kinds is not None:
                 eligible = eligible.where(ResearchRun.task_kind.in_(task_kinds))
+            else:
+                eligible = eligible.where(ResearchRun.task_kind != "verify_meta")
             run = session.scalar(
                 eligible.order_by(ResearchRun.created_at, ResearchRun.id)
                 .with_for_update(skip_locked=True)
@@ -360,6 +363,8 @@ class JobRepository:
         _bounded_text(request_id, 128, "External request ID")
         with Session(self.engine) as session, session.begin():
             run = _owned(session, lease)
+            if run.task_kind == "verify_meta":
+                raise StateConflict("Native verification requires its scoped dispatcher")
             if run.external_request_in_flight:
                 raise ExternalRequestPending("An external request requires an observed outcome")
             if session.get(ResearchExternalRequest, (run.id, request_id)) is not None:
@@ -462,6 +467,8 @@ class JobRepository:
     def request_cancel(self, run_id: uuid.UUID) -> RunSnapshot:
         with Session(self.engine) as session, session.begin():
             run = _locked(session, run_id)
+            if run.task_kind == "verify_meta":
+                raise StateConflict("Native verification requires its operator control")
             if run.status in {"succeeded", "failed", "cancelled", "cancel_requested"}:
                 return _snapshot(run)
             run.lease_token += 1  # Invalidate an in-flight worker before any further writes.
@@ -591,6 +598,8 @@ class JobRepository:
         _integer(expected_token, 0, 2**63 - 1, "Lease token")
         with Session(self.engine) as session, session.begin():
             run = _locked(session, run_id)
+            if run.task_kind == "verify_meta":
+                raise StateConflict("Native verification requires free recorded finalization")
             if run.status != "interrupted" or run.lease_token != expected_token:
                 raise StateConflict("Only the current interrupted run can be explicitly resumed")
             if run.external_request_in_flight:

@@ -30,7 +30,7 @@ class ResearchRun(Base):
         CheckConstraint("mode IN ('explore', 'ask', 'surprise')", name="ck_research_runs_mode"),
         CheckConstraint(
             "task_kind IN ('research', 'formalise', 'write_summary', 'write_paper', "
-            "'ingest_literature', 'reassess_finding')",
+            "'ingest_literature', 'reassess_finding', 'verify_meta')",
             name="ck_research_runs_task_kind",
         ),
         CheckConstraint(

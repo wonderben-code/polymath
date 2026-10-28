@@ -117,8 +117,9 @@ class DispatchCoordinator:
         with Session(self.engine) as session, session.begin():
             # Always account -> job, including completion. Check lease after any
             # account-lock wait so an expired/cancelled worker cannot dispatch.
-            self.budget._account(session, account_id)
+            account = self.budget._account(session, account_id)
             run = _owned(session, lease)
+            self.budget._scope_authorized(session, account, run.id)
             _live_dispatch_owner(session, run)
             prior = session.get(ResearchExternalRequest, (run.id, request_id))
             if prior is not None:
@@ -243,6 +244,7 @@ class DispatchCoordinator:
         settlement_key: str | None = None,
         prompt_tokens: int | None = None,
         completion_tokens: int | None = None,
+        freeze_reason: str | None = None,
     ) -> Reservation:
         """Persist a known response and its accounting, even after lost ownership.
 
@@ -250,9 +252,15 @@ class DispatchCoordinator:
         unknown hold, never zero. A known late response may reconcile a prior
         timeout using explicit response/usage evidence.
         """
+        if freeze_reason is not None:
+            _budget_key(freeze_reason, "freeze_reason", maximum=64)
         data = _json_object(observation)
         with Session(self.engine) as session, session.begin():
             run, request, row = self._bound(session, grant)
+            if freeze_reason is not None:
+                account = self.budget._account(session, grant.account_id)
+                account.frozen = True
+                account.frozen_reason = freeze_reason
             if request.status == "reconciled":
                 self._audit_late_conflict(
                     session,

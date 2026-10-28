@@ -441,6 +441,7 @@ class MetaReadinessStore:
                 raise ReadinessError("readiness_account_not_found")
             account.execution_enabled = False
             account.kill_switch = True
+            account.native_control_epoch += 1
             session.flush()
             _audit(
                 session,

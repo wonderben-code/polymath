@@ -31,6 +31,7 @@ Created 27 October 2026. Every push to `main` is Bitcoin-timestamped through Ope
 | [docs/PUBLIC_SHARING.md](docs/PUBLIC_SHARING.md) | Explicit public snapshots, short cited excerpts, expiry, revocation and public-library API |
 | [docs/API.md](docs/API.md) | Versioned HTTP contract, ownership/CSRF, event replay and standalone external client |
 | [docs/META_READINESS.md](docs/META_READINESS.md) | Operator-attested model/billing proposals, conservative cost quotes, budget inspection and safe disable |
+| [docs/META_VERIFICATION.md](docs/META_VERIFICATION.md) | Exact one-call Meta approval, shared budget, observation receipts and free recovery |
 | [docs/HACKATHON.md](docs/HACKATHON.md) | Dates, judging, setup checklist, IP notes |
 | [CLAUDE.md](CLAUDE.md) | Instructions for any coding agent picking this up |
 
@@ -44,6 +45,7 @@ The implementation baseline is recorded in `docs/ARCHITECTURE.md`. The target is
 - [x] A4: bounded adaptive research-controller prototype and Meta adapter, verified with fixtures
 - [ ] A1–A2, A5: verified Meta capabilities and first real-source investigation
 - [x] B3.1: disabled Meta readiness proposals, authenticated budget inspection and safe disable
+- [x] B3.2 implementation: exact one-call Meta approval, observed usage/receipts and free recovery; verified with mock transport
 - [ ] B–C live gates: native model/billing verification, execution activation and scientific Explore evaluation
 - [x] D3 local contract/client: documented v1 API and standalone HTTP client, verified with real loopback worker journeys
 - [ ] D live gates: public URL, hosted access/operations and deployed external-client verification
@@ -64,3 +66,5 @@ Explicit owner sharing now creates an exact public finding snapshot with short c
 
 ## Licence
 Apache 2.0. See [LICENSE](LICENSE).
+
+A separate, disabled one-call Meta verification lane now uses the actual adapter with exact human approval and the shared ledger. Its immutable receipt records protocol behavior and reported usage; it grants no research activation and proves no pricing, funding or scientific claim. All verification checks so far use mock HTTP. No paid Meta call has run.

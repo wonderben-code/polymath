@@ -205,3 +205,13 @@ Before an explicitly bounded live experiment: verify current pricing and account
 **Current owner instruction: continue without paid calls.** Credits/account limits are not ready. Do not enable a model request merely because a key appears; the owner must confirm readiness and permit paid testing first.
 
 Network destinations identified so far: `api.meta.ai`, `dev.meta.ai` for model documentation, `api.openalex.org` for discovery, and `export.arxiv.org`/`arxiv.org` for accessible literature. Saved environment requirements do not establish runtime connectivity or provider authorization.
+
+## One-call Meta verification
+
+The separate `/api/v1/budget/verification` routes and the verification tab in `/operator/budget` bind one fixed protocol request to a saved readiness proposal, current server key/model/ledger, provider-account attestation and exact human approval. Preview sends nothing. The explicit **Arm and queue THIS one call** action clears the account kill switch for that scope and advances its stop generation; ordinary research and pricing flags stay unchanged. Every later safe disable invalidates older authority, including repeated disables. All calls and uncertain holds count on the existing ledger.
+
+`PAID_META_PROBE_ENABLED=false` is the default. Enabling it requires preparation, an explicitly allowed operator, an exact `NATIVE_BUDGET_ACCOUNT_ID` and server-only Meta model/key. No setting or key alone approves a call. These settings must remain off under the owner's current instruction to continue without paid calls. Compose forwards no model credentials and starts no verification worker.
+
+`make meta-probe-worker` or `uv --project backend run python -m polymath.meta_probe_worker --once` exits2 while disabled, before connecting, claiming or constructing a model. An explicit `--finalize-only RUN_ID` can finish an already recorded response without a key, paid flag or network call; it cannot resend a prepared/unknown request. No CLI endpoint, model or credential overrides are accepted.
+
+The adapter journals bounded wire facts and strict usage before action validation. Known costs use separate input/output ceiling arithmetic; invalid action text does not erase a charge. Missing/mismatched model identity or unusable usage preserves the unknown hold. A successful receipt proves only that one proposed wire/action/usage check passed. Pricing authenticity, inclusive billing, provider funding/caps, scientific quality and research activation remain separate gates. See [META_VERIFICATION.md](META_VERIFICATION.md) for the exact contract.

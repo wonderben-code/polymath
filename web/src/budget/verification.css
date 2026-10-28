@@ -1,0 +1,2 @@
+.budget-field select { display: block; width: 100%; max-width: 100%; min-width: 0; margin-top: 10px; padding: 12px; border: 1px solid #b9c7b6; background: #fffefa; color: var(--ink); font: inherit; }
+.budget-actions [aria-pressed='true'] { background: #e1e9d9; border-color: #6a8b62; }

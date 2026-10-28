@@ -117,3 +117,73 @@ def test_budget_readiness_configuration_grants_no_publication_or_model_authority
     assert not settings.publication_approval_enabled
     assert not settings.publication_execution_enabled
     assert not settings.meta_configured
+
+
+def test_native_credentials_and_ledger_do_not_enable_paid_probe_by_default():
+    settings = Settings(
+        model_api_key="synthetic-placeholder",
+        meta_model="synthetic-meta-model",
+        native_budget_account_id="native-ledger",
+        _env_file=None,
+    )
+    assert not settings.paid_meta_probe_enabled
+    assert not settings.budget_readiness_enabled
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {},
+        {"budget_readiness_enabled": True},
+        {"budget_readiness_enabled": True, "native_budget_account_id": "native"},
+        {
+            "budget_readiness_enabled": True,
+            "native_budget_account_id": "native",
+            "model_api_key": "synthetic",
+        },
+        {
+            "budget_readiness_enabled": True,
+            "native_budget_account_id": "native",
+            "model_api_key": "synthetic",
+            "meta_model": "synthetic-model",
+            "meta_api_base_url": "https://other-provider.invalid/v1",
+        },
+    ],
+)
+def test_paid_probe_requires_all_explicit_server_configuration(changes):
+    with pytest.raises(ValidationError):
+        Settings(
+            paid_meta_probe_enabled=True,
+            operator_bootstrap_token="Synthetic_Operator_0123456789abcdef-ABCDEF",
+            budget_admin_actor_ids=("publisher",),
+            _env_file=None,
+            **changes,
+        )
+
+
+def test_paid_probe_configuration_does_not_enable_any_other_remote_action():
+    settings = Settings(
+        paid_meta_probe_enabled=True,
+        budget_readiness_enabled=True,
+        operator_bootstrap_token="Synthetic_Operator_0123456789abcdef-ABCDEF",
+        budget_admin_actor_ids=("publisher",),
+        native_budget_account_id="same-native-ledger",
+        model_api_key="synthetic-placeholder",
+        meta_model="synthetic-meta-model",
+        _env_file=None,
+    )
+    assert settings.paid_meta_probe_enabled
+    assert not settings.publication_execution_enabled
+    assert not settings.literature_ingestion_enabled
+
+
+@pytest.mark.parametrize("model_id", ["model with spaces", "model\nheader", ".model", "a" * 121])
+def test_meta_model_configuration_matches_the_native_identifier_contract(model_id):
+    with pytest.raises(ValidationError):
+        Settings(meta_model=model_id, _env_file=None)
+
+
+@pytest.mark.parametrize("account_id", ["legacy/account", "-ledger", "ledger name"])
+def test_new_native_ledger_configuration_is_strict_even_when_paid_execution_is_off(account_id):
+    with pytest.raises(ValidationError):
+        Settings(native_budget_account_id=account_id, _env_file=None)
