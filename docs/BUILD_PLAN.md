@@ -34,7 +34,7 @@ Dependencies: A5, B1–B5.
 
 - [ ] **C1 — Integrate literature providers.** Fixed-host OpenAlex/arXiv abstract adapters, provider-declared bibliography and bounded chronological feeds are implemented. Explicit model-selected arXiv HTML indexes and exact saved windows are implemented with immutable version pinning, bounded extraction and source-range provenance; local controller, PostgreSQL, worker and browser verification passed. Remaining: native provider/authentication verification and actual accessible-paper evaluation. Abstracts, opened indexes and saved full-text excerpts retain distinct reading scope. See [FULL_TEXT.md](FULL_TEXT.md).
 - [ ] **C2 — Build evidence validation.** Immutable source/finding versions and run-bound exact-quote/hash/Unicode-offset checks implemented with 28 PostgreSQL tests; final findings cannot invent a durable read. Remaining: validate against actual accessible literature and assess source support in live investigations. Integrity checks alone do not establish scientific truth.
-- [ ] **C3 — Build the adaptive investigation policy.** The optional Surprise ladder now records model-directed hypotheses/revisions/discards, independent stage-scoped counterevidence/prior-work searches, multiple atomic bridges, exact parent-source coverage and explicit stopping. Novelty/confidence are structured uncalibrated model judgements. One run shares all limits; partial discoveries survive interruption. Ordinary protocols remain unchanged. Remaining: model-directed multi-bridge Explore collections/ranking, designed in [EXPLORE_COLLECTION.md](EXPLORE_COLLECTION.md), and live scientific evaluation. See [DISCOVERY_LADDER.md](DISCOVERY_LADDER.md).
+- [ ] **C3 — Build the adaptive investigation policy.** The optional Surprise ladder now records model-directed hypotheses/revisions/discards, independent stage-scoped counterevidence/prior-work searches, multiple atomic bridges, exact parent-source coverage and explicit stopping. Novelty/confidence are structured uncalibrated model judgements. One run shares all limits; partial discoveries survive interruption. Ordinary protocols remain unchanged. Explore collection EC1 pure contracts are complete; EC2–EC6 integration and live scientific evaluation remain pending. See [EXPLORE_COLLECTION.md](EXPLORE_COLLECTION.md) and [DISCOVERY_LADDER.md](DISCOVERY_LADDER.md).
 - [x] **C4 — Build the research workspace.** Mode entry, actual owned history, streamed events, cancellation, candidate bridges, mappings, evidence inspection, objections/limitations, and mobile/accessibility behavior implemented. Browser verification uses explicitly synthetic model/source fixtures; no live Explore/Ask/Surprise outcome is claimed.
 - [ ] **C5 — Evaluate Explore.** Audit the three proposed seeds and a misleading/weak input; measure source support, mapping quality, latency, and cost. Add regression cases from observed failures.
 
@@ -89,11 +89,12 @@ Dependencies: C evidence contracts; D operator authorization; credentials for li
 Gate: all three experiences work, publishing respects authorization, and any remaining production credential/approval blocker is reported without claiming full release completion.
 
 
-## Scientific context increment (next local milestone)
+## Scientific context increment (saved local release)
 
 This closes specific E1/F6/G6 gaps without changing the complete release scope.
 The reviewed contract and compatibility requirements are in
 [SCIENTIFIC_CONTEXT.md](SCIENTIFIC_CONTEXT.md). All live gates remain separate.
+Saved SC `a95011a` passed 3,939 tests: 1,863 unit, 1,232 PostgreSQL and 844 frontend.
 
 - [x] **SC1 — Preserve old protocols and add pure contracts.** Archived pushed D2 `6e3d75b`; captured original canonical schemas/profiles/manifests/results/artifact messages/exports with Git-blob verification and no network/database calls. Strict bounded context and exact claim-selection DTOs plus 132 contract/compatibility cases pass; the full backend unit suite is 1,585. SC2–SC5 now wire these contracts into admission/controllers/readers. Nine persisted native-input cases also match the true D2 archive. Complete historical worker-checkpoint golden capture remains explicitly omitted; actual replay/accounting is covered in SC6.
 - [x] **SC2 — Pin artifact provenance at admission.** Immutable owned context binds exact stage-specific parents, original-bound assessment scores, the applied reassessment chain and prior formalisation. Reject incomplete/oversized contexts before enqueue; replay reads the saved snapshot.
@@ -101,6 +102,20 @@ The reviewed contract and compatibility requirements are in
 - [x] **SC4 — Bind Ask overviews and revisions.** The model selects ordered existing classified claims; exact saved claim text forms the overview. Independent storage validation rejects forged/dropped bindings. Bound-Ask reassessment uses its explicit admitted profile before any call.
 - [x] **SC5 — Complete readers, exports and clients.** UI/SDK support both versions, show original confidence as historical, preserve labels/citations in Ask/public projections, and avoid unlabelled derived summaries in memory/navigation. Old saved exports remain exact.
 - [x] **SC6 — Verify the connected increment.** Focused real PostgreSQL, actual Meta-adapter MockTransport, replay/unknown/stop/private/public authority and core browser-to-export journeys pass with archived compatibility checks. The full 1,232-case database regression passed; 3,939 distinct backend/frontend cases pass. Additional UI-only browser legs are explicitly unproved in the progress log; focused component/backend checks cover them. No real scientific-quality claim follows from fixtures.
+
+## Explore collection increment
+
+The contract and acceptance details are in [EXPLORE_COLLECTION.md](EXPLORE_COLLECTION.md).
+EC1 is a pure foundation; collection runtime, migration, native profiles and UI
+remain unwired. The current unit suite passes 1,970 tests; PostgreSQL/frontend
+suites were not rerun for this checkpoint.
+
+- [x] **EC1 — Freeze pure contracts and archived compatibility.** Strict collection intent, Explore commit and model-ordered ranking/finish contracts pass 67 cases. The actual saved SC archive `a95011a` supplies 40 compatibility cases: 38 captured values and two provenance checks. Existing schemas, profiles and hashes remain unchanged.
+- [ ] **EC2 — Add the shared stage registry and admission.** Backfill existing Surprise ownership, add exact Explore intent/registry bindings and resolve each concrete protocol. Verify FKs, immutable history and downgrade refusal without fabricated Surprise inputs.
+- [ ] **EC3 — Connect the controller and atomic ranking store.** Preserve the original goal, ordinary Bridge/Ask memory leads and whole-run counters. Persist model-ranked/excluded partitions, partial outcomes and exact stage/ranking acknowledgements; recover response loss without extra calls.
+- [ ] **EC4 — Connect native private/public profiles and runtime.** Add a separately approved optional profile; allow a tighter actual bridge ceiling without changing its approved profile hash. Preserve all old hashes, one-ledger limits, replay and free known-call accounting.
+- [ ] **EC5 — Integrate saved findings and scientific context.** Apply consistent memory/map/F3/artifact/reassessment/sharing eligibility and immutable original-stage context to Explore collections.
+- [ ] **EC6 — Complete UI/SDK and connected verification.** Show ranked, unranked, partial and historical findings; add separate capability discovery without changing strict existing access DTOs. Verify HTTP/browser/mobile journeys, GET-only reload, ownership, funding stops, exports and full regressions. Live science/deployment remain separate gates.
 
 ## H. Release the complete product and submit
 

@@ -1,9 +1,16 @@
-# Next increment: model-directed Explore bridge collections
+# Model-directed Explore bridge collections
 
-Design for the increment after scientific-context integration. Capture the
-pushed SC compatibility baseline before implementation. This contract does not
-grant paid execution, public funding or publication authority. Meta remains the
-scientific decision-maker; the existing worker and budget ledger are retained.
+**EC1 complete; EC2–EC6 pending.** Strict pure collection/commit/ranking contracts
+pass 67 cases. The actual saved SC archive `a95011a` supplies 40 compatibility
+cases: 38 captured values and two provenance checks. The current backend unit
+suite passes 1,970 tests. Collection runtime, migration, native profiles and UI
+are not wired yet; the sections below describe that remaining integration.
+
+The last full SC release passed 3,939 tests: 1,863 unit, 1,232 PostgreSQL and 844
+frontend. PostgreSQL/frontend suites were not rerun for this pure-foundation
+checkpoint. This contract grants no paid execution, public funding or
+publication authority. No paid calls ran. Meta remains the scientific
+decision-maker; the existing worker and budget ledger are retained.
 
 ## Product outcome and decisions
 
@@ -81,8 +88,9 @@ This extension must not change the old Surprise-specific memory/parent rules.
 
 New Explore action adapter reuses search/read/full-text/memory, model field
 selection and bounded `record_note` hypothesis decisions, plus `record_bridge`
-with assessment. It has a new terminal `finish_ranked` action; optionally allow
-nonterminal `rank_saved` to save an interim model ranking while research continues.
+with assessment. The pure contract defines terminal `finish_ranked` and
+nonterminal `rank_saved`, which saves an interim model ranking while research
+continues. Their controller/store integration remains pending.
 
 Ranking contains ordered exact acknowledged `MemoryReadReference`s and a concise
 model rationale per entry. Add explicit excluded/unranked references with reasons.
@@ -160,20 +168,33 @@ handles and unchanged historical public bytes.
 
 ## Implementation order and release evidence
 
-1. Archive SC's pushed commit; add old ordinary/Surprise/native/SC/hash/export
-   baselines. Freeze new intent, packet, ordered ranking and capability contracts.
-2. Registry migration, Explore admission and shared protocol resolver; verify
-   actual FKs, immutable history and downgrade refusal. Refactor the existing
-   stage transaction behind the unchanged Surprise wrapper.
-3. New controller variant and atomic ranking/stop store. Exercise two useful
-   independent bridges, a discarded weak lead, different model ranking vs score,
-   empty stop, partial stop, late alias review and lost stage/ranking receipts.
-4. Native private/public activation, input/profile/worker integration; prove
-   all old hashes and one-ledger limits, cached replay and DB-only late billing.
-5. Consistent memory/map/F3/artifact/assessment/sharing eligibility and existing
-   scientific-context pinning for original/reassessed Explore stages.
-6. Connected UI/SDK and actual synthetic HTTP/browser journeys, including
-   mobile, reload with zero POSTs, foreign 404, funding stop and retained exports.
+- [x] **EC1 — Pure contracts and archived compatibility.** Implemented
+  `explore_collection_contracts.py` with strict intent, commit, ordered ranking,
+  finish and acknowledgement validation; 67 pure cases pass. The actual pushed
+  SC archive `a95011ae46fcb3d66b784abab7444167e39c33fc` supplies 40 compatibility
+  cases (38 captured values plus two provenance checks). Full backend unit suite:
+  1,970 passed. No collection runtime or capability endpoint is wired.
+- [ ] **EC2 — Registry, admission and shared stage protocol.** Add migration and
+  concrete Explore ownership; verify FKs, immutable history and downgrade
+  refusal. Reuse the stage transaction behind the unchanged Surprise wrapper.
+- [ ] **EC3 — Controller and atomic ranking/stop store.** Exercise independent
+  bridges, discarded weak leads, model ranking that differs from score order,
+  empty/partial stops, ordinary Bridge/Ask memory leads, late alias review and
+  lost stage/ranking receipts. Keep the original goal and whole-run counters.
+- [ ] **EC4 — Native profiles and runtime.** Connect private/public activation
+  and exact input/profile/worker binding; permit a tighter run bridge ceiling
+  within the original approved profile. Prove old hashes, one-ledger limits,
+  cached replay and DB-only late billing.
+- [ ] **EC5 — Downstream eligibility and scientific context.** Integrate
+  memory/map/F3/artifact/reassessment/sharing with exact original/reassessed
+  Explore stage provenance.
+- [ ] **EC6 — UI/SDK and connected verification.** Add separate capability
+  discovery, ranked/unranked/partial/history readers and synthetic HTTP/browser
+  journeys: mobile, zero-POST reload, foreign 404, funding stops, retained
+  exports and full regressions. Live science/deployment remain separate gates.
+
+Track task acceptance in [BUILD_PLAN.md](BUILD_PLAN.md) and exact checkpoint
+evidence in [PROGRESS.md](PROGRESS.md).
 
 Primary risks: accidentally exposing orphan Explore positives through the old
 ordinary-success branch; rewriting a legacy protocol during generalization;
