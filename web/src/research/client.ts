@@ -1,3 +1,4 @@
+import { parseBibliography } from './bibliography'
 import type {
   AnswerClaim,
   AnswerFinding,
@@ -106,6 +107,7 @@ function source(value: unknown): SourceDocument {
     source_id: text(record.source_id, 400), title: text(record.title, 2000), url: text(record.url, 4000),
     text: text(record.text, 40000), content_kind: kind(record.content_kind),
     retrieved_at: date(record.retrieved_at), extraction_method: text(record.extraction_method, 200),
+    ...(record.bibliography === undefined || record.bibliography === null ? {} : { bibliography: parseBibliography(record.bibliography, invalid) }),
   }
 }
 function evidence(value: unknown): EvidenceQuote {

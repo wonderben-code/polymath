@@ -46,6 +46,11 @@ class SourceRetrieval(Base):
     __table_args__ = (
         UniqueConstraint("version_id", "metadata_sha256", name="uq_source_retrieval"),
         UniqueConstraint("version_id", "id", name="uq_source_retrieval_version"),
+        CheckConstraint(
+            "bibliography IS NULL OR (jsonb_typeof(bibliography) = 'object' "
+            "AND octet_length(bibliography::text) <= 65536)",
+            name="ck_source_bibliography",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
@@ -55,6 +60,7 @@ class SourceRetrieval(Base):
     url: Mapped[str] = mapped_column(String(2000))
     retrieved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     extraction_method: Mapped[str] = mapped_column(String(100))
+    bibliography: Mapped[dict | None] = mapped_column(JSONB(none_as_null=True), nullable=True)
 
 
 class RunEvidenceSource(Base):

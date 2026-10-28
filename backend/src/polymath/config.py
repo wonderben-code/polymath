@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     operator_display_name: str = Field(default="Publisher", min_length=1, max_length=120)
     publication_approval_enabled: bool = False
     publication_execution_enabled: bool = False
+    literature_ingestion_enabled: bool = False
     zenodo_sandbox_token: SecretStr | None = None
     zenodo_production_token: SecretStr | None = None
     publication_publisher_id: str | None = Field(

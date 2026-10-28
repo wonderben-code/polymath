@@ -234,7 +234,7 @@ export function App() {
 
           {workspace.phase === 'ready' && workspace.activeRun?.status === 'succeeded' && workspace.activeRun.result_id && workspace.result?.finding && (workspace.result.finding.outcome === 'bridge' || workspace.result.finding.outcome === 'answer') && <ArtifactWorkspace key={workspace.activeRun.result_id} sourceResultId={workspace.activeRun.result_id} sourceKind={workspace.result.finding.outcome} csrfToken={workspace.csrfToken} enabled={workspace.phase === 'ready'} canGenerate={workspace.canSubmit} onSessionExpired={workspace.invalidateSession} onBusyChange={setArtifactBusy} />}
 
-          <KnowledgeBrowser enabled={workspace.phase === 'ready'} onOpenRun={workspace.selectRun} refreshToken={workspace.activeRun?.result_id} canInvestigate={workspace.canSubmit && !artifactBusy} investigating={workspace.submitting} onInvestigateBridges={workspace.investigateBridges} />
+          <KnowledgeBrowser enabled={workspace.phase === 'ready'} onOpenRun={workspace.selectRun} refreshToken={workspace.activeRun?.result_id} canInvestigate={workspace.canSubmit && !artifactBusy} investigating={workspace.submitting} onInvestigateBridges={workspace.investigateBridges} csrfToken={workspace.csrfToken} onSessionExpired={workspace.invalidateSession} />
 
           <section className="approach-section" id="approach" aria-labelledby="approach-title">
             <div className="approach-heading"><span className="eyebrow">HOW WE INVESTIGATE</span><h2 id="approach-title">Follow the evidence.<br /> <em>Keep the questions open.</em></h2></div>

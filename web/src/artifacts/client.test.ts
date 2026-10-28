@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cancelArtifactJob, createArtifactJob, exportUrl, getArtifact, getArtifactJob, listArtifactJobs, parseArtifact, parseArtifactJob } from './client'
+import { BIBLIOGRAPHY } from '../research/bibliography.test-support'
 
 const RUN = '11111111-1111-4111-8111-111111111111'
 const ARTIFACT = '22222222-2222-4222-8222-222222222222'
@@ -41,6 +42,11 @@ function formalised() {
 afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers() })
 
 describe('artifact contracts', () => {
+  it('preserves bibliography for exact original passages while retaining absent historical fields', () => {
+    const fixture = saved()
+    expect(parseArtifact({ ...fixture, passages: fixture.passages.map((passage) => ({ ...passage, bibliography: BIBLIOGRAPHY })) }).passages[0].bibliography).toEqual(BIBLIOGRAPHY)
+    expect(parseArtifact(fixture).passages[0]).not.toHaveProperty('bibliography')
+  })
   it('keeps artifact jobs separate from scientific finding result IDs', () => {
     expect(parseArtifactJob(job())).toMatchObject({ task_kind: 'write_summary', artifact_id: ARTIFACT, result_id: null })
     expect(() => parseArtifactJob({ ...job(), result_id: SOURCE })).toThrow('invalid_response')

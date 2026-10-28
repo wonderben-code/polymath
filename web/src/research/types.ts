@@ -1,3 +1,5 @@
+import type { SourceBibliography } from './bibliography'
+
 export interface ResearchRunSummary {
   id: string
   mode: 'explore' | 'ask' | 'surprise'
@@ -19,6 +21,7 @@ export interface SourceDocument {
   content_kind: 'abstract' | 'full_text'
   retrieved_at: string
   extraction_method: string
+  bibliography?: SourceBibliography
 }
 
 export interface EvidenceQuote {

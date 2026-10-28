@@ -17,6 +17,7 @@ from polymath import __version__
 from polymath.artifact_api import create_artifact_router
 from polymath.config import Settings, get_settings
 from polymath.database import build_engine
+from polymath.ingestion_api import create_ingestion_router
 from polymath.knowledge import create_knowledge_router
 from polymath.operator_auth import OperatorPolicy, create_operator_router
 from polymath.publication import PublicationStore
@@ -44,6 +45,7 @@ def create_app(
     operator_policy: OperatorPolicy | None = None,
     publication_policy: PublicationPolicy | None = None,
     publication_availability: Callable[[], bool] | None = None,
+    ingestion_availability: Callable[[], bool] | None = None,
 ) -> FastAPI:
     settings = settings or get_settings()
     configured_operator, configured_publication = configured_publication_policies(settings)
@@ -55,6 +57,11 @@ def create_app(
 
         def publication_availability() -> bool:
             return publication_execution_available(settings)
+
+    if ingestion_availability is None:
+
+        def ingestion_availability() -> bool:
+            return settings.literature_ingestion_enabled
 
     @asynccontextmanager
     async def lifespan(application: FastAPI) -> AsyncIterator[None]:
@@ -70,6 +77,9 @@ def create_app(
         create_run_router(application.state.engine, availability=research_availability)
     )
     application.include_router(create_knowledge_router(application.state.engine))
+    application.include_router(
+        create_ingestion_router(application.state.engine, availability=ingestion_availability)
+    )
     application.include_router(
         create_artifact_router(application.state.engine, availability=research_availability)
     )

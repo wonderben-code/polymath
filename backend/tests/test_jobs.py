@@ -61,6 +61,34 @@ def expire(engine: Engine, lease: JobLease) -> None:
         )
 
 
+def test_task_filtered_workers_skip_jobs_for_other_engines(jobs):
+    repository, _, _ = jobs
+    ingestion = repository.create(
+        mode="explore", goal="Synthetic provider window", task_kind="ingest_literature"
+    )
+    research = repository.create(mode="explore", goal="Synthetic model investigation")
+    artifact = repository.create(
+        mode="explore", goal="Synthetic document generation", task_kind="write_paper"
+    )
+    assert repository.claim_next("model", task_kinds=("research",)).run_id == research.id
+    assert repository.claim_next("model", task_kinds=("research",)) is None
+    assert repository.get(ingestion.id).status == "queued"
+    assert (
+        repository.claim_next("sources", task_kinds=("ingest_literature",)).run_id == ingestion.id
+    )
+    assert repository.get(artifact.id).status == "queued"
+    assert repository.claim_next("documents", task_kinds=("write_paper",)).run_id == artifact.id
+
+
+@pytest.mark.parametrize("kinds", [(), ("unknown",), ("research", "research"), ["research"]])
+def test_invalid_worker_task_selection_cannot_claim(jobs, kinds):
+    repository, _, _ = jobs
+    run = repository.create(mode="explore", goal="Synthetic untouched queue")
+    with pytest.raises(ValueError, match="Worker task kinds"):
+        repository.claim_next("invalid", task_kinds=kinds)
+    assert repository.get(run.id).status == "queued"
+
+
 def test_concurrent_claims_have_exactly_one_winner(jobs) -> None:
     repository, _, _ = jobs
     run = repository.create(mode="explore", goal="Investigate a real concept")

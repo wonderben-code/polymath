@@ -278,6 +278,7 @@ def _context_unchecked(
                 source_id=version.source_id,
                 title=retrieval.title,
                 url=retrieval.url,
+                bibliography=document.bibliography,
                 content_sha256=version.content_sha256,
                 content_kind=version.content_kind,
                 quote=evidence.quote,
@@ -445,6 +446,21 @@ def render_artifact(result: ArtifactResult, basis: ArtifactBasis) -> str:
             f"Source: `{_text(passage.source_id)}`. SHA-256: `{passage.content_sha256}`.",
             "",
         ]
+        if passage.bibliography is not None:
+            bibliography = passage.bibliography
+            if bibliography.authors:
+                authors = "; ".join(_text(author.name) for author in bibliography.authors)
+                suffix = " (additional authors omitted)" if bibliography.authors_truncated else ""
+                lines += [f"Authors: {authors}{suffix}.", ""]
+            if bibliography.publication_year is not None:
+                lines += [f"Publication year: {bibliography.publication_year}.", ""]
+            if bibliography.venue is not None:
+                lines += [f"Venue: {_text(bibliography.venue)}.", ""]
+            if bibliography.doi is not None:
+                lines += [f"DOI: {_text(bibliography.doi)}.", ""]
+            if bibliography.arxiv_id is not None:
+                version = f"v{bibliography.arxiv_version}" if bibliography.arxiv_version else ""
+                lines += [f"arXiv: {_text(bibliography.arxiv_id)}{version}.", ""]
         lines += ["> " + _text(line) for line in passage.quote.splitlines()]
         lines += [""]
     return "\n".join(lines).rstrip() + "\n"

@@ -12,7 +12,7 @@ import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Request
-from sqlalchemy import Engine, cast, func, or_, select
+from sqlalchemy import Engine, case, cast, func, or_, select
 from sqlalchemy.dialects.postgresql import JSONPATH
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, aliased
@@ -25,7 +25,9 @@ from polymath.evidence_models import (
     SourceRetrieval,
     SourceVersion,
 )
+from polymath.ingestion_models import LiteratureWatch, WatchSeenSourceVersion
 from polymath.lineage_models import ResearchRunParent
+from polymath.models import ResearchRun
 from polymath.run_api import (
     _authenticated,
     _private_response,
@@ -103,10 +105,13 @@ def _sources(owner_hash: str, query: str = ""):
             SourceVersion.content_kind,
             SourceRetrieval.title,
             RunEvidenceSource.run_id,
+            ResearchRun.task_kind,
+            WatchSeenSourceVersion.watch_id,
             func.row_number()
             .over(
                 partition_by=SourceVersion.id,
                 order_by=(
+                    case((ResearchRun.task_kind == "research", 0), else_=1),
                     SourceRetrieval.retrieved_at.desc(),
                     RunEvidenceSource.run_id,
                     SourceRetrieval.id,
@@ -117,7 +122,21 @@ def _sources(owner_hash: str, query: str = ""):
         .join(SourceRetrieval, SourceRetrieval.version_id == SourceVersion.id)
         .join(RunEvidenceSource, RunEvidenceSource.retrieval_id == SourceRetrieval.id)
         .join(ResearchRunAccess, ResearchRunAccess.run_id == RunEvidenceSource.run_id)
-        .where(ResearchRunAccess.session_hash == owner_hash)
+        .join(ResearchRun, ResearchRun.id == RunEvidenceSource.run_id)
+        .outerjoin(
+            WatchSeenSourceVersion,
+            (WatchSeenSourceVersion.run_id == RunEvidenceSource.run_id)
+            & (WatchSeenSourceVersion.retrieval_id == SourceRetrieval.id)
+            & (WatchSeenSourceVersion.version_id == SourceVersion.id),
+        )
+        .outerjoin(LiteratureWatch, LiteratureWatch.id == WatchSeenSourceVersion.watch_id)
+        .where(
+            ResearchRunAccess.session_hash == owner_hash,
+            or_(
+                ResearchRun.task_kind != "ingest_literature",
+                LiteratureWatch.owner_session_hash == owner_hash,
+            ),
+        )
     )
     if query:
         statement = statement.where(
@@ -129,7 +148,13 @@ def _sources(owner_hash: str, query: str = ""):
     ranked = statement.subquery()
     return (
         select(
-            ranked.c.id, ranked.c.source_id, ranked.c.content_kind, ranked.c.title, ranked.c.run_id
+            ranked.c.id,
+            ranked.c.source_id,
+            ranked.c.content_kind,
+            ranked.c.title,
+            ranked.c.run_id,
+            ranked.c.task_kind,
+            ranked.c.watch_id,
         )
         .where(ranked.c.version_rank == 1)
         .order_by(ranked.c.id)
@@ -194,7 +219,14 @@ def _source_item(row) -> dict:
         "result_id": None,
         "source_id": row.source_id,
         "content_kind": row.content_kind,
-        "summary": f"Saved {row.content_kind.replace('_', ' ')} snapshot",
+        "task_kind": row.task_kind,
+        "watch_id": str(row.watch_id) if row.watch_id is not None else None,
+        "source_version_id": str(row.id),
+        "summary": (
+            f"Collected {row.content_kind.replace('_', ' ')}; unassessed source version"
+            if row.task_kind == "ingest_literature"
+            else f"Saved {row.content_kind.replace('_', ' ')} snapshot"
+        ),
     }
 
 
@@ -381,6 +413,9 @@ def _graph(session: Session, owner_hash: str, query: str) -> dict:
                 "result_id": None,
                 "source_id": row.source_id,
                 "content_kind": row.content_kind,
+                "task_kind": row.task_kind,
+                "watch_id": str(row.watch_id) if row.watch_id is not None else None,
+                "source_version_id": str(row.id),
             }
     return {
         "nodes": list(nodes.values()),

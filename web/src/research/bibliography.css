@@ -1,0 +1,8 @@
+.source-bibliography { margin-top: .8rem; font-size: .82rem; text-align: left; overflow-wrap: anywhere; }
+.source-bibliography summary { cursor: pointer; color: #365d46; }
+.source-bibliography p { color: #59685d; font-size: .78rem; line-height: 1.6; }
+.source-bibliography dl { display: grid; grid-template-columns: minmax(6rem,auto) minmax(0,1fr); gap: .55rem 1rem; line-height: 1.6; }
+.source-bibliography dt { color: #59685d; font-weight: 500; }
+.source-bibliography dd { margin: 0; }
+.source-bibliography a { color: #315f45; }
+@media (max-width: 560px) { .source-bibliography dl { grid-template-columns: minmax(0,1fr); gap: .3rem; } .source-bibliography dd { margin-bottom: .6rem; } }

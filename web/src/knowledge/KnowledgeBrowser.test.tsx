@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { KnowledgeBrowser } from './KnowledgeBrowser'
 import { loadKnowledge } from './client'
+import { capabilities as watchCapabilities, detail as watchDetail, source as watchSource, watch as savedWatch, WATCH, SOURCE } from '../ingestion/fixtures.test-support'
 
 const RUN = '11111111-1111-4111-8111-111111111111'
 const RESULT = '22222222-2222-4222-8222-222222222222'
@@ -44,6 +45,35 @@ function mockRecords(data = records()) {
 afterEach(() => vi.unstubAllGlobals())
 
 describe('session-owned knowledge browser', () => {
+  it('routes collected map and search sources to owned unassessed text, never to a research run', async () => {
+    const source = { id: `source:${SOURCE}`, type: 'source', title: watchSource().title, run_id: RUN, result_id: null, source_id: watchSource().source_id, content_kind: 'abstract', summary: 'Collected abstract; unassessed source version', task_kind: 'ingest_literature', watch_id: WATCH, source_version_id: SOURCE }
+    const data = { items: [source], nodes: [{ ...source, kind: 'source', label: source.title }], edges: [], truncated: false, coverage: { scope: 'current_browser_session', findings_considered: 0 } }
+    const fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const path = String(input)
+      if (path.endsWith('/capabilities')) return Response.json(watchCapabilities(false))
+      if (path.includes('/watches?')) return Response.json({ watches: [savedWatch({ source_count: 1 })], next_cursor: null })
+      if (path.endsWith(`/sources/${SOURCE}`)) return Response.json(watchDetail())
+      if (path.includes('/sources?')) return Response.json({ sources: [watchSource()], next_cursor: null })
+      if (path.includes('/ticks?')) return Response.json({ ticks: [], next_cursor: null })
+      if (path === `/api/v1/knowledge/watches/${WATCH}`) return Response.json(savedWatch({ source_count: 1 }))
+      return Response.json(data)
+    })
+    vi.stubGlobal('fetch', fetch)
+    const open = vi.fn()
+    render(<KnowledgeBrowser enabled onOpenRun={open} csrfToken="csrf" />)
+    await userEvent.click(await screen.findByRole('button', { name: `Read unassessed source: ${source.title}` }))
+    expect(await screen.findByRole('region', { name: 'Saved unassessed source text' })).toHaveTextContent('Synthetic original abstract')
+    expect(open).not.toHaveBeenCalled()
+    expect(fetch.mock.calls.every(([path]) => !String(path).startsWith('/api/v1/runs'))).toBe(true)
+    await userEvent.click(screen.getByRole('button', { name: 'Close saved source' }))
+    await userEvent.click(screen.getByRole('button', { name: `Select map node: Source ${source.title}` }))
+    const node = screen.getByRole('region', { name: 'Selected knowledge record' })
+    expect(node).toHaveTextContent('An unassessed source version collected by a literature watch')
+    await userEvent.click(within(node).getByRole('button', { name: 'Read unassessed source' }))
+    expect(await screen.findByRole('region', { name: 'Saved unassessed source text' })).toBeInTheDocument()
+    expect(open).not.toHaveBeenCalled()
+  })
+
   it('never fetches or creates a session while disabled', () => {
     const fetch = mockRecords()
     render(<KnowledgeBrowser enabled={false} onOpenRun={vi.fn()} />)

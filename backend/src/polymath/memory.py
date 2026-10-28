@@ -207,7 +207,10 @@ class ResearchMemory:
                     MemorySourceReference(
                         retrieval_id=str(retrieval.id),
                         source=SourceReference(
-                            source_id=version.source_id, title=retrieval.title, url=retrieval.url
+                            source_id=version.source_id,
+                            title=retrieval.title,
+                            url=retrieval.url,
+                            bibliography=_document(version, retrieval).bibliography,
                         ),
                         content_sha256=version.content_sha256,
                         content_kind=version.content_kind,

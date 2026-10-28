@@ -28,12 +28,14 @@ from polymath.evidence_models import (
     SourceVersion,
 )
 from polymath.jobs import JobLease, _owned
+from polymath.literature.identity import distinct_paper_count
 from polymath.memory_models import ResearchMemoryRead
 from polymath.research.models import (
     AnswerFinding,
     BridgeFinding,
     InsufficientFinding,
     ResearchResult,
+    SourceBibliography,
     SourceDocument,
 )
 
@@ -122,12 +124,16 @@ def _validate_document(document: SourceDocument) -> SourceDocument:
 
 
 def _metadata(document: SourceDocument) -> dict:
-    return {
+    metadata = {
         "title": document.title,
         "url": document.url,
         "retrieved_at": document.retrieved_at.astimezone(UTC).isoformat(),
         "extraction_method": document.extraction_method,
     }
+    # Absence preserves the exact metadata hashes of historical retrievals.
+    if document.bibliography is not None:
+        metadata["bibliography"] = document.bibliography.model_dump(mode="json")
+    return metadata
 
 
 def _artifact(version: SourceVersion, retrieval: SourceRetrieval) -> SourceArtifact:
@@ -145,6 +151,11 @@ def _document(version: SourceVersion, retrieval: SourceRetrieval) -> SourceDocum
         content_kind=version.content_kind,
         retrieved_at=retrieval.retrieved_at,
         extraction_method=retrieval.extraction_method,
+        bibliography=(
+            SourceBibliography.model_validate_json(json.dumps(retrieval.bibliography))
+            if retrieval.bibliography is not None
+            else None
+        ),
     )
 
 
@@ -200,6 +211,11 @@ class EvidenceStore:
                     url=document.url,
                     retrieved_at=document.retrieved_at,
                     extraction_method=document.extraction_method,
+                    bibliography=(
+                        document.bibliography.model_dump(mode="json")
+                        if document.bibliography is not None
+                        else None
+                    ),
                 )
                 .on_conflict_do_nothing(constraint="uq_source_retrieval")
             )
@@ -278,7 +294,10 @@ class EvidenceStore:
                     raise EvidenceError("ambiguous_source_version")
                 source_map[document.source_id] = (version, retrieval)
                 refs.append({"version_id": str(version.id), "retrieval_id": str(retrieval.id)})
-            quote_rows = self._validate_quotes(result, source_map)
+            alias_context = tuple(
+                _document(*row) for row in session.execute(_bound_sources(session, run.id)).all()
+            )
+            quote_rows = self._validate_quotes(result, source_map, alias_context=alias_context)
             self._validate_parent_evidence(session, run, result, quote_rows)
             payload = result.model_dump(mode="json")
             payload["sources"] = []
@@ -474,7 +493,7 @@ class EvidenceStore:
                 raise EvidenceError("bridge_fields_not_selected")
 
     @staticmethod
-    def _validate_quotes(result: ResearchResult, sources: dict):
+    def _validate_quotes(result: ResearchResult, sources: dict, *, alias_context=()):
         if result.status not in {"bridge", "answer"}:
             return []
         if isinstance(result.finding, AnswerFinding):
@@ -488,8 +507,8 @@ class EvidenceStore:
         if len(result.quotes) != len(expected):
             raise EvidenceError("missing_verified_quotes")
         rows = []
-        sides = {"left": set(), "right": set()}
-        claim_sources: dict[str, set[str]] = {}
+        sides = {"left": [], "right": []}
+        claim_sources: dict[str, list[SourceDocument]] = {}
         for (evidence, side, claim_id), quote in zip(expected, result.quotes, strict=True):
             source = sources.get(quote.source_id)
             if source is None:
@@ -507,20 +526,21 @@ class EvidenceStore:
             ):
                 raise EvidenceError("quote_integrity_failed")
             if side == "answer":
-                claim_sources.setdefault(claim_id, set()).add(retrieval.url)
+                claim_sources.setdefault(claim_id, []).append(_document(version, retrieval))
             else:
-                sides[side].add(retrieval.url)
+                sides[side].append(_document(version, retrieval))
             rows.append((quote, version, retrieval))
         if result.status == "answer":
             if any(
-                claim.label == "postulated" and len(claim_sources.get(claim.id, ())) < 2
+                claim.label == "postulated"
+                and distinct_paper_count(claim_sources.get(claim.id, ()), context=alias_context) < 2
                 for claim in result.finding.claims
             ):
                 raise EvidenceError("postulated_distinct_sources_required")
         elif (
             not sides["left"]
             or not sides["right"]
-            or not any(left != right for left in sides["left"] for right in sides["right"])
+            or distinct_paper_count((*sides["left"], *sides["right"]), context=alias_context) < 2
         ):
             raise EvidenceError("distinct_evidence_sources_required")
         return rows

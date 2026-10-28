@@ -178,7 +178,7 @@ class _RecordedModel:
         request_id = f"model-{self.step:04d}"
         request_hash = _digest(
             {
-                "protocol": "polymath-worker-artifacts-v5",
+                "protocol": "polymath-worker-sources-v6",
                 "model_identity": self.policy.model_identity,
                 "endpoint": META_COMPLETIONS_URL,
                 "stream": False,
@@ -533,6 +533,7 @@ class ResearchWorker:
         lease = await asyncio.to_thread(
             self.jobs.claim_next,
             worker_id,
+            task_kinds=("research", "formalise", "write_summary", "write_paper"),
             lease_seconds=self.policy.lease_seconds,
         )
         if lease is None:
@@ -564,7 +565,7 @@ class ResearchWorker:
                 await asyncio.to_thread(
                     self.jobs.append_event,
                     lease,
-                    event_key=f"controller:v5:{item.sequence}",
+                    event_key=f"controller:v6:{item.sequence}",
                     kind=item.kind,
                     summary=item.summary,
                 )
@@ -587,7 +588,7 @@ class ResearchWorker:
                 basis = await asyncio.to_thread(ArtifactStore(self.engine).load_basis, lease)
             fingerprint = _digest(
                 {
-                    "protocol": "polymath-worker-artifacts-v5",
+                    "protocol": "polymath-worker-sources-v6",
                     "mode": snapshot.mode,
                     "task_kind": snapshot.task_kind,
                     "parents": [parent.model_dump(mode="json") for parent in parents],

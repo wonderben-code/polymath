@@ -1,4 +1,5 @@
 import { useEffect, useId, useState } from 'react'
+import { Bibliography } from '../research/bibliography'
 import { exportUrl } from './client'
 import type { ArtifactKind, ArtifactPassage, CitedText, DocumentDraft, FiniteCheckResult, FormalisationDraft, SavedArtifact } from './types'
 import { useArtifactWorkspace } from './useArtifactWorkspace'
@@ -90,6 +91,7 @@ function Preview({ artifact }: { artifact: SavedArtifact }) {
     <section className="artifact-document-section artifact-references"><h4>Original source passages</h4><p className="artifact-scope">Each citation opens an exact passage from the saved finding’s original evidence.</p><ol aria-label="Document source passages">{artifact.passages.map((passage) => <li key={passage.ordinal} id={`artifact-passage-${artifact.id}-${passage.ordinal}`} tabIndex={-1} value={passage.ordinal + 1}>
       <div className="artifact-reference-heading"><PassageLink passage={passage} /><span>{passage.content_kind === 'abstract' ? 'Abstract only' : 'Full-text snapshot'}</span></div>
       <blockquote>{passage.quote}</blockquote><p className="artifact-reference-support">Recorded association: {passage.supports}</p>
+      <Bibliography value={passage.bibliography} />
       <details><summary>Saved source version</summary><dl><dt>Source</dt><dd>{passage.source_id}</dd><dt>Content hash</dt><dd>{passage.content_sha256}</dd></dl></details>
     </li>)}</ol></section>
     <footer className="artifact-export"><a className="artifact-download" href={exportUrl(artifact.id)} download>Download saved Markdown<span aria-hidden="true"> ↓</span></a><p>The download contains the exact saved document, citations, and limitations.</p><details><summary>Document version</summary><dl><dt>Document hash</dt><dd>{artifact.markdown_sha256}</dd><dt>Source finding</dt><dd>{artifact.source_result_id}</dd><dt>Source finding hash</dt><dd>{artifact.source_sha256}</dd></dl></details></footer>

@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { Bibliography } from './bibliography'
 import type {
   AnswerClaim,
   AnswerFinding,
@@ -213,7 +214,7 @@ function Evidence({ result }: { result: ResearchResult }) {
         const matched = quoteMatches(quote, source)
         return <details className="research-quote" key={`${quote.source_id}-${quote.start}-${index}`}><summary><span>{source ? source.title : 'Source unavailable'}</span><span className={`research-evidence-label${matched ? '' : ' needs-review'}`}>{matched ? sourceKind(quote.content_kind) : 'Quotation needs review'}</span></summary><div className="research-quote-body"><p className="research-quote-scope">{matched ? 'Quotation matches the saved source text.' : 'This quotation could not be matched to the saved source and must not be treated as verified evidence.'}</p><blockquote>{quote.quote}</blockquote><p className="research-claim"><span>Recorded support:</span> {quote.supports}</p>{source && <SourceLink source={source} />}</div></details>
       })}</div>}
-      {result.sources.length > 0 ? <ul className="research-source-list" aria-label="Saved sources">{result.sources.map((source) => <li key={source.source_id}><div><SourceLink source={source} /><span className="research-source-kind">{sourceKind(source.content_kind)}</span></div><p>{sourceOrigin(source)}</p></li>)}</ul> : <p className="research-empty">No source text has been saved for this outcome.</p>}
+      {result.sources.length > 0 ? <ul className="research-source-list" aria-label="Saved sources">{result.sources.map((source) => <li key={source.source_id}><div><SourceLink source={source} /><span className="research-source-kind">{sourceKind(source.content_kind)}</span></div><p>{sourceOrigin(source)}</p><Bibliography value={source.bibliography} /></li>)}</ul> : <p className="research-empty">No source text has been saved for this outcome.</p>}
     </section>
   )
 }

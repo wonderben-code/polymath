@@ -1,4 +1,5 @@
 import type { ResearchActivityEvent } from '../research/types'
+import type { SourceBibliography } from '../research/bibliography'
 
 export type ArtifactKind = 'formalise' | 'write_summary' | 'write_paper'
 export type ArtifactStatus = 'ready' | 'insufficient_evidence' | 'failed' | 'limit_reached'
@@ -40,6 +41,7 @@ export interface ArtifactPassage {
   quote: string
   supports: string
   claim_id: string | null
+  bibliography?: SourceBibliography
 }
 
 export interface DocumentSection {

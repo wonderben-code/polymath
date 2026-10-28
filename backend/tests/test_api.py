@@ -34,8 +34,27 @@ def test_credentials_alone_never_enable_research_submission() -> None:
     )
     with TestClient(application) as client:
         capabilities = client.get("/api/v1/capabilities").json()
+        assert (
+            client.get("/api/v1/knowledge/watches/capabilities").json()["execution_available"]
+            is False
+        )
     assert capabilities["meta_configured"] is True
     assert capabilities["research_available"] is False
+
+
+def test_free_collection_setting_enables_no_model_or_publication_authority() -> None:
+    application = create_app(Settings(literature_ingestion_enabled=True, _env_file=None))
+    with TestClient(application) as client:
+        capabilities = client.get("/api/v1/knowledge/watches/capabilities")
+        assert capabilities.status_code == 200
+        assert capabilities.json()["execution_available"] is True
+        assert capabilities.json()["model_calls"] is False
+        assert capabilities.headers["cache-control"] == "no-store"
+        assert client.get("/api/v1/capabilities").json()["research_available"] is False
+        assert (
+            client.get("/api/v1/publication-jobs/capabilities").json()["execution_available"]
+            is False
+        )
 
 
 def test_default_publication_routes_are_mounted_without_privileged_authority() -> None:

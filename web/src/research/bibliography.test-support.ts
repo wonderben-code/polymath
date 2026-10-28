@@ -1,0 +1,1 @@
+export const BIBLIOGRAPHY = { authors: [{ name: 'Synthetic Author', orcid: '0000-0002-1825-0097' }], authors_truncated: false, publication_year: 2026, publication_date: '2026-10-28', venue: 'Synthetic Journal', doi: '10.1234/synthetic.fixture', arxiv_id: '2610.00001', arxiv_version: 2, openalex_id: 'W123456', license: 'cc-by-4.0' }

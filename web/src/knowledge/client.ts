@@ -9,6 +9,9 @@ export interface KnowledgeItem {
   source_id: string | null
   content_kind: 'abstract' | 'full_text' | null
   summary: string
+  task_kind?: string | null
+  watch_id?: string | null
+  source_version_id?: string | null
 }
 
 export interface KnowledgeNode {
@@ -20,6 +23,9 @@ export interface KnowledgeNode {
   source_id: string | null
   content_kind: 'abstract' | 'full_text' | null
   finding_outcome?: 'bridge' | 'answer' | null
+  task_kind?: string | null
+  watch_id?: string | null
+  source_version_id?: string | null
 }
 
 export interface KnowledgeEdge {
@@ -89,6 +95,15 @@ function unique(items: { id: string }[]) {
   if (new Set(items.map((item) => item.id)).size !== items.length) throw new KnowledgeError('invalid_response')
 }
 
+function sourceNavigation(entry: Record<string, unknown>, source: boolean) {
+  const task = entry.task_kind === undefined || entry.task_kind === null ? null : text(entry.task_kind, 80)
+  const watchId = entry.watch_id === undefined ? null : identity(entry.watch_id, true)
+  const versionId = entry.source_version_id === undefined ? null : identity(entry.source_version_id, true)
+  if (task === 'ingest_literature' && (!source || !watchId || !versionId || entry.result_id !== null)) throw new KnowledgeError('invalid_response')
+  if (!source && (watchId || versionId)) throw new KnowledgeError('invalid_response')
+  return { task_kind: task, watch_id: watchId, source_version_id: versionId }
+}
+
 async function response(path: string, signal: AbortSignal): Promise<unknown> {
   try {
     const result = await fetch(path, { signal, credentials: 'same-origin', headers: { Accept: 'application/json' }, cache: 'no-store' })
@@ -122,6 +137,7 @@ export async function loadKnowledge(query: string, signal: AbortSignal): Promise
       run_id: identity(entry.run_id) as string, result_id: identity(entry.result_id, true),
       source_id: nullableText(entry.source_id, 200), content_kind: kind(entry.content_kind),
       summary: text(entry.summary, 3000, true),
+      ...sourceNavigation(entry, entry.type === 'source'),
     }
   })
   const nodes: KnowledgeNode[] = collection(graph.nodes, 200).map((item) => {
@@ -134,6 +150,7 @@ export async function loadKnowledge(query: string, signal: AbortSignal): Promise
       run_id: identity(node.run_id, true), result_id: identity(node.result_id, true),
       source_id: nullableText(node.source_id, 200), content_kind: kind(node.content_kind),
       finding_outcome: outcome,
+      ...sourceNavigation(node, node.kind === 'source'),
     }
   })
   const nodeIds = new Set(nodes.map((node) => node.id))

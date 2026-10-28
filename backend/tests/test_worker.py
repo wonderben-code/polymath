@@ -84,6 +84,20 @@ async def test_disabled_worker_never_claims_or_invokes_model(database):
 
 
 @pytest.mark.asyncio
+async def test_model_worker_never_claims_free_ingestion_jobs(database):
+    jobs = JobRepository(database)
+    run = jobs.create(
+        mode="explore", goal="Synthetic free collection", task_kind="ingest_literature"
+    )
+    model = AdaptiveFixture()
+    worker = setup_worker(database, model)
+    assert (await worker.run_once("model-worker")).status == "idle"
+    assert jobs.get(run.id).status == "queued"
+    assert model.seen == []
+    assert BudgetService(database).usage("fixture").reservations == 0
+
+
+@pytest.mark.asyncio
 async def test_replacement_worker_exposes_expired_run_without_restarting_research(database):
     jobs = JobRepository(database)
     run = jobs.create(mode="explore", goal="Synthetic orphaned worker exercise")

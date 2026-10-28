@@ -16,6 +16,10 @@ from sqlalchemy.orm import Session
 
 from polymath.models import ResearchEvent, ResearchExternalRequest, ResearchRun
 
+TASK_KINDS = frozenset(
+    {"research", "formalise", "write_summary", "write_paper", "ingest_literature"}
+)
+
 
 class JobError(Exception):
     """Base class for controlled repository errors."""
@@ -220,7 +224,7 @@ class JobRepository:
     def create(self, *, mode: str, goal: str, task_kind: str = "research") -> RunSnapshot:
         if mode not in {"explore", "ask", "surprise"}:
             raise ValueError("Unsupported research mode")
-        if task_kind not in {"research", "formalise", "write_summary", "write_paper"}:
+        if task_kind not in TASK_KINDS:
             raise ValueError("Unsupported task kind")
         if not isinstance(goal, str):
             raise ValueError("Research goal must be a string")
@@ -240,14 +244,30 @@ class JobRepository:
                 raise JobNotFound("Research run does not exist")
             return _snapshot(run)
 
-    def claim_next(self, worker_id: str, *, lease_seconds: int = 60) -> JobLease | None:
+    def claim_next(
+        self,
+        worker_id: str,
+        *,
+        lease_seconds: int = 60,
+        task_kinds: tuple[str, ...] | None = None,
+    ) -> JobLease | None:
         _bounded_text(worker_id, 128, "Worker ID")
         _integer(lease_seconds, 1, 3600, "Lease duration")
+        if task_kinds is not None and (
+            not isinstance(task_kinds, tuple)
+            or not task_kinds
+            or any(not isinstance(kind, str) or kind not in TASK_KINDS for kind in task_kinds)
+            or len(set(task_kinds)) != len(task_kinds)
+        ):
+            raise ValueError(
+                "Worker task kinds must be a nonempty tuple of distinct supported kinds"
+            )
         with Session(self.engine) as session, session.begin():
+            eligible = select(ResearchRun).where(ResearchRun.status == "queued")
+            if task_kinds is not None:
+                eligible = eligible.where(ResearchRun.task_kind.in_(task_kinds))
             run = session.scalar(
-                select(ResearchRun)
-                .where(ResearchRun.status == "queued")
-                .order_by(ResearchRun.created_at, ResearchRun.id)
+                eligible.order_by(ResearchRun.created_at, ResearchRun.id)
                 .with_for_update(skip_locked=True)
                 .limit(1)
             )

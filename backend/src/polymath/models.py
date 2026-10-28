@@ -29,7 +29,8 @@ class ResearchRun(Base):
     __table_args__ = (
         CheckConstraint("mode IN ('explore', 'ask', 'surprise')", name="ck_research_runs_mode"),
         CheckConstraint(
-            "task_kind IN ('research', 'formalise', 'write_summary', 'write_paper')",
+            "task_kind IN ('research', 'formalise', 'write_summary', 'write_paper', "
+            "'ingest_literature')",
             name="ck_research_runs_task_kind",
         ),
         CheckConstraint(

@@ -3,10 +3,22 @@
 from __future__ import annotations
 
 import hashlib
-from datetime import datetime
+import json
+import re
+from datetime import date, datetime
 from typing import Annotated, Literal
+from urllib.parse import urlsplit
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, TypeAdapter, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    TypeAdapter,
+    field_validator,
+    model_serializer,
+    model_validator,
+)
 
 Text = Annotated[str, StringConstraints(strict=True, strip_whitespace=True, min_length=1)]
 SourceId = Annotated[str, StringConstraints(strict=True, min_length=1, max_length=200)]
@@ -19,6 +31,7 @@ ArtifactId = Annotated[
 ]
 ContentHash = Annotated[str, StringConstraints(strict=True, pattern=r"^[0-9a-f]{64}$")]
 ResearchMode = Literal["explore", "ask", "surprise"]
+MAX_BIBLIOGRAPHY_BYTES = 60_000
 
 
 class StrictModel(BaseModel):
@@ -42,10 +55,153 @@ def _validate_public_text(value: object) -> None:
             _validate_public_text(item)
 
 
+_DOI = re.compile(r"10\.[0-9]{4,9}/[A-Za-z0-9][A-Za-z0-9._;()/:+\-]{0,170}")
+_ARXIV = re.compile(
+    r"(?P<base>(?:[0-9]{4}\.[0-9]{4,5}|[a-z]+(?:-[a-z]+)?(?:\.[A-Z]{2})?/[0-9]{7}))"
+    r"(?:v(?P<version>[1-9][0-9]{0,3}))?"
+)
+
+
+def _canonical_doi(value: str) -> str:
+    if not isinstance(value, str) or any(not 33 <= ord(character) <= 126 for character in value):
+        raise ValueError("invalid DOI")
+    if "://" in value:
+        parsed = urlsplit(value)
+        if (
+            parsed.scheme not in ("http", "https")
+            or parsed.netloc.lower() not in ("doi.org", "dx.doi.org")
+            or parsed.query
+            or parsed.fragment
+        ):
+            raise ValueError("invalid DOI")
+        value = parsed.path.removeprefix("/")
+    if _DOI.fullmatch(value) is None:
+        raise ValueError("invalid DOI")
+    return value.lower()
+
+
+def _canonical_arxiv(value: str) -> tuple[str, int | None]:
+    if not isinstance(value, str):
+        raise ValueError("invalid arXiv identifier")
+    match = _ARXIV.fullmatch(value)
+    if match is None:
+        raise ValueError("invalid arXiv identifier")
+    base = match.group("base")
+    serial = base.rsplit("/", 1)[-1].split(".", 1)[0]
+    if not 1 <= int(serial[2:4]) <= 12:
+        raise ValueError("invalid arXiv identifier")
+    return base, int(match.group("version")) if match.group("version") else None
+
+
+def _canonical_openalex(value: str) -> str:
+    if not isinstance(value, str):
+        raise ValueError("invalid OpenAlex identifier")
+    if value.startswith("https://openalex.org/"):
+        value = value.removeprefix("https://openalex.org/")
+    if re.fullmatch(r"W[1-9][0-9]{0,18}", value) is None:
+        raise ValueError("invalid OpenAlex identifier")
+    return value
+
+
+def _canonical_orcid(value: str) -> str:
+    if not isinstance(value, str):
+        raise ValueError("invalid ORCID")
+    if value.startswith("https://orcid.org/"):
+        value = value.removeprefix("https://orcid.org/")
+    if re.fullmatch(r"[0-9]{4}-[0-9]{4}-[0-9]{4}-[0-9]{3}[0-9X]", value) is None:
+        raise ValueError("invalid ORCID")
+    digits = value.replace("-", "")
+    total = 0
+    for digit in digits[:15]:
+        total = (total + int(digit)) * 2
+    checksum = (12 - total % 11) % 11
+    if digits[-1] != ("X" if checksum == 10 else str(checksum)):
+        raise ValueError("invalid ORCID")
+    return value
+
+
+class SourceAuthor(StrictModel):
+    name: Annotated[Text, Field(max_length=300)]
+    orcid: Annotated[str, Field(max_length=80)] | None = None
+
+    @field_validator("orcid", mode="before")
+    @classmethod
+    def canonical_orcid(cls, value: str | None) -> str | None:
+        return _canonical_orcid(value) if value is not None else None
+
+    @model_validator(mode="after")
+    def public_author(self) -> SourceAuthor:
+        _validate_public_text(self.model_dump())
+        return self
+
+
+class SourceBibliography(StrictModel):
+    """Provider-declared bibliography/aliases, not complete identity resolution."""
+
+    authors: Annotated[tuple[SourceAuthor, ...], Field(max_length=100)] = ()
+    authors_truncated: bool = False
+    publication_year: Annotated[int, Field(ge=1000, le=2100)] | None = None
+    publication_date: date | None = None
+    venue: Annotated[Text, Field(max_length=500)] | None = None
+    doi: Annotated[str, Field(max_length=200)] | None = None
+    arxiv_id: Annotated[str, Field(max_length=100)] | None = None
+    arxiv_version: Annotated[int, Field(ge=1, le=9999)] | None = None
+    openalex_id: Annotated[str, Field(max_length=40)] | None = None
+    license: Annotated[Text, Field(max_length=100)] | None = None
+
+    @field_validator("doi", mode="before")
+    @classmethod
+    def canonical_doi(cls, value: str | None) -> str | None:
+        return _canonical_doi(value) if value is not None else None
+
+    @field_validator("arxiv_id")
+    @classmethod
+    def canonical_arxiv(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        base, version = _canonical_arxiv(value)
+        if version is not None:
+            raise ValueError("arXiv base identity and version must be separate")
+        return base
+
+    @field_validator("openalex_id", mode="before")
+    @classmethod
+    def canonical_openalex(cls, value: str | None) -> str | None:
+        return _canonical_openalex(value) if value is not None else None
+
+    @model_validator(mode="after")
+    def consistent_bibliography(self) -> SourceBibliography:
+        serialized = self.model_dump(mode="json")
+        _validate_public_text(serialized)
+        # Leave headroom below the database's65KiB JSONB textual bound, including
+        # separator/escaping overhead and multibyte author names.
+        if len(json.dumps(serialized, ensure_ascii=False, sort_keys=True).encode("utf-8")) > (
+            MAX_BIBLIOGRAPHY_BYTES
+        ):
+            raise ValueError("source bibliography exceeds its UTF-8 byte limit")
+        if self.arxiv_version is not None and self.arxiv_id is None:
+            raise ValueError("arXiv versions require their paper identity")
+        if self.authors_truncated and len(self.authors) != 100:
+            raise ValueError("truncated author lists must preserve the bounded prefix")
+        if self.publication_date is not None and not 1000 <= self.publication_date.year <= 2100:
+            raise ValueError("publication date is outside the supported range")
+        return self
+
+
 class SourceReference(StrictModel):
     source_id: SourceId
     title: Annotated[Text, Field(max_length=1000)]
     url: Annotated[str, StringConstraints(pattern=r"^https://[^\s]+$", max_length=2000)]
+    bibliography: SourceBibliography | None = None
+
+    @model_serializer(mode="wrap")
+    def preserve_absent_bibliography(self, handler):
+        # Historical source/retrieval/artifact hashes must not acquire a new
+        # null field merely because the reader understands richer metadata.
+        data = handler(self)
+        if self.bibliography is None:
+            data.pop("bibliography", None)
+        return data
 
 
 class ProviderFailure(StrictModel):

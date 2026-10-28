@@ -11,6 +11,7 @@ from typing import Protocol
 
 from pydantic import ValidationError
 
+from polymath.literature.identity import distinct_paper_count
 from polymath.research.meta import ModelError, ResearchModel
 from polymath.research.models import (
     ACTION_ADAPTER,
@@ -169,7 +170,7 @@ def _verify_evidence(
     if not {"counterevidence", "prior_work"}.issubset(search_purposes):
         raise ValueError("missing_required_searches")
     verified = []
-    sides: dict[str, set[str]] = {"left": set(), "right": set()}
+    sides: dict[str, list[SourceDocument]] = {"left": [], "right": []}
     for item in finding.evidence:
         source = sources.get(item.source_id)
         if source is None:
@@ -177,7 +178,7 @@ def _verify_evidence(
         start = source.text.find(item.quote)
         if start < 0:
             raise ValueError("quotation_not_found")
-        sides[item.side].add(source.url)
+        sides[item.side].append(source)
         verified.append(
             VerifiedQuote(
                 source_id=item.source_id,
@@ -192,7 +193,7 @@ def _verify_evidence(
         )
     if not sides["left"] or not sides["right"]:
         raise ValueError("missing_evidence_side")
-    if not any(left != right for left in sides["left"] for right in sides["right"]):
+    if distinct_paper_count((*sides["left"], *sides["right"]), context=sources.values()) < 2:
         raise ValueError("distinct_sources_required")
     return tuple(verified)
 
@@ -205,7 +206,7 @@ def _verify_answer_evidence(
         raise ValueError("missing_required_searches")
     verified = []
     for claim in finding.claims:
-        distinct_sources = set()
+        distinct_sources = []
         for item in claim.evidence:
             source = sources.get(item.source_id)
             if source is None:
@@ -213,7 +214,7 @@ def _verify_answer_evidence(
             start = source.text.find(item.quote)
             if start < 0:
                 raise ValueError("quotation_not_found")
-            distinct_sources.add(source.url)
+            distinct_sources.append(source)
             verified.append(
                 VerifiedQuote(
                     source_id=item.source_id,
@@ -227,7 +228,10 @@ def _verify_answer_evidence(
                     content_kind=source.content_kind,
                 )
             )
-        if claim.label == "postulated" and len(distinct_sources) < 2:
+        if (
+            claim.label == "postulated"
+            and distinct_paper_count(distinct_sources, context=sources.values()) < 2
+        ):
             raise ValueError("postulated_requires_distinct_sources")
     return tuple(verified)
 
@@ -581,6 +585,7 @@ class ResearchController:
                         document.source_id != reference.source.source_id
                         or document.title != reference.source.title
                         or document.url != reference.source.url
+                        or document.bibliography != reference.source.bibliography
                         or document.content_kind != reference.content_kind
                         or document.content_sha256 != reference.content_sha256
                     ):
@@ -662,6 +667,7 @@ class ResearchController:
                     if (
                         document.source_id != action.source_id
                         or document.url != discovered[action.source_id].url
+                        or document.bibliography != discovered[action.source_id].bibliography
                     ):
                         raise ValueError("source_identity_mismatch")
                     document = _retain_source(sources, document)
