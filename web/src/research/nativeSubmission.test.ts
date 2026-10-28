@@ -1,3 +1,4 @@
+import { privateAccess } from './accessFixtures.test-support'
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { createElement } from 'react'
 import type { ReactNode } from 'react'
@@ -123,7 +124,8 @@ describe('unknown scientific enqueue in the shared native workspace', () => {
     const created = run(), fetch = vi.fn(async (input: RequestInfo | URL, options?: RequestInit) => {
       const path = input.toString()
       if (path === '/api/v1/session') return Response.json({ csrf_token: BROWSER_CSRF, expires_at: '2100-01-01T00:00:00Z' })
-      if (path === '/api/v1/operator/session') return Response.json(operatorFixture(true))
+      if (path === '/api/v1/research/access') return Response.json(privateAccess())
+    if (path === '/api/v1/operator/session') return Response.json(operatorFixture(true))
       if (path === '/api/v1/budget/research/current') return Response.json(currentActivation())
       if (path === '/api/v1/runs' && options?.method === 'POST') {
         if (failure === 'lost') throw new TypeError('Synthetic committed enqueue response loss')
@@ -173,7 +175,8 @@ describe('unknown scientific enqueue in the shared native workspace', () => {
     const fetch = vi.fn(async (input: RequestInfo | URL, options?: RequestInit) => {
       const path = input.toString()
       if (path === '/api/v1/session') return Response.json({ csrf_token: BROWSER_CSRF, expires_at: '2100-01-01T00:00:00Z' })
-      if (path === '/api/v1/operator/session') return Response.json(operatorFixture(true))
+      if (path === '/api/v1/research/access') return Response.json(privateAccess())
+    if (path === '/api/v1/operator/session') return Response.json(operatorFixture(true))
       if (path === '/api/v1/budget/research/current') return Response.json(currentActivation())
       if (path === '/api/v1/runs' && options?.method === 'POST') return Response.json({ detail: 'meta_research_authority_expired' }, { status: 409 })
       if (path === '/api/v1/runs') return Response.json({ runs: [run()], next_cursor: null })

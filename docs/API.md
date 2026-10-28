@@ -269,7 +269,47 @@ routes use separate contracts in [DEVELOPMENT.md](DEVELOPMENT.md),
 [REASSESSMENT.md](REASSESSMENT.md) and [PUBLIC_SHARING.md](PUBLIC_SHARING.md).
 Ordinary API access cannot authorize a publisher or bypass a worker's budget.
 
-Native Meta research activation and the operator-browser admission/resume contract are in [META_RESEARCH.md](META_RESEARCH.md). Production capabilities include `native_research_required`; a configured path does not grant spending. This first audience requires the owning operator context and both CSRFs, with `expected_activation_sha256` on research/artifact/reassessment submissions. The existing standalone client remains verified against the trusted synthetic path; its deployed/public native journey is still pending with D2.
+Native Meta activation and private operator-browser admission are described in
+[META_RESEARCH.md](META_RESEARCH.md). `native_research_required` makes a configured
+path distinct from spending authority. Private activation retains both CSRFs.
+The separate public-session audience uses an explicitly reviewed durable funding
+delegation, the visitor's ordinary cookie/CSRF and `expected_activation_sha256`;
+it never gives visitors administrator credentials. Both use the same worker and
+ledger. See [PUBLIC_RESEARCH_ACCESS.md](PUBLIC_RESEARCH_ACCESS.md).
+
+## Funded visitor research
+
+`GET /api/v1/research/access` requires an existing owner session and returns a
+strict `polymath-research-access-v1` projection: audience, funding availability,
+static reason, current activation hash/deadline, session limits and own remaining
+allowance/jobs. It creates no owner, job, finding, grant or reservation. Enabled
+operational rate counters still apply. A private `operator_browser` hint contains
+no private activation metadata; its privileged current route remains separate.
+
+An explicit SDK create or resume first checks cookie-free capabilities. Native
+public actions read owned access and attach the displayed hash to one POST.
+Legacy execution is allowed only when the server explicitly states native
+binding is unnecessary. No stale-version, rate-limit or uncertain-write response
+automatically resubmits a POST. The SDK does not collect operator credentials.
+
+All three enqueue routes and original-run resume use this access context. An
+exhausted new-job allowance does not consume another admission for resume;
+the original hash and canonical decimal lease token still apply. Unknown work
+blocks further spending and cannot resume. Funding closure keeps saved owned
+results, source inspection, stage history, cancellation and exact exports
+available until the owner session expires. It never becomes a false login error.
+
+Public deployments use persistent rate/queue/body/SSE controls. Rate responses
+use static codes and bounded `Retry-After` values; retry time does not promise
+renewed funding. One event connection lasts at most300 seconds; retain its
+cursor and reconnect without creating another job. Stream closure alone is
+not a terminal result. Private and public input ownership remains unchanged.
+
+`python3 scripts/polymath-client.py --help` documents `research access`, artifact
+creation, finding reassessment and exact resume. The CLI's funded public journey
+is verified locally through actual HTTP/PostgreSQL and the Meta adapter with
+mock transport. Public deployment and real native scientific evaluation remain
+unverified, and paid calls are still disabled.
 
 ## Standalone discovery ladder commands
 
@@ -297,9 +337,9 @@ identifiers, hash formats, ancestry bindings and selected-stage membership are
 validated by the client. Scientific support remains a model judgement subject
 to the server's saved-evidence checks.
 
-Creation is verified here through real loopback HTTP and PostgreSQL with
-synthetic intelligence. The standalone client does not yet implement the current
-operator-browser native activation credentials. These flags cannot authorize a
-production Meta call; public native admission/client integration remains D2
-work. Owner reads of already saved stages require no new paid authorization.
+Creation is verified through real loopback HTTP and PostgreSQL with synthetic
+intelligence. The client supports ordinary visitor creation only under a current
+explicit public funding delegation; it does not collect private operator-browser
+credentials. Flags alone cannot authorize a Meta call. Owner reads of saved
+stages require no new paid authorization.
 See [DISCOVERY_LADDER.md](DISCOVERY_LADDER.md) for stage provenance and recovery.

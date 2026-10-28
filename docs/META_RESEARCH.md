@@ -24,9 +24,11 @@ approval is required; generated stages cannot change the original input hash.
 One ladder uses the same existing run, worker and global spending ledger.
 See [DISCOVERY_LADDER.md](DISCOVERY_LADDER.md) for exact stage/replay semantics.
 
-Public-session access remains part of the full product scope. It requires the
-separate D2 access/abuse controls before admission can spend this account. This
-first activation must not be described as public paid-research readiness. Free
+Public-session access now uses the separate D2 delegation and resource controls
+in [PUBLIC_RESEARCH_ACCESS.md](PUBLIC_RESEARCH_ACCESS.md). It never reinterprets
+this private activation or creates another wallet. Both implementations are
+verified locally with mock HTTP; real funding, native science and public
+deployment remain unverified. Free
 reading, public shared findings and scheduled literature ingestion retain their
 existing boundaries; activation alone does not create automatic paid jobs.
 

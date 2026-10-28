@@ -34,7 +34,7 @@ Created 27 October 2026. Every push to `main` is Bitcoin-timestamped through Ope
 | [docs/META_VERIFICATION.md](docs/META_VERIFICATION.md) | Exact one-call Meta approval, shared budget, observation receipts and free recovery |
 | [docs/META_RESEARCH.md](docs/META_RESEARCH.md) | Native Meta activation, all-task worker composition, per-run limits and exact recovery |
 | [docs/DISCOVERY_LADDER.md](docs/DISCOVERY_LADDER.md) | Model-directed multi-bridge Surprise runs, exact parent evidence, partial discoveries and recovery |
-| [docs/PUBLIC_RESEARCH_ACCESS.md](docs/PUBLIC_RESEARCH_ACCESS.md) | Next-milestone design for controlled visitor access, explicit owner funding and shared-ledger quotas; not enabled |
+| [docs/PUBLIC_RESEARCH_ACCESS.md](docs/PUBLIC_RESEARCH_ACCESS.md) | Controlled visitor access, explicit durable owner funding, shared-ledger quotas and resource controls; disabled by default |
 | [docs/HACKATHON.md](docs/HACKATHON.md) | Dates, judging, setup checklist, IP notes |
 | [CLAUDE.md](CLAUDE.md) | Instructions for any coding agent picking this up |
 
@@ -52,6 +52,7 @@ The implementation baseline is recorded in `docs/ARCHITECTURE.md`. The target is
 - [x] B3.3 implementation: native Meta composition for all research/writing/reassessment tasks, exact activation and safe resume; verified with mock transport
 - [ ] B–C live gates: native model/billing verification, execution activation and scientific Explore evaluation
 - [x] D3 local contract/client: documented v1 API and standalone HTTP client, verified with real loopback worker journeys
+- [x] D2 implementation: funded visitor sessions, persistent resource controls and public browser/API/client access; local mock verification
 - [ ] D live gates: public URL, hosted access/operations and deployed external-client verification
 - [x] E1–E3: Ask and Surprise Me implementation, verified through synthetic worker/browser journeys
 - [ ] E4: live Meta/source evaluation and scientific quality review
@@ -74,6 +75,12 @@ Apache 2.0. See [LICENSE](LICENSE).
 
 A separate, disabled one-call Meta verification lane now uses the actual adapter with exact human approval and the shared ledger. Its immutable receipt records protocol behavior and reported usage; it grants no research activation and proves no pricing, funding or scientific claim. All verification checks so far use mock HTTP. No paid Meta call has run.
 
-The native research path now connects every existing task to the real Meta adapter through exact approval, original per-run limits, one shared ledger and recorded usage before action validation. The first audience is the approving operator’s browser; controlled public research access remains pending. Ordinary product screens share that current approval context. All checks still use mock Meta/provider HTTP, and live research remains disabled.
+The native research path connects every existing task to the Meta adapter through
+exact approval, original per-run limits, one shared ledger and recorded usage
+before action validation. Private operator-browser approvals keep their original
+scope. A separate explicitly reviewed durable delegation lets ordinary visitors
+use the same engine without administrator credentials. Session/global funding,
+queue/rate/body/stream limits and unknown-cost stops apply. Public research stays
+disabled by default, and all checks still use mock Meta/provider HTTP.
 
 Surprise can now opt into a discovery ladder: Meta decides whether to save more bridges, select earlier discoveries as premises, investigate a higher connection or stop. Every stage keeps exact original quotations, objections, model-assessed novelty and explicitly uncalibrated confidence. Saved stages remain readable after cancellation or limits; only an explicit model decision selects a final stage. The whole run shares one approved budget and call allowance. This is implemented locally with synthetic verification, not a claim of live scientific discovery.

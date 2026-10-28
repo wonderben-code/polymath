@@ -9,6 +9,7 @@ import {
 import type { Destination, OperatorSession, PublicationCapabilities, PublicationManifest, PublicationMetadata } from './client'
 import './publications.css'
 import { PublicationDelivery } from './PublicationDelivery'
+import { useNativeResearchSubmission } from '../research/nativeContext'
 
 interface Props { artifact: SavedArtifact; csrfToken: string | null; enabled: boolean; onSessionExpired: () => void; sourceCurrent: boolean }
 type Action = 'prepare' | 'approve' | 'revoke' | 'login' | 'logout'
@@ -42,6 +43,7 @@ function errorMessage(error: unknown): string {
 }
 
 export function PublicationPanel({ artifact, csrfToken, enabled, onSessionExpired, sourceCurrent }: Props) {
+  const native = useNativeResearchSubmission(), inspectOperator = !native.required || native.access?.audience === 'operator_browser'
   const headingId = useId()
   const [capabilities, setCapabilities] = useState<PublicationCapabilities | null>(null)
   const [operator, setOperator] = useState<OperatorSession>(UNAUTHENTICATED)
@@ -100,10 +102,10 @@ export function PublicationPanel({ artifact, csrfToken, enabled, onSessionExpire
     setOperator(UNAUTHENTICATED); setCapabilities(null)
     setMetadata(initialMetadata(artifact)); setKeywords(''); setDestination('')
     if (!enabled || !csrfToken || artifact.status !== 'ready' || artifact.kind === 'formalise') return () => controller.abort()
-    void Promise.all([publicationCapabilities(controller.signal), operatorSession(controller.signal), publicationHistory(artifact.id, controller.signal)]).then(([capability, session, saved]) => {
+    void Promise.all([publicationCapabilities(controller.signal), inspectOperator ? operatorSession(controller.signal) : Promise.resolve(UNAUTHENTICATED), publicationHistory(artifact.id, controller.signal)]).then(([capability, session, saved]) => {
       if (controller.signal.aborted || current !== version.current) return
       if (saved.manifests.some((item) => !manifestMatchesArtifact(item, artifact))) throw new PublicationError('invalid_response')
-      setCapabilities(capability); setOperator(session); setHistory(saved.manifests); setNextCursor(saved.next_cursor)
+      setCapabilities(capability); setOperator(inspectOperator ? session : { ...UNAUTHENTICATED, configured: capability.configured }); setHistory(saved.manifests); setNextCursor(saved.next_cursor)
       setDestination(capability.destinations.includes('sandbox') ? 'sandbox' : '')
       setUncertain(false); setEdited(false); setNow(Date.now())
       if (saved.manifests[0]) applyRecord(saved.manifests[0])
@@ -114,7 +116,7 @@ export function PublicationPanel({ artifact, csrfToken, enabled, onSessionExpire
     return () => { controller.abort(); mutation.current?.abort(); pagination.current?.abort() }
     // The panel is keyed by the exact immutable artifact; callbacks cannot
     // change that boundary while an async response is pending.
-  }, [artifact.id, artifact.markdown_sha256, enabled, csrfToken, refresh, onSessionExpired])
+  }, [artifact.id, artifact.markdown_sha256, enabled, csrfToken, refresh, onSessionExpired, inspectOperator])
 
   useEffect(() => {
     const deadlines = [operator.expires_at, record?.approval?.revoked_at ? null : record?.approval?.expires_at].filter((value): value is string => !!value).map(Date.parse).filter((time) => time > now)

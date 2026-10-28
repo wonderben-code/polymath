@@ -5,17 +5,20 @@ requeued. Any ambiguous external request must be explicitly reconciled before re
 Every worker mutation checks a live lease and fencing token under a row lock.
 """
 
+import hashlib
 import json
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Literal
 
-from sqlalchemy import Engine, func, select
+from sqlalchemy import Engine, func, or_, select, text
 from sqlalchemy.orm import Session
 
+from polymath.budget_models import BudgetReservation
 from polymath.meta_research_models import NativeResearchRunBinding
 from polymath.models import ResearchEvent, ResearchExternalRequest, ResearchRun
+from polymath.public_research_models import PublicResearchDelegation, PublicResearchRunAccess
 
 TASK_KINDS = frozenset(
     {
@@ -26,6 +29,37 @@ TASK_KINDS = frozenset(
         "ingest_literature",
         "reassess_finding",
         "verify_meta",
+    }
+)
+
+# Static public worker control outcomes only; caller text is never persisted.
+PUBLIC_INTERRUPTION_REASONS = frozenset(
+    {
+        "public_research_total_budget_exceeded",
+        "public_research_daily_budget_exceeded",
+        "public_session_total_budget_exceeded",
+        "public_session_daily_budget_exceeded",
+        "public_session_job_day_limit",
+        "public_research_job_day_limit",
+        "public_research_active_limit",
+        "public_research_queue_limit",
+        "public_network_active_limit",
+        "active_run_limit",
+        "public_research_binding_invalid",
+        "public_research_delegation_expired",
+        "public_research_requester_expired",
+        "public_research_disabled",
+        "public_research_activation_required",
+        "public_research_authority_expired",
+        "public_research_stopped",
+        "public_research_frozen",
+        "public_research_budget_exhausted",
+        "public_research_daily_budget_exhausted",
+        "public_research_session_budget_exhausted",
+        "public_research_session_daily_budget_exhausted",
+        "public_research_prior_unresolved",
+        "public_research_resource_unavailable",
+        "public_resource_controls_unavailable",
     }
 )
 
@@ -193,6 +227,124 @@ def _clear_lease(run: ResearchRun) -> None:
     run.lease_expires_at = None
 
 
+def _native_claim_blocked(session: Session, account_id: str) -> bool:
+    """Short scheduling fence; financial/dispatch authority is checked separately."""
+    digest = hashlib.sha256(b"polymath-native-claim-v1\0" + account_id.encode()).digest()
+    key = int.from_bytes(digest[:8], "big", signed=True)
+    session.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": key})
+    expired = session.scalars(
+        select(ResearchRun)
+        .join(NativeResearchRunBinding, NativeResearchRunBinding.run_id == ResearchRun.id)
+        .join(PublicResearchRunAccess, PublicResearchRunAccess.run_id == ResearchRun.id)
+        .join(
+            PublicResearchDelegation,
+            PublicResearchDelegation.approval_id == PublicResearchRunAccess.approval_id,
+        )
+        .where(
+            NativeResearchRunBinding.account_id == account_id,
+            ResearchRun.status == "queued",
+            PublicResearchDelegation.valid_until <= func.clock_timestamp(),
+        )
+        .order_by(ResearchRun.created_at, ResearchRun.id)
+        .with_for_update(skip_locked=True, of=ResearchRun)
+        .limit(100)
+    ).all()
+    for run in expired:
+        run.status = "cancelled"
+        run.lease_token += 1
+        run.interruption_reason = "public_research_authority_expired"
+        run.finished_at = _now(session)
+        _clear_lease(run)
+        _event(
+            session,
+            run,
+            f"public_expired:{run.lease_token}",
+            "cancelled",
+            "Public research delegation expired before execution; investigation cancelled",
+        )
+    # request_cancel already fences the worker and clears ownership. Complete
+    # that local state transition if the worker disappeared before its finally
+    # block, while retaining every remote ambiguity and monetary hold.
+    cancelled = session.scalars(
+        select(ResearchRun)
+        .join(NativeResearchRunBinding, NativeResearchRunBinding.run_id == ResearchRun.id)
+        .where(
+            NativeResearchRunBinding.account_id == account_id,
+            ResearchRun.status == "cancel_requested",
+            ResearchRun.lease_owner.is_(None),
+            ResearchRun.lease_expires_at.is_(None),
+        )
+        .order_by(ResearchRun.created_at, ResearchRun.id)
+        .with_for_update(skip_locked=True, of=ResearchRun)
+        .limit(100)
+    ).all()
+    for run in cancelled:
+        run.status = "cancelled"
+        run.finished_at = _now(session)
+        _event(
+            session,
+            run,
+            f"cancelled:{run.lease_token}",
+            "cancelled",
+            "Investigation cancelled; no further research will be dispatched",
+        )
+    active = (
+        select(ResearchRun.id)
+        .join(NativeResearchRunBinding, NativeResearchRunBinding.run_id == ResearchRun.id)
+        .where(
+            NativeResearchRunBinding.account_id == account_id,
+            or_(
+                (ResearchRun.status == "running")
+                & (
+                    ResearchRun.lease_expires_at.is_(None)
+                    | (ResearchRun.lease_expires_at > func.clock_timestamp())
+                ),
+                ResearchRun.status == "cancel_requested",
+                # An interrupted/restored run's ambiguity marker remains a
+                # fence even if its journal is incomplete.
+                ResearchRun.external_request_in_flight,
+            ),
+        )
+        .limit(1)
+    )
+    if session.scalar(active) is not None:
+        return True
+    if (
+        session.scalar(
+            select(BudgetReservation.id)
+            .where(
+                BudgetReservation.account_id == account_id,
+                BudgetReservation.status == "unknown",
+            )
+            .limit(1)
+        )
+        is not None
+    ):
+        return True
+    # Probe and research requests share the ledger. Also retain a native-bound
+    # prepared journal with a missing reservation rather than assume no send.
+    pending = (
+        select(ResearchExternalRequest.run_id)
+        .outerjoin(
+            NativeResearchRunBinding,
+            NativeResearchRunBinding.run_id == ResearchExternalRequest.run_id,
+        )
+        .outerjoin(
+            BudgetReservation,
+            BudgetReservation.id == ResearchExternalRequest.reservation_id,
+        )
+        .where(
+            ResearchExternalRequest.status == "prepared",
+            or_(
+                NativeResearchRunBinding.account_id == account_id,
+                BudgetReservation.account_id == account_id,
+            ),
+        )
+        .limit(1)
+    )
+    return session.scalar(pending) is not None
+
+
 def _event(
     session: Session,
     run: ResearchRun,
@@ -260,11 +412,16 @@ class JobRepository:
         lease_seconds: int = 60,
         task_kinds: tuple[str, ...] | None = None,
         native_only: bool = False,
+        native_account_id: str | None = None,
     ) -> JobLease | None:
         _bounded_text(worker_id, 128, "Worker ID")
         _integer(lease_seconds, 1, 3600, "Lease duration")
         if type(native_only) is not bool:
             raise ValueError("native_only must be a bool")
+        if native_account_id is not None:
+            if not native_only:
+                raise ValueError("native_account_id requires native_only=True")
+            _bounded_text(native_account_id, 120, "Native account ID")
         if task_kinds is not None and (
             not isinstance(task_kinds, tuple)
             or not task_kinds
@@ -275,12 +432,23 @@ class JobRepository:
                 "Worker task kinds must be a nonempty tuple of distinct supported kinds"
             )
         with Session(self.engine) as session, session.begin():
+            if native_account_id is not None and _native_claim_blocked(session, native_account_id):
+                return None
             eligible = select(ResearchRun).where(ResearchRun.status == "queued")
             native_bound = (
                 select(NativeResearchRunBinding.run_id)
                 .where(NativeResearchRunBinding.run_id == ResearchRun.id)
                 .exists()
             )
+            if native_account_id is not None:
+                native_bound = (
+                    select(NativeResearchRunBinding.run_id)
+                    .where(
+                        NativeResearchRunBinding.run_id == ResearchRun.id,
+                        NativeResearchRunBinding.account_id == native_account_id,
+                    )
+                    .exists()
+                )
             eligible = eligible.where(native_bound if native_only else ~native_bound)
             if task_kinds is not None:
                 eligible = eligible.where(ResearchRun.task_kind.in_(task_kinds))
@@ -549,14 +717,20 @@ class JobRepository:
                 interrupted.append(run.id)
             return interrupted
 
-    def interrupt(self, lease: JobLease) -> RunSnapshot:
+    def interrupt(self, lease: JobLease, *, reason: str | None = None) -> RunSnapshot:
         """Cooperative shutdown retains state and requires the same explicit resume policy."""
+        if reason is not None and (
+            not isinstance(reason, str) or reason not in PUBLIC_INTERRUPTION_REASONS
+        ):
+            raise ValueError("Unsupported public interruption reason")
         with Session(self.engine) as session, session.begin():
             run = _owned(session, lease)
             run.status = "interrupted"
             run.lease_token += 1
             run.interruption_reason = (
-                "external_outcome_unknown" if run.external_request_in_flight else "worker_shutdown"
+                "external_outcome_unknown"
+                if run.external_request_in_flight
+                else reason or "worker_shutdown"
             )
             _clear_lease(run)
             _event(

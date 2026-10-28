@@ -38,6 +38,8 @@ class Settings(BaseSettings):
     budget_max_hard_cap_microdollars: int = Field(default=150_000_000, ge=1, le=150_000_000)
     paid_meta_probe_enabled: bool = False
     paid_meta_research_enabled: bool = False
+    public_meta_research_enabled: bool = False
+    public_resource_limits_enabled: bool = False
     native_budget_account_id: str | None = Field(
         default=None, min_length=1, max_length=120, pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,119}$"
     )
@@ -131,6 +133,16 @@ class Settings(BaseSettings):
             and self.meta_api_base_url == "https://api.meta.ai/v1"
         ):
             raise ValueError("Paid Meta work requires explicit native and budget authority")
+        return self
+
+    @model_validator(mode="after")
+    def require_explicit_public_configuration(self) -> "Settings":
+        if self.public_resource_limits_enabled and not self.operator_bootstrap_token:
+            raise ValueError("Public resource controls require a strong server credential")
+        if self.public_meta_research_enabled and not (
+            self.paid_meta_research_enabled and self.public_resource_limits_enabled
+        ):
+            raise ValueError("Public research requires native authority and resource controls")
         return self
 
     @model_validator(mode="after")

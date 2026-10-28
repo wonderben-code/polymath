@@ -18,13 +18,15 @@ from contextlib import suppress
 from dataclasses import asdict, dataclass
 from typing import Protocol
 
-from sqlalchemy import Engine
+from sqlalchemy import Engine, func, select
+from sqlalchemy.orm import Session
 
+from polymath.access_models import BrowserSession, ResearchRunAccess
 from polymath.artifact_controller import ArtifactLimits
 from polymath.assessment_controller import AssessmentLimits
 from polymath.config import Settings
 from polymath.database import build_engine
-from polymath.jobs import JobLease, RunSnapshot
+from polymath.jobs import PUBLIC_INTERRUPTION_REASONS, JobLease, RunSnapshot, _owned
 from polymath.literature import OpenLiteratureTools
 from polymath.meta_probe_contracts import MetaObservation
 from polymath.meta_probe_worker import _FinalizeDatabaseSettings
@@ -40,7 +42,10 @@ from polymath.meta_research_contracts import (
     research_step_sha256,
 )
 from polymath.meta_research_dispatch import MetaResearchDispatcher, NativeResearchGrant
+from polymath.meta_research_errors import META_RESEARCH_ERROR_STATUSES, MetaResearchError
 from polymath.operator_auth import OperatorPolicy
+from polymath.provider_pacing import DatabaseProviderPacer
+from polymath.public_research_contracts import PublicResearchPolicy
 from polymath.research.controller import ResearchLimits
 from polymath.research.meta import MetaModel, ModelReply
 from polymath.worker import (
@@ -52,6 +57,46 @@ from polymath.worker import (
 )
 
 _REQUEST_ID = re.compile(r"model-(?!0000)[0-9]{4}")
+
+
+def _dispatch_stop(error: MetaResearchError, *, public: bool = False) -> ExecutionStopped:
+    code = error.code
+    if public:
+        code = {
+            "meta_research_authority_expired": "public_research_authority_expired",
+            "meta_research_prior_unresolved": "public_research_prior_unresolved",
+            "meta_research_unavailable": "public_research_disabled",
+        }.get(code, code)
+    return ExecutionStopped(
+        code
+        if code in META_RESEARCH_ERROR_STATUSES or code in PUBLIC_INTERRUPTION_REASONS
+        else "native_dispatch_not_safe"
+    )
+
+
+def _authorize_provider(session: Session, lease: JobLease) -> None:
+    """Fence each free source request without carrying DB locks into HTTP."""
+    try:
+        _owned(session, lease)
+        owner_alive = session.scalar(
+            select(BrowserSession.expires_at > func.clock_timestamp())
+            .join(ResearchRunAccess, ResearchRunAccess.session_hash == BrowserSession.token_hash)
+            .where(ResearchRunAccess.run_id == lease.run_id)
+        )
+        if owner_alive is not True:
+            from polymath.public_research_models import PublicResearchRunAccess
+
+            raise ExecutionStopped(
+                "public_research_requester_expired"
+                if session.get(PublicResearchRunAccess, lease.run_id) is not None
+                else "ownership_lost"
+            )
+    except ExecutionStopped:
+        raise
+    except Exception:
+        # Ordinary provider exceptions become failed-search observations. Losing
+        # ownership must instead stop the whole controller before another call.
+        raise ExecutionStopped("native_source_authority_unavailable") from None
 
 
 def _validate_native_limits(value, parent) -> None:
@@ -211,9 +256,12 @@ class NativeRecordedModel:
         request_id = f"model-{self.step:04d}"
         await self.context.check_owner()
         if self._input is None:
-            self._input = await asyncio.to_thread(
-                self.store.load_original_input, self.context.lease
-            )
+            try:
+                self._input = await asyncio.to_thread(
+                    self.store.load_original_input, self.context.lease
+                )
+            except MetaResearchError as error:
+                raise _dispatch_stop(error) from None
         value = self._input
         if self.profile.protocol_binding != {
             "activation_sha256": value.activation_sha256,
@@ -269,6 +317,10 @@ class NativeRecordedModel:
                         raise
         except asyncio.CancelledError:
             raise
+        except MetaResearchError as error:
+            raise _dispatch_stop(
+                error, public=value.manifest.audience == "public_sessions"
+            ) from None
         except Exception:
             raise ExecutionStopped("native_dispatch_not_safe") from None
         # No finish/action parsing before the exact bounded transport facts and
@@ -286,12 +338,17 @@ def build_native_research_worker(
     research_policy: NativeResearchPolicy,
     readiness_policy: ReadinessPolicy,
     operator_policy: OperatorPolicy,
+    public_policy: PublicResearchPolicy | None = None,
     model_factory: Callable[[NativeResearchInput, NativeResearchGrant], _NativeModel] | None = None,
     tools_factory=None,
 ) -> ResearchWorker:
     """Compose the existing worker; the native adapter stays lazy until its grant."""
-    store = MetaResearchStore(engine, research_policy, readiness_policy, operator_policy)
-    dispatcher = MetaResearchDispatcher(engine, research_policy, readiness_policy, operator_policy)
+    store = MetaResearchStore(
+        engine, research_policy, readiness_policy, operator_policy, public_policy=public_policy
+    )
+    dispatcher = MetaResearchDispatcher(
+        engine, research_policy, readiness_policy, operator_policy, public_policy=public_policy
+    )
 
     def native_factory(value: NativeResearchInput, grant: NativeResearchGrant) -> MetaModel:
         # Use the exact immutable secret snapshot checked at the grant boundary,
@@ -304,7 +361,10 @@ def build_native_research_worker(
         )
 
     def resolve(lease: JobLease, snapshot: RunSnapshot) -> WorkerRuntimeProfile:
-        value = store.load_original_input(lease)
+        try:
+            value = store.load_original_input(lease)
+        except MetaResearchError as error:
+            raise _dispatch_stop(error) from None
         if value.profile.task_kind != snapshot.task_kind:
             raise ExecutionStopped("native_task_conflict")
         return original_runtime_profile(value)
@@ -317,14 +377,25 @@ def build_native_research_worker(
     def forbidden_legacy_model(snapshot):
         raise ExecutionStopped("native_legacy_factory_forbidden")
 
+    def source_tools(context: _RunContext, snapshot: RunSnapshot):
+        return OpenLiteratureTools(
+            provider_slot=DatabaseProviderPacer(
+                engine,
+                authorize=lambda session: _authorize_provider(session, context.lease),
+                max_wait_seconds=10,
+            )
+        )
+
     return ResearchWorker(
         engine,
         model_factory=forbidden_legacy_model,
         tools_factory=tools_factory or (lambda _: OpenLiteratureTools()),
+        tools_context_factory=source_tools if tools_factory is None else None,
         policy=None,
         runtime_profile_resolver=resolve,
         recorded_model_factory=recorded,
         native_only=True,
+        native_claim_account_id=research_policy.native_account_id,
         execution_enabled=native_research_configured(
             research_policy, readiness_policy, operator_policy
         ),
@@ -371,6 +442,7 @@ async def run(
             research_policy=research,
             readiness_policy=readiness,
             operator_policy=operator,
+            public_policy=PublicResearchPolicy(enabled=settings.public_meta_research_enabled),
         )
         if once:
             result = await worker.run_once(worker_id)

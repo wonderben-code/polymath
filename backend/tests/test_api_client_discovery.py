@@ -69,7 +69,9 @@ def detail(stage=None):
 def test_explicit_intent_is_validated_before_write_and_default_wire_unchanged(monkeypatch):
     client = client_module.PolymathClient("http://127.0.0.1:8000")
     calls = []
-    monkeypatch.setattr(client, "_write", lambda path, body, **kwargs: calls.append((path, body)))
+    monkeypatch.setattr(
+        client, "_scientific_write", lambda path, body, **kwargs: calls.append((path, body))
+    )
     client.create_run("surprise")
     client.create_run("surprise", discovery_intent=INTENT)
     assert calls == [
@@ -101,7 +103,9 @@ def test_explicit_intent_is_validated_before_write_and_default_wire_unchanged(mo
 def test_invalid_intent_never_bootstraps_or_sends(change, monkeypatch):
     intent = {**INTENT, **{key: value for key, value in change.items() if key != "mode"}}
     client = client_module.PolymathClient("http://127.0.0.1:8000")
-    monkeypatch.setattr(client, "_write", lambda *args, **kwargs: pytest.fail("invalid input sent"))
+    monkeypatch.setattr(
+        client, "_scientific_write", lambda *args, **kwargs: pytest.fail("invalid input sent")
+    )
     with pytest.raises(client_module.ClientError, match="invalid_arguments"):
         client.create_run(change.get("mode", "surprise"), "Synthetic goal", discovery_intent=intent)
 

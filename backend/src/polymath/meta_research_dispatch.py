@@ -155,9 +155,19 @@ def finalize_known_call(engine, run_id, request_id):
 
 
 class MetaResearchDispatcher:
-    def __init__(self, engine, research_policy=None, readiness_policy=None, operator_policy=None):
+    def __init__(
+        self,
+        engine,
+        research_policy=None,
+        readiness_policy=None,
+        operator_policy=None,
+        *,
+        public_policy=None,
+    ):
         self.engine = engine
-        self.store = MetaResearchStore(engine, research_policy, readiness_policy, operator_policy)
+        self.store = MetaResearchStore(
+            engine, research_policy, readiness_policy, operator_policy, public_policy=public_policy
+        )
         self.coordinator = DispatchCoordinator(engine)
         self.budget = BudgetService(engine)
 
@@ -222,7 +232,7 @@ class MetaResearchDispatcher:
                     raise MetaResearchError("meta_research_input_changed")
                 return None
             self.store._approval_current(
-                session, approval, manifest, proposal, account, operator=operator
+                session, approval, manifest, proposal, account, operator=operator, run_id=run.id
             )
             previous = session.scalars(
                 select(NativeResearchCallRequest).where(NativeResearchCallRequest.run_id == run.id)
@@ -291,6 +301,7 @@ class MetaResearchDispatcher:
                 operator=operator,
                 reserve=False,
                 pending_request=(run.id, request_id),
+                run_id=run.id,
             )
             _owned(session, lease)
             self.budget._scope_authorized(session, account, run.id, permit)

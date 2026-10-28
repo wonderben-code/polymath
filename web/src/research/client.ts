@@ -2,7 +2,7 @@ import { parseDiscoveryIntent } from './discoveryIntent'
 import type { DiscoveryIntent } from '../discovery/types'
 import { parseBibliography } from './bibliography'
 import { parseSourceCoverage, validateSourceCoverageContext } from './sourceCoverage'
-import { nativeAdmissionFailure, parseNativeRunControl, validNativeSubmission } from './nativeAdmission'
+import { nativeSubmissionHeaders, nativeAdmissionFailure, parseNativeRunControl, validNativeSubmission } from './nativeAdmission'
 import type { NativeSubmissionContext } from './nativeAdmission'
 import type {
   AnswerClaim,
@@ -20,10 +20,10 @@ import type {
 } from './types'
 
 export type ResearchApiErrorCode = 'session_expired' | 'session_changed' | 'run_unavailable' |
-  'unavailable' | 'queue_limit' | 'invalid_request' | 'invalid_response' | 'connection_failed' | 'aborted' | 'native_authority_changed'
+  'unavailable' | 'queue_limit' | 'invalid_request' | 'invalid_response' | 'connection_failed' | 'aborted' | 'native_authority_changed' | 'resource_limited'
 
 export class ResearchApiError extends Error {
-  constructor(public readonly code: ResearchApiErrorCode) {
+  constructor(public readonly code: ResearchApiErrorCode, public readonly retryAfterSeconds: number | null = null) {
     super(code)
     this.name = 'ResearchApiError'
   }
@@ -292,7 +292,7 @@ async function request(path: string, signal?: AbortSignal, write?: { csrf: strin
     const response = await fetch(path, {
       signal: controller.signal, credentials: 'same-origin', cache: 'no-store', redirect: 'error',
       method: write ? 'POST' : 'GET',
-      headers: { Accept: 'application/json', ...(write ? { 'X-CSRF-Token': write.csrf, 'Content-Type': 'application/json', ...(write.native ? { 'X-Operator-CSRF-Token': write.native.operatorCsrfToken } : {}) } : {}) },
+      headers: { Accept: 'application/json', ...(write ? { 'X-CSRF-Token': write.csrf, 'Content-Type': 'application/json', ...(write.native ? nativeSubmissionHeaders(write.native) : {}) } : {}) },
       ...(write?.body === undefined ? {} : { body: JSON.stringify(write.body) }),
     })
     if (!response.ok && [401, 403, 409, 503].includes(response.status)) {
@@ -302,7 +302,7 @@ async function request(path: string, signal?: AbortSignal, write?: { csrf: strin
     }
     if (response.status === 401) throw new ResearchApiError('session_expired')
     if (response.status === 403) throw new ResearchApiError('session_changed')
-    if (response.status === 429) throw new ResearchApiError('queue_limit')
+    if (response.status === 429) { const retry = response.headers.get('retry-after'), seconds = retry && /^\d{1,5}$/.test(retry) && Number(retry) <= 86400 ? Number(retry) : null; throw new ResearchApiError(seconds === null ? 'queue_limit' : 'resource_limited', seconds) }
     if (response.status === 422) throw new ResearchApiError('invalid_request')
     if (response.status === 404) {
       if (missingResult) {

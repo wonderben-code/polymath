@@ -14,7 +14,27 @@ META_RESEARCH_ERROR_STATUSES = {
     "meta_research_input_changed": 409,
     "meta_research_outcome_unknown": 409,
     "meta_research_storage_unavailable": 503,
+    "public_research_disabled": 503,
+    "public_research_resource_unavailable": 503,
+    "public_research_requester_expired": 401,
+    "public_research_total_budget_exceeded": 503,
+    "public_research_daily_budget_exceeded": 429,
+    "public_session_total_budget_exceeded": 429,
+    "public_session_daily_budget_exceeded": 429,
+    "public_session_job_day_limit": 429,
+    "public_research_job_day_limit": 429,
+    "public_research_active_limit": 429,
+    "public_research_queue_limit": 429,
+    "public_network_active_limit": 429,
+    "active_run_limit": 429,
+    "public_research_binding_invalid": 503,
+    "public_research_delegation_expired": 503,
 }
+
+
+def retry_headers(error) -> dict[str, str]:
+    value = getattr(error, "retry_after_seconds", None)
+    return {"Retry-After": str(value)} if type(value) is int and 0 <= value <= 86400 else {}
 
 
 class MetaResearchError(Exception):

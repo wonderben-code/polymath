@@ -1,27 +1,31 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { DiscoveryError, getDiscoveryStage, getDiscoverySummary, listDiscoveryStages, stageMatchesReceipt } from './client'
+import { useNativeResearchSubmission } from '../research/nativeContext'
 import type { DiscoveryIntent, DiscoveryStage, DiscoverySummary } from './types'
 
 const ACTIVE = new Set(['queued', 'running', 'waiting_retry', 'cancel_requested'])
 export function useDiscoveryWorkspace({ runId, intent, enabled, csrfToken, activitySequence, runStatus, onSessionExpired }: { runId: string; intent: DiscoveryIntent; enabled: boolean; csrfToken: string | null; activitySequence: number; runStatus: string; onSessionExpired: () => void }) {
+  const nativeAuthority = useNativeResearchSubmission(), publicReads = nativeAuthority.required && nativeAuthority.access?.audience !== 'operator_browser'
   const [summary, setSummary] = useState<DiscoverySummary | null>(null), [stages, setStages] = useState<DiscoveryStage[]>([]), [selectedId, setSelectedId] = useState<string | null>(null), [phase, setPhase] = useState<'loading' | 'ready' | 'error' | 'expired'>('loading'), [error, setError] = useState(''), [paused, setPaused] = useState(false), [reading, setReading] = useState(false), [selectingId, setSelectingId] = useState<string | null>(null)
   const generation = useRef(0), blocked = useRef(false), requests = useRef(new Set<AbortController>()), read = useRef<(manual: boolean) => void>(() => {}), expiredCallback = useRef(onSessionExpired), latest = useRef<{ summary: DiscoverySummary | null; stages: DiscoveryStage[] }>({ summary: null, stages: [] })
   const lastActivity = useRef(`${runId}:${runStatus}:${activitySequence}`)
   expiredCallback.current = onSessionExpired
   const expire = useCallback(() => { if (blocked.current) return; blocked.current = true; generation.current++; requests.current.forEach((request) => request.abort()); requests.current.clear(); latest.current = { summary: null, stages: [] }; setSummary(null); setStages([]); setSelectedId(null); setError(''); setPaused(false); setReading(false); setSelectingId(null); setPhase('expired'); expiredCallback.current() }, [])
   useEffect(() => {
-    const scope = ++generation.current; blocked.current = false; let active = true, inFlight = false, again = false, reads = 0, stopped = false, timer: number | undefined
+    const scope = ++generation.current; blocked.current = false; let active = true, inFlight = false, again = false, reads = 0, stopped = false, nextReadAt = 0, timer: number | undefined
     requests.current.forEach((request) => request.abort()); requests.current.clear(); latest.current = { summary: null, stages: [] }; setSummary(null); setStages([]); setSelectedId(null); setError(''); setPaused(false); setReading(false); setSelectingId(null); setPhase('loading')
     const current = (signal: AbortSignal) => active && scope === generation.current && !blocked.current && !signal.aborted
     function requestRead(manual: boolean) {
       if (!enabled || !csrfToken || !active || blocked.current || stopped && !manual) return
       if (manual) { reads = 0; stopped = false; setPaused(false) }
       if (inFlight) { again = true; return }
-      window.clearTimeout(timer); void load()
+      window.clearTimeout(timer)
+      if (publicReads && Date.now() < nextReadAt) { timer = window.setTimeout(() => requestRead(manual), nextReadAt - Date.now()); return }
+      void load()
     }
     async function load() {
       if (inFlight || !active || blocked.current) return
-      inFlight = true; again = false; setReading(true); const controller = new AbortController(); requests.current.add(controller)
+      inFlight = true; nextReadAt = Date.now() + 10000; again = false; setReading(true); const controller = new AbortController(); requests.current.add(controller)
       try {
         // Read the list first: a later summary may include a newly committed stage,
         // but no listed immutable receipt may disappear or change underneath it.
@@ -33,7 +37,7 @@ export function useDiscoveryWorkspace({ runId, intent, enabled, csrfToken, activ
         latest.current = { summary: total, stages: saved.stages }; setSummary(total); setStages(saved.stages); setSelectedId((old) => old && saved.stages.some((detail) => detail.stage.stage_id === old) ? old : saved.stages[0]?.stage.stage_id ?? null); setError(''); setPhase('ready'); reads++
         if (saved.stages.length < total.stages.length) again = true
         if (reads >= 120) { stopped = true; setPaused(true) }
-        else if (again || ACTIVE.has(total.run_status)) timer = window.setTimeout(() => requestRead(false), again ? 0 : 3000)
+        else if (again || ACTIVE.has(total.run_status)) timer = window.setTimeout(() => requestRead(false), publicReads ? 10000 : again ? 0 : 3000)
       } catch (caught) {
         if (!current(controller.signal)) return
         if (caught instanceof DiscoveryError && caught.code === 'session_expired') expire()
@@ -42,7 +46,7 @@ export function useDiscoveryWorkspace({ runId, intent, enabled, csrfToken, activ
     }
     lastActivity.current = `${runId}:${runStatus}:${activitySequence}`; read.current = requestRead; requestRead(false)
     return () => { active = false; generation.current++; window.clearTimeout(timer); requests.current.forEach((request) => request.abort()); requests.current.clear(); read.current = () => {} }
-  }, [runId, intent.max_stages, intent.max_depth, enabled, csrfToken, expire])
+  }, [runId, intent.max_stages, intent.max_depth, enabled, csrfToken, expire, publicReads])
   useEffect(() => { const signal = `${runId}:${runStatus}:${activitySequence}`; if (lastActivity.current !== signal) { lastActivity.current = signal; read.current(false) } }, [runId, activitySequence, runStatus])
   const refresh = useCallback(() => read.current(true), [])
   async function select(stageId: string) {

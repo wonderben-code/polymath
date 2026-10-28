@@ -12,11 +12,12 @@ const TERMINAL = new Set(['succeeded', 'failed', 'cancelled', 'interrupted'])
 const RETRY_DELAYS = [500, 1500, 4000]
 type Phase = 'idle' | 'loading' | 'ready' | 'error' | 'expired'
 
-function message(code: ResearchApiErrorCode): string {
+function message(code: ResearchApiErrorCode, retry: number | null = null): string {
   switch (code) {
     case 'session_expired': return 'Your research session expired. Reload saved research to continue.'
     case 'session_changed': return 'Your research session changed. Reload saved research before trying again.'
     case 'run_unavailable': return 'This investigation is unavailable in your current session.'
+    case 'resource_limited': return `A request or visitor allowance limit was reached. ${retry === null ? 'Wait before trying again.' : `Wait at least ${retry} seconds before trying again.`} No action was retried; saved research remains available.`
     case 'queue_limit': return 'The research queue or your active-investigation limit has been reached.'
     case 'invalid_request': return 'Check the research request and try again.'
     case 'invalid_response': return 'The research service returned an unreadable record. Reload saved research to try again.'
@@ -114,8 +115,9 @@ export function useResearchWorkspace(enabled: boolean, researchAvailable: boolea
   }, [clearPrivateState])
 
   const native = useNativeResearchContext({ enabled: phase === 'ready' && enabled, csrfToken: csrf, required: nativeRequired, available: researchAvailable, onBrowserExpired: () => invalidate('session_expired') })
+  const ownActiveResearch = native.access?.audience === 'public_sessions' && runs.some((run) => ['queued', 'running', 'waiting_retry', 'cancel_requested', 'interrupted'].includes(run.status))
   const ladderProfile = native.activation?.discovery_ladder_profile?.profile
-  const discoveryIntent = useMemo<DiscoveryIntent | null>(() => ladderProfile ? { protocol: 'polymath-surprise-ladder-v1', max_stages: Math.min(3, ladderProfile.max_stages), max_depth: Math.min(2, ladderProfile.max_depth) } : null, [ladderProfile?.max_stages, ladderProfile?.max_depth])
+  const discoveryIntent = useMemo<DiscoveryIntent | null>(() => native.access?.audience === 'public_sessions' ? native.access.limits?.discovery_intent ?? null : ladderProfile ? { protocol: 'polymath-surprise-ladder-v1', max_stages: Math.min(3, ladderProfile.max_stages), max_depth: Math.min(2, ladderProfile.max_depth) } : null, [ladderProfile?.max_stages, ladderProfile?.max_depth, native.access])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -345,14 +347,14 @@ export function useResearchWorkspace(enabled: boolean, researchAvailable: boolea
       if (controller.signal.aborted || current !== generation.current) return
       const failureCode = code(failure)
       if (failureCode === 'session_expired' || failureCode === 'session_changed') invalidate(failureCode)
-      else if (selected.current === target) setDetailError(failureCode === 'connection_failed' ? 'Cancellation could not be confirmed. Reload the investigation to check its status before trying again.' : message(failureCode))
+      else if (selected.current === target) setDetailError(failureCode === 'connection_failed' ? 'Cancellation could not be confirmed. Reload the investigation to check its status before trying again.' : message(failureCode, failure instanceof ResearchApiError ? failure.retryAfterSeconds : null))
     } finally {
       if (mutation.current === controller) { mutation.current = null; setCancellingId(null) }
     }
   }, [phase, csrf, activeRun, invalidate, remember])
 
   const submit = useCallback(async (mode: OwnedRun['mode'], goal: string, parentResultIds: readonly string[] = []) => {
-    if (!enabled || !researchAvailable || !native.canSubmit || unconfirmedSubmission || phase !== 'ready' || !csrf || mutation.current) return
+    if (!enabled || !researchAvailable || !native.canSubmit || ownActiveResearch || unconfirmedSubmission || phase !== 'ready' || !csrf || mutation.current) return
     const controller = new AbortController()
     const current = generation.current
     mutation.current = controller
@@ -371,11 +373,11 @@ export function useResearchWorkspace(enabled: boolean, researchAvailable: boolea
       const failureCode = code(failure)
       if (failureCode === 'session_expired' || failureCode === 'session_changed') invalidate(failureCode)
       else if (failureCode === 'native_authority_changed') { native.invalidate(); setError(message(failureCode)) }
-      else { if (['connection_failed', 'invalid_response', 'unavailable'].includes(failureCode)) setUnconfirmedSubmission(true); setError(failureCode === 'connection_failed' ? 'Could not confirm whether the investigation was queued. Reload saved research before trying again.' : message(failureCode)) }
+      else { if (['connection_failed', 'invalid_response', 'unavailable'].includes(failureCode)) setUnconfirmedSubmission(true); setError(failureCode === 'connection_failed' ? 'Could not confirm whether the investigation was queued. Reload saved research before trying again.' : message(failureCode, failure instanceof ResearchApiError ? failure.retryAfterSeconds : null)) }
     } finally {
       if (mutation.current === controller) { mutation.current = null; setSubmitting(false) }
     }
-  }, [enabled, researchAvailable, phase, csrf, unconfirmedSubmission, invalidate, remember, native.canSubmit, native.submission, native.invalidate, discoveryIntent])
+  }, [enabled, researchAvailable, phase, csrf, unconfirmedSubmission, invalidate, remember, native.canSubmit, native.submission, native.invalidate, discoveryIntent, ownActiveResearch])
 
   const investigateBridges = useCallback((parentResultIds: readonly string[]) => submit(
     'explore',
@@ -389,8 +391,8 @@ export function useResearchWorkspace(enabled: boolean, researchAvailable: boolea
     phase, runs, nextCursor, loadingMore, error, detailError, selectedId, activeRun, events, result,
     connection, submitting, cancelling: cancellingId === activeRun?.id,
     canCancel: !submitting && (!cancellingId || cancellingId === activeRun?.id),
-    canSubmit: enabled && researchAvailable && native.canSubmit && !unconfirmedSubmission && phase === 'ready' && !!csrf && !submitting && !cancellingId,
+    canSubmit: enabled && researchAvailable && native.canSubmit && !ownActiveResearch && !unconfirmedSubmission && phase === 'ready' && !!csrf && !submitting && !cancellingId,
     csrfToken: csrf, invalidateSession,
-    refresh, selectRun, loadMore, cancel, submit, investigateBridges, native, discoveryIntent,
+    refresh, selectRun, loadMore, cancel, submit, investigateBridges, native, discoveryIntent, ownActiveResearch,
   }
 }

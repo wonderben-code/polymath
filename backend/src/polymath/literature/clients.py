@@ -21,6 +21,7 @@ from polymath.literature.identity import (
     canonical_openalex_id,
     identifier_from_url,
 )
+from polymath.provider_pacing import ProviderPacingError, ProviderSlot
 from polymath.research.models import (
     SourceAuthor,
     SourceBibliography,
@@ -391,12 +392,20 @@ class _BoundedClient:
     provider: Provider
     endpoint: str
 
-    def __init__(self, *, transport: httpx.AsyncBaseTransport | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        transport: httpx.AsyncBaseTransport | None = None,
+        provider_slot: ProviderSlot | None = None,
+    ) -> None:
         self._transport = transport
+        self._provider_slot = provider_slot
 
     async def _request(self, params: dict[str, str | int]) -> tuple[bytes, datetime]:
         try:
             async with asyncio.timeout(REQUEST_TIMEOUT_SECONDS):
+                if self._provider_slot is not None:
+                    await self._provider_slot(self.provider)
                 async with httpx.AsyncClient(
                     transport=self._transport,
                     timeout=httpx.Timeout(10.0, connect=5.0),
@@ -435,6 +444,9 @@ class _BoundedClient:
                             if len(payload) > MAX_RESPONSE_BYTES:
                                 raise ProviderError(self.provider, "response_too_large")
                         return bytes(payload), datetime.now(UTC)
+        except ProviderPacingError as error:
+            code = "rate_limited" if error.code == "rate_limited" else "transport_error"
+            raise ProviderError(self.provider, code) from None
         except (TimeoutError, httpx.TimeoutException):
             raise ProviderError(self.provider, "timeout") from None
         except httpx.HTTPError:
@@ -450,8 +462,9 @@ class OpenAlexClient(_BoundedClient):
         *,
         api_key: SecretStr | None = None,
         transport: httpx.AsyncBaseTransport | None = None,
+        provider_slot: ProviderSlot | None = None,
     ) -> None:
-        super().__init__(transport=transport)
+        super().__init__(transport=transport, provider_slot=provider_slot)
         if api_key is not None:
             # OpenAlex's query-key route is not enabled: httpx request logs can
             # include full URLs. Verify a safe authentication route before use.

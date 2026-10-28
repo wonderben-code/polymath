@@ -1,7 +1,10 @@
 """HTTP application: honest health/capability checks and optional built web assets."""
 
+import hashlib
+import json
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
+from dataclasses import replace
 from pathlib import Path
 
 from alembic.config import Config
@@ -10,13 +13,15 @@ from alembic.script import ScriptDirectory
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import Session
 
 from polymath import __version__
 from polymath.artifact_api import create_artifact_router
 from polymath.assessment_api import create_assessment_router
 from polymath.budget_admin_api import create_budget_admin_router
+from polymath.budget_models import BudgetAccount
 from polymath.config import Settings, get_settings
 from polymath.database import build_engine
 from polymath.discovery_api import create_discovery_router
@@ -28,7 +33,22 @@ from polymath.meta_readiness_contracts import ReadinessPolicy
 from polymath.meta_research import MetaResearchStore
 from polymath.meta_research_api import create_meta_research_router
 from polymath.meta_research_contracts import NativeResearchPolicy
+from polymath.meta_research_models import MetaResearchManifestRecord
 from polymath.operator_auth import OperatorPolicy, create_operator_router
+from polymath.public_research_api import create_public_research_router
+from polymath.public_research_contracts import (
+    MAX_PUBLIC_MANIFEST_BYTES,
+    PUBLIC_RESEARCH_PROTOCOL,
+    PublicResearchManifest,
+    PublicResearchPolicy,
+    PublicResourceLimits,
+)
+from polymath.public_resource_controls import (
+    PublicResourceControls,
+    PublicResourcePolicy,
+    derive_network_key,
+)
+from polymath.public_resource_middleware import PublicResourceMiddleware
 from polymath.publication import PublicationStore
 from polymath.publication_api import create_publication_router
 from polymath.publication_contracts import PublicationPolicy
@@ -48,6 +68,53 @@ def migration_heads() -> set[str]:
     return set(ScriptDirectory.from_config(config).get_heads())
 
 
+def _reviewed_public_resources(
+    session: Session, account_id: str | None
+) -> PublicResourceLimits | None:
+    """Read historical resource bounds, without evaluating spending authority.
+
+    Expiry, logout, key removal and a changed scientific prompt cannot prevent
+    reading saved work or stopping it. Invalid/unavailable manifests leave the
+    independent server resource ceilings in place; financial grants remain the
+    responsibility of the native store. This helper obtains no locks or grants.
+    """
+    if account_id is None:
+        return None
+    row = session.scalar(
+        select(MetaResearchManifestRecord)
+        .join(
+            BudgetAccount,
+            BudgetAccount.native_manifest_sha256 == MetaResearchManifestRecord.manifest_sha256,
+        )
+        .where(
+            BudgetAccount.id == account_id,
+            MetaResearchManifestRecord.account_id == account_id,
+        )
+    )
+    if row is None:
+        return None
+    try:
+        if (
+            not isinstance(row.manifest, dict)
+            or row.manifest.get("protocol") != PUBLIC_RESEARCH_PROTOCOL
+        ):
+            return None
+        raw = json.dumps(
+            row.manifest, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False
+        ).encode("utf-8")
+        if (
+            len(raw) > MAX_PUBLIC_MANIFEST_BYTES
+            or hashlib.sha256(raw).hexdigest() != row.manifest_sha256
+        ):
+            return None
+        historical = PublicResearchManifest.model_validate_json(raw)
+        if historical.account_id != account_id:
+            return None
+        return historical.public_limits.resources
+    except (ValueError, TypeError, AttributeError):
+        return None
+
+
 def create_app(
     settings: Settings | None = None,
     *,
@@ -60,6 +127,8 @@ def create_app(
     readiness_policy: ReadinessPolicy | None = None,
     probe_policy: MetaProbePolicy | None = None,
     research_policy: NativeResearchPolicy | None = None,
+    public_policy: PublicResearchPolicy | None = None,
+    resource_controls: PublicResourceControls | None = None,
 ) -> FastAPI:
     settings = settings or get_settings()
     native_required = research_policy is not None or research_availability is None
@@ -88,6 +157,8 @@ def create_app(
             model_id=settings.meta_model,
             api_key=settings.model_api_key,
         )
+    if public_policy is None:
+        public_policy = PublicResearchPolicy(enabled=settings.public_meta_research_enabled)
     if research_availability is None:
 
         def research_availability() -> bool:
@@ -124,12 +195,70 @@ def create_app(
     application.state.operator_policy = operator_policy
     application.state.publication_policy = publication_policy
     application.state.engine = build_engine(settings)
+    application.state.public_policy = public_policy
+
+    def reviewed_resources(session):
+        return _reviewed_public_resources(session, research_policy.native_account_id)
+
+    if resource_controls is None:
+        resource_controls = PublicResourceControls(
+            application.state.engine,
+            PublicResourcePolicy(
+                enabled=settings.public_resource_limits_enabled,
+                network_key=derive_network_key(settings.operator_bootstrap_token)
+                if settings.public_resource_limits_enabled
+                else None,
+                limits=public_policy.resources,
+            ),
+            limits_resolver=reviewed_resources,
+        )
+    else:
+        original_resolver = resource_controls.limits_resolver
+
+        def combined_resources(session):
+            authoritative = reviewed_resources(session)
+            custom = original_resolver(session) if original_resolver is not None else None
+            if authoritative is None:
+                return custom
+            if custom is None:
+                return authoritative
+            if not isinstance(custom, PublicResourceLimits):
+                raise ValueError("invalid_public_resource_limits")
+            return PublicResourceLimits.model_validate(
+                {
+                    key: min(value, getattr(custom, key))
+                    for key, value in authoritative.model_dump(mode="json").items()
+                }
+            )
+
+        # Keep the caller's independent resolver intact when several apps share
+        # one injected control configuration. All assembled services below use
+        # this same wrapper and the same persistent database counters.
+        resource_policy = resource_controls.policy
+        if resource_policy.enabled:
+            resource_policy = replace(
+                resource_policy,
+                limits=PublicResourceLimits.model_validate(
+                    {
+                        key: min(value, getattr(public_policy.resources, key))
+                        for key, value in resource_policy.limits.model_dump(mode="json").items()
+                    }
+                ),
+            )
+        resource_controls = PublicResourceControls(
+            resource_controls.engine,
+            resource_policy,
+            limits_resolver=combined_resources,
+        )
+    application.state.public_resource_controls = resource_controls
     native_store = (
         MetaResearchStore(
             application.state.engine,
             research_policy=research_policy,
             readiness_policy=readiness_policy,
             operator_policy=operator_policy,
+            public_policy=public_policy,
+            resource_controls=resource_controls,
         )
         if native_required
         else None
@@ -143,6 +272,17 @@ def create_app(
         )
     )
     application.include_router(create_discovery_router(application.state.engine))
+    application.include_router(
+        create_public_research_router(
+            application.state.engine,
+            native_store=native_store,
+            research_policy=research_policy,
+            readiness_policy=readiness_policy,
+            operator_policy=operator_policy,
+            public_policy=public_policy,
+            resource_controls=resource_controls,
+        )
+    )
     application.include_router(create_knowledge_router(application.state.engine))
     application.include_router(
         create_budget_admin_router(
@@ -287,6 +427,9 @@ def create_app(
                 return FileResponse(candidate)
             return FileResponse(frontend / "index.html")
 
+    # The ASGI resource gate is outermost and bounds bodies before FastAPI can
+    # parse them. Disabled construction performs no database or model action.
+    application.add_middleware(PublicResourceMiddleware, controls=resource_controls)
     return application
 
 

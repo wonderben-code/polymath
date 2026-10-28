@@ -130,7 +130,7 @@ export function App() {
   const researchConnected = workspace.canSubmit && !artifactBusy && !assessmentBusy && (mode === 'surprise' || !!prompts[mode].trim())
   const unavailable = connection === 'offline'
     ? 'The research service could not be reached. Check the connection and try again.'
-    : 'Live investigations are not available yet. The research engine is being connected.'
+    : workspace.ownActiveResearch ? 'An investigation is active in this browser. Finish or cancel it before starting another model task.' : workspace.native.required && workspace.native.phase !== 'disabled' ? 'Current funding authority or this browser’s limits do not permit a new model task. Saved research remains readable.' : 'Live investigations are disabled or unavailable. Saved research remains readable.'
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()

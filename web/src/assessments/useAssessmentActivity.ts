@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useNativeResearchSubmission } from '../research/nativeContext'
 import { parseActivity } from '../research/client'
 import type { ResearchActivityEvent } from '../research/types'
 
@@ -13,6 +14,7 @@ export function useAssessmentActivity({ runId, enabled, onStatus, onSessionExpir
   onStatus: () => void | Promise<void>
   onSessionExpired: () => void
 }) {
+  const nativeAuthority = useNativeResearchSubmission(), publicReads = nativeAuthority.required && nativeAuthority.access?.audience !== 'operator_browser'
   const [events, setEvents] = useState<ResearchActivityEvent[]>([])
   const [connection, setConnection] = useState<AssessmentConnection>('closed')
   const status = useRef(onStatus), expire = useRef(onSessionExpired)
@@ -21,13 +23,23 @@ export function useAssessmentActivity({ runId, enabled, onStatus, onSessionExpir
     setEvents([]); setConnection('closed')
     if (!enabled || !runId || !UUID.test(runId)) return
     let source: EventSource | null = null, deadline: number | undefined, retry: number | undefined, refresh: number | undefined
-    let active = true, attempts = 0, cursor = 0
+    let active = true, attempts = 0, cursor = 0, lastStatusAt = Date.now(), statusInFlight = false, finalRefreshPending = false
     const recorded = new Map<number, ResearchActivityEvent>()
     function close() { window.clearTimeout(deadline); window.clearTimeout(refresh); refresh = undefined; source?.close(); source = null }
-    function requestStatus() { if (active) void Promise.resolve(status.current()).catch(() => { /* The owning workspace presents status errors. */ }) }
+    function requestStatus(final = false) {
+      if (!active) return
+      if (publicReads && statusInFlight) { if (final) finalRefreshPending = true; return }
+      statusInFlight = true; lastStatusAt = Date.now()
+      let completion: void | Promise<void> = undefined
+      try { completion = status.current() } catch { /* The owning workspace presents status errors. */ }
+      void Promise.resolve(completion).catch(() => { /* The owning workspace presents status errors. */ }).finally(() => {
+        statusInFlight = false
+        if (active && finalRefreshPending) { finalRefreshPending = false; requestStatus(true) }
+      })
+    }
     function refreshSoon() {
       if (refresh !== undefined) return
-      refresh = window.setTimeout(() => { refresh = undefined; requestStatus() }, 200)
+      refresh = window.setTimeout(() => { refresh = undefined; requestStatus() }, publicReads ? Math.max(1, lastStatusAt + 10000 - Date.now()) : 200)
     }
     function connect() {
       if (!active) return
@@ -56,12 +68,12 @@ export function useAssessmentActivity({ runId, enabled, onStatus, onSessionExpir
         } catch { close(); setConnection('error'); requestStatus() }
       })
       stream.addEventListener('session_expired', () => { if (current()) { close(); setEvents([]); setConnection('closed'); expire.current() } })
-      stream.addEventListener('end', () => { if (current()) { close(); setConnection('closed'); requestStatus() } })
+      stream.addEventListener('end', () => { if (current()) { close(); setConnection('closed'); requestStatus(true) } })
       stream.addEventListener('error', disconnected)
       watch(10000)
     }
     connect()
     return () => { active = false; close(); window.clearTimeout(retry); window.clearTimeout(refresh) }
-  }, [runId, enabled])
+  }, [runId, enabled, publicReads])
   return { events, connection }
 }

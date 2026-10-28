@@ -4,18 +4,21 @@ import { BudgetError } from '../budget/client'
 import { getCurrentResearchActivation } from '../budget/activationClient'
 import type { EligibleActivation } from '../budget/activationTypes'
 import { budgetDeadline } from '../budget/deadline'
+import { getResearchAccess, ResearchAccessError } from './access'
+import type { ResearchAccess } from './access'
+import type { NativeSubmissionContext } from './nativeAdmission'
 import type { NativeResearchContextValue } from './nativeContext'
 
 export function useNativeResearchContext({ enabled, csrfToken, required, available, onBrowserExpired }: { enabled: boolean; csrfToken: string | null; required: boolean; available: boolean; onBrowserExpired: () => void }): NativeResearchContextValue {
-  const [phase, setPhase] = useState<NativeResearchContextValue['phase']>(required ? 'disabled' : 'not_required'), [activation, setActivation] = useState<EligibleActivation | null>(null), [operatorCsrf, setOperatorCsrf] = useState<string | null>(null), [operatorExpiry, setOperatorExpiry] = useState<string | null>(null), [reason, setReason] = useState<string | null>(null), [revision, setRevision] = useState(0), [pollPaused, setPollPaused] = useState(false)
-  const [loadedCsrf, setLoadedCsrf] = useState<string | null>(null)
+  const [phase, setPhase] = useState<NativeResearchContextValue['phase']>(required ? 'disabled' : 'not_required'), [activation, setActivation] = useState<EligibleActivation | null>(null), [access, setAccess] = useState<ResearchAccess | null>(null), [operatorCsrf, setOperatorCsrf] = useState<string | null>(null), [operatorExpiry, setOperatorExpiry] = useState<string | null>(null), [reason, setReason] = useState<string | null>(null), [revision, setRevision] = useState(0), [pollPaused, setPollPaused] = useState(false)
+  const [loadedCsrf, setLoadedCsrf] = useState<string | null>(null), [retryUntil, setRetryUntil] = useState<number | null>(null)
   const generation = useRef(0), request = useRef<AbortController | null>(null), browserExpired = useRef(onBrowserExpired)
   browserExpired.current = onBrowserExpired
   const invalidate = useCallback((why = 'meta_research_authority_expired') => { generation.current++; request.current?.abort(); setActivation(null); setOperatorCsrf(null); setOperatorExpiry(null); setLoadedCsrf(null); setPollPaused(false); setReason(why); setPhase('expired') }, [])
-  const refresh = useCallback(() => { generation.current++; request.current?.abort(); setActivation(null); setOperatorCsrf(null); setOperatorExpiry(null); setPollPaused(false); setReason(null); setRevision((value) => value + 1) }, [])
+  const refresh = useCallback(() => { if (retryUntil !== null && retryUntil > Date.now()) return; generation.current++; request.current?.abort(); setActivation(null); setAccess(null); setOperatorCsrf(null); setOperatorExpiry(null); setLoadedCsrf(null); setPollPaused(false); setReason(null); setRevision((value) => value + 1) }, [retryUntil])
   useEffect(() => {
     const scope = ++generation.current, controller = new AbortController(); request.current = controller; let active = true, timer: number | undefined, reads = 0
-    setActivation(null); setOperatorCsrf(null); setOperatorExpiry(null); setPollPaused(false); setReason(null)
+    setActivation(null); setAccess(null); setOperatorCsrf(null); setOperatorExpiry(null); setLoadedCsrf(null); setRetryUntil(null); setPollPaused(false); setReason(null)
     if (!required) { setPhase('not_required'); return () => controller.abort() }
     if (!enabled || !csrfToken || !available) { setPhase('disabled'); return () => controller.abort() }
     setPhase('loading')
@@ -23,9 +26,10 @@ export function useNativeResearchContext({ enabled, csrfToken, required, availab
     function failed(caught: unknown) {
       if (!current()) return
       setActivation(null); setOperatorCsrf(null); setOperatorExpiry(null); setPollPaused(false)
-      const code = caught instanceof BudgetError || caught instanceof PublicationError ? caught.code : 'unavailable'
+      const code = caught instanceof BudgetError || caught instanceof PublicationError || caught instanceof ResearchAccessError ? caught.code : 'unavailable'
       setReason(code)
-      if (['browser_expired', 'browser_changed'].includes(code)) { setPhase('expired'); generation.current++; controller.abort(); browserExpired.current() }
+      if (caught instanceof ResearchAccessError && caught.code === 'resource_limited' && caught.retryAfterSeconds !== null) setRetryUntil(Date.now() + caught.retryAfterSeconds * 1000)
+      if (['browser_expired', 'browser_changed'].includes(code)) { setAccess(null); setPhase('expired'); generation.current++; controller.abort(); browserExpired.current() }
       else if (['operator_expired', 'operator_unavailable', 'readiness_role_unavailable', 'readiness_actor_forbidden', 'meta_research_actor_forbidden'].includes(code)) setPhase('operator_required')
       else setPhase('error')
     }
@@ -45,16 +49,37 @@ export function useNativeResearchContext({ enabled, csrfToken, required, availab
         else setPollPaused(true)
       } catch (caught) { failed(caught) }
     }
-    void (async () => {
-      try { const access = await operatorSession(controller.signal); if (!current()) return
-        if (!access.authenticated || !access.csrf_token || !access.expires_at || Date.parse(access.expires_at) <= Date.now()) { setPhase('operator_required'); setReason('operator_session_required'); return }
-        setOperatorCsrf(access.csrf_token); setOperatorExpiry(access.expires_at); setLoadedCsrf(csrfToken); await readCurrent()
+    async function readAccess() {
+      try {
+        const next = await getResearchAccess(controller.signal); if (!current()) return
+        setAccess(next)
+        if (next.audience === 'operator_browser') {
+          const operator = await operatorSession(controller.signal); if (!current()) return
+          if (!operator.authenticated || !operator.csrf_token || !operator.expires_at || Date.parse(operator.expires_at) <= Date.now()) { setPhase('operator_required'); setReason('operator_session_required'); return }
+          setOperatorCsrf(operator.csrf_token); setOperatorExpiry(operator.expires_at); setLoadedCsrf(csrfToken); await readCurrent(); return
+        }
+        reads++; setActivation(null); setOperatorCsrf(null); setOperatorExpiry(null)
+        const live = next.audience === 'public_sessions' && next.available && !!next.expires_at && Date.parse(next.expires_at) > Date.now()
+        setLoadedCsrf(live ? csrfToken : null); setPhase(live ? 'ready' : 'activation_required'); setReason(live ? null : next.reason ?? 'public_research_authority_expired')
+        // Only GETs can refresh funding; an earlier task keeps its original hash.
+        if (reads < 60) timer = window.setTimeout(() => void readAccess(), Math.max(10000, (next.retry_after_seconds ?? 0) * 1000))
+        else setPollPaused(true)
       } catch (caught) { failed(caught) }
-    })()
+    }
+    void readAccess()
     return () => { active = false; controller.abort(); window.clearTimeout(timer) }
   }, [enabled, csrfToken, required, available, revision])
-  useEffect(() => { if (!operatorExpiry) return; const deadline = activation && Date.parse(activation.expires_at) < Date.parse(operatorExpiry) ? activation.expires_at : operatorExpiry; return budgetDeadline(deadline, () => invalidate('meta_research_authority_expired')) }, [activation, operatorExpiry, invalidate])
-  const canSubmit = !required || enabled && available && phase === 'ready' && !pollPaused && loadedCsrf === csrfToken && !!operatorCsrf && !!operatorExpiry && Date.parse(operatorExpiry) > Date.now() && !!activation && Date.parse(activation.expires_at) > Date.now()
-  const submission = useMemo(() => required && canSubmit && operatorCsrf && activation ? { operatorCsrfToken: operatorCsrf, expectedActivationSha256: activation.manifest_sha256 } : null, [required, canSubmit, operatorCsrf, activation?.manifest_sha256])
-  return useMemo(() => ({ required, phase, activation, submission, canSubmit, pollPaused, reason, invalidate, refresh }), [required, phase, activation, submission, canSubmit, pollPaused, reason, invalidate, refresh])
+  useEffect(() => {
+    const deadline = access?.audience === 'public_sessions' ? access.expires_at : operatorExpiry ? activation && Date.parse(activation.expires_at) < Date.parse(operatorExpiry) ? activation.expires_at : operatorExpiry : null
+    if (!deadline || Date.parse(deadline) <= Date.now()) return
+    return budgetDeadline(deadline, () => invalidate(access?.audience === 'public_sessions' ? 'public_research_authority_expired' : 'meta_research_authority_expired'))
+  }, [access?.audience, access?.expires_at, activation, operatorExpiry, invalidate])
+  useEffect(() => { if (retryUntil === null) return; return budgetDeadline(new Date(retryUntil).toISOString(), () => setRetryUntil(null)) }, [retryUntil])
+  const retryAfterSeconds = retryUntil === null ? null : Math.max(0, Math.ceil((retryUntil - Date.now()) / 1000))
+  const publicLive = access?.audience === 'public_sessions' && access.available && !!access.expires_at && Date.parse(access.expires_at) > Date.now() && !!access.expected_activation_sha256
+  const privateLive = !!operatorCsrf && !!operatorExpiry && Date.parse(operatorExpiry) > Date.now() && !!activation && Date.parse(activation.expires_at) > Date.now()
+  const canResume = !required || enabled && available && phase === 'ready' && !pollPaused && loadedCsrf === csrfToken && (publicLive || privateLive)
+  const canSubmit = canResume && (access?.audience !== 'public_sessions' || (access.remaining_session_jobs_today ?? 0) > 0)
+  const submission = useMemo<NativeSubmissionContext | null>(() => !required || !canResume ? null : access?.audience === 'public_sessions' && access.expected_activation_sha256 ? { audience: 'public_sessions', expectedActivationSha256: access.expected_activation_sha256 } : operatorCsrf && activation ? { operatorCsrfToken: operatorCsrf, expectedActivationSha256: activation.manifest_sha256 } : null, [required, canResume, access?.audience, access?.expected_activation_sha256, operatorCsrf, activation?.manifest_sha256])
+  return useMemo(() => ({ required, phase, activation, access, submission, canSubmit, canResume, retryAfterSeconds, pollPaused, reason, invalidate, refresh }), [required, phase, activation, access, submission, canSubmit, canResume, retryAfterSeconds, pollPaused, reason, invalidate, refresh])
 }

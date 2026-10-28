@@ -211,6 +211,8 @@ class NativeResearchAdmission:
     activation_sha256: str
     transaction: object = field(repr=False)
     account: BudgetAccount | None = field(default=None, repr=False)
+    audience: str = "operator_browser"
+    network_bucket: str | None = field(default=None, repr=False)
 
 
 @dataclass(frozen=True)
@@ -356,13 +358,35 @@ def _activation(session, approval_id):
     row = session.get(MetaResearchManifestRecord, approval.manifest_id)
     ready = session.get(MetaReadinessProposalRecord, row.readiness_id)
     try:
-        manifest = MetaResearchManifest.model_validate_json(json.dumps(row.manifest))
+        from polymath.public_research_contracts import (
+            PublicResearchManifest,
+            public_research_manifest_sha256,
+            validate_public_research_manifest,
+        )
+        from polymath.public_research_models import PublicResearchDelegation
+
+        public = row.manifest.get("protocol") == "polymath-meta-public-research-v1"
+        manifest_type = PublicResearchManifest if public else MetaResearchManifest
+        manifest = manifest_type.model_validate_json(json.dumps(row.manifest))
         proposal = MetaReadinessProposal.model_validate_json(
             json.dumps(_stored(ready, _clock(session)).proposal)
         )
-        validate_research_manifest(manifest, proposal)
+        if public:
+            from polymath.public_delegations import validate_public_delegation
+
+            validate_public_research_manifest(manifest, proposal)
+            validate_public_delegation(session, approval, row, manifest)
+        else:
+            validate_research_manifest(manifest, proposal)
+            if session.get(PublicResearchDelegation, approval.id) is not None:
+                raise ValueError
+        digest = (
+            public_research_manifest_sha256(manifest)
+            if public
+            else research_manifest_sha256(manifest)
+        )
         if (
-            research_manifest_sha256(manifest) != row.manifest_sha256
+            digest != row.manifest_sha256
             or approval.manifest_sha256 != row.manifest_sha256
             or approval.armed_epoch != manifest.native_control_epoch + 1
             or manifest.readiness_id != str(row.readiness_id)
@@ -378,6 +402,8 @@ def _activation(session, approval_id):
 
 def _original_input(session, run_id, *, check_input=False):
     from polymath.meta_research_contracts import profile_for_task, task_profile_sha256
+    from polymath.public_research_contracts import PublicResearchManifest, public_profile_for_task
+    from polymath.public_research_models import PublicResearchRunAccess
 
     binding = session.get(NativeResearchRunBinding, run_id)
     if binding is None:
@@ -385,14 +411,28 @@ def _original_input(session, run_id, *, check_input=False):
     approval, row, manifest, proposal = _activation(session, binding.approval_id)
     run = session.get(ResearchRun, run_id)
     discovery = load_discovery_intent(session, run)
-    profile = profile_for_task(manifest, binding.task_kind, discovery=discovery)
+    public = isinstance(manifest, PublicResearchManifest)
+    selector = public_profile_for_task if public else profile_for_task
+    profile = selector(manifest, binding.task_kind, discovery=discovery)
     owner = session.get(ResearchRunAccess, run_id)
+    public_access = session.get(PublicResearchRunAccess, run_id)
+    if public:
+        if (
+            public_access is None
+            or public_access.approval_id != approval.id
+            or public_access.manifest_sha256 != binding.manifest_sha256
+            or public_access.account_id != binding.account_id
+            or public_access.requester_session_hash != binding.browser_session_hash
+            or public_access.public_policy_sha256 != manifest.public_policy_sha256
+        ):
+            raise MetaResearchError("meta_research_storage_unavailable")
+    elif public_access is not None or binding.browser_session_hash != approval.browser_session_hash:
+        raise MetaResearchError("meta_research_storage_unavailable")
     if (
         binding.manifest_id != row.id
         or binding.manifest_sha256 != row.manifest_sha256
         or binding.account_id != row.account_id
         or binding.armed_epoch != approval.armed_epoch
-        or binding.browser_session_hash != approval.browser_session_hash
         or run.task_kind != binding.task_kind
         or run.mode != binding.mode
         or owner is None
@@ -431,12 +471,25 @@ def _fresh_locked_run(session, run_id):
 
 
 class MetaResearchStore:
-    def __init__(self, engine, research_policy=None, readiness_policy=None, operator_policy=None):
+    def __init__(
+        self,
+        engine,
+        research_policy=None,
+        readiness_policy=None,
+        operator_policy=None,
+        *,
+        public_policy=None,
+        resource_controls=None,
+    ):
         from polymath.meta_research_contracts import NativeResearchPolicy
 
         if engine.dialect.name != "postgresql":
             raise ValueError("MetaResearchStore requires PostgreSQL")
         self.engine = engine
+        from polymath.public_research_contracts import PublicResearchPolicy
+
+        self.public_policy = public_policy or PublicResearchPolicy()
+        self.resource_controls = resource_controls
         self.research_policy = research_policy or NativeResearchPolicy()
         self.readiness_policy = readiness_policy or ReadinessPolicy()
         self.operator_policy = operator_policy
@@ -461,7 +514,15 @@ class MetaResearchStore:
             raise MetaResearchError("meta_research_unavailable")
 
     def _current_facts(
-        self, session, account, manifest, proposal, *, reserve=True, pending_request=None
+        self,
+        session,
+        account,
+        manifest,
+        proposal,
+        *,
+        reserve=True,
+        pending_request=None,
+        allow_prepared=False,
     ):
         self._enabled()
         now = _clock(session)
@@ -522,6 +583,28 @@ class MetaResearchStore:
         )
         if unknown is not None:
             raise MetaResearchError("meta_research_prior_unresolved")
+        prepared_marker = (
+            select(ResearchExternalRequest.run_id)
+            .where(
+                ResearchExternalRequest.run_id == ResearchRun.id,
+                ResearchExternalRequest.request_id == ResearchRun.external_request_id,
+                ResearchExternalRequest.status == "prepared",
+            )
+            .correlate(ResearchRun)
+            .exists()
+        )
+        unexplained_marker = session.scalar(
+            select(ResearchRun.id)
+            .join(NativeResearchRunBinding, NativeResearchRunBinding.run_id == ResearchRun.id)
+            .where(
+                NativeResearchRunBinding.account_id == account.id,
+                ResearchRun.external_request_in_flight.is_(True),
+                ~prepared_marker,
+            )
+            .limit(1)
+        )
+        if unexplained_marker is not None:
+            raise MetaResearchError("meta_research_prior_unresolved")
         pending = (
             select(ResearchExternalRequest.run_id)
             .join(BudgetReservation, BudgetReservation.id == ResearchExternalRequest.reservation_id)
@@ -535,6 +618,35 @@ class MetaResearchStore:
                 or_(
                     ResearchExternalRequest.run_id != pending_request[0],
                     ResearchExternalRequest.request_id != pending_request[1],
+                )
+            )
+        if allow_prepared:
+            # Queueing is free; only a correctly fenced, live native call can
+            # be treated as known in-flight work. A stranded prepared journal
+            # remains ambiguous even before its hold is marked unknown.
+            live_binding = (
+                select(NativeResearchRunBinding.run_id)
+                .where(
+                    NativeResearchRunBinding.run_id == ResearchExternalRequest.run_id,
+                    NativeResearchRunBinding.account_id == account.id,
+                    NativeResearchRunBinding.manifest_sha256 == account.native_manifest_sha256,
+                    NativeResearchRunBinding.armed_epoch == account.native_control_epoch,
+                )
+                .exists()
+            )
+            pending = pending.join(
+                ResearchRun, ResearchRun.id == ResearchExternalRequest.run_id
+            ).where(
+                or_(
+                    ResearchRun.status != "running",
+                    ResearchRun.lease_expires_at.is_(None),
+                    ResearchRun.lease_expires_at <= now,
+                    ResearchExternalRequest.dispatch_lease_token != ResearchRun.lease_token,
+                    ResearchRun.external_request_in_flight.is_(False),
+                    ResearchRun.external_request_id.is_(None),
+                    ResearchRun.external_request_id != ResearchExternalRequest.request_id,
+                    BudgetReservation.status != "in_flight",
+                    ~live_binding,
                 )
             )
         if session.scalar(pending.limit(1)) is not None:
@@ -570,8 +682,27 @@ class MetaResearchStore:
         operator=None,
         reserve=True,
         pending_request=None,
+        run_id=None,
+        requester_hash=None,
+        allow_prepared=False,
     ):
         from polymath.meta_research_contracts import research_policy_sha256
+        from polymath.public_research_contracts import PublicResearchManifest
+
+        if isinstance(manifest, PublicResearchManifest):
+            return self.public_service.require_current(
+                session,
+                approval,
+                manifest,
+                proposal,
+                account,
+                operator=operator,
+                reserve=reserve,
+                pending_request=pending_request,
+                run_id=run_id,
+                requester_hash=requester_hash,
+                allow_prepared=allow_prepared,
+            )
 
         browser = session.get(BrowserSession, approval.browser_session_hash, populate_existing=True)
         now = _clock(session)
@@ -603,6 +734,39 @@ class MetaResearchStore:
             session, account, manifest, proposal, reserve=reserve, pending_request=pending_request
         )
         return operator
+
+    @property
+    def public_service(self):
+        from polymath.public_research import PublicResearchService
+
+        return PublicResearchService(self)
+
+    @property
+    def public_delegations(self):
+        from polymath.public_delegations import PublicDelegationStore
+
+        return PublicDelegationStore(self)
+
+    def public_preview(self, *args, **kwargs):
+        return self.public_delegations.preview(*args, **kwargs)
+
+    def public_activate(self, *args, **kwargs):
+        return self.public_delegations.activate(*args, **kwargs)
+
+    @staticmethod
+    def _public_manifest_requested(session, digest):
+        if not isinstance(digest, str) or re.fullmatch(r"[0-9a-f]{64}", digest) is None:
+            return False
+        return (
+            session.scalar(
+                select(MetaResearchManifestRecord.id).where(
+                    MetaResearchManifestRecord.manifest_sha256 == digest,
+                    MetaResearchManifestRecord.manifest["protocol"].astext
+                    == "polymath-meta-public-research-v1",
+                )
+            )
+            is not None
+        )
 
     def preview(
         self,
@@ -748,6 +912,8 @@ class MetaResearchStore:
             return self._record(session, row, operator)
 
     def _record(self, session, row, viewer):
+        if row.manifest.get("protocol") != "polymath-meta-research-activation-v1":
+            raise MetaResearchError("meta_research_not_found")
         approval = session.scalar(
             select(MetaResearchApproval).where(MetaResearchApproval.manifest_id == row.id)
         )
@@ -816,6 +982,8 @@ class MetaResearchStore:
             )
             if row is None:
                 return {"activation": None, "reason": "meta_research_activation_required"}
+            if row.manifest.get("protocol") != "polymath-meta-research-activation-v1":
+                return {"activation": None, "reason": "meta_research_activation_required"}
             approval = session.scalar(
                 select(MetaResearchApproval).where(MetaResearchApproval.manifest_id == row.id)
             )
@@ -850,7 +1018,10 @@ class MetaResearchStore:
             raise MetaResearchError("meta_research_invalid_request")
         with Session(self.engine) as session, session.begin():
             operator = self._authorize(session, request, write=False)
-            query = select(MetaResearchManifestRecord)
+            query = select(MetaResearchManifestRecord).where(
+                MetaResearchManifestRecord.manifest["protocol"].astext
+                == "polymath-meta-research-activation-v1"
+            )
             if before is not None:
                 anchor = session.get(MetaResearchManifestRecord, _id(before))
                 if anchor is None:
@@ -901,6 +1072,8 @@ class MetaResearchStore:
             return self._record(session, row, operator)
 
     def begin_admission(self, session, request, expected_activation_sha256):
+        if self._public_manifest_requested(session, expected_activation_sha256):
+            return self.public_service.begin_admission(session, request, expected_activation_sha256)
         operator = self._authorize(session, request, write=True)
         digest = _digest(expected_activation_sha256)
         row = session.scalar(
@@ -927,6 +1100,8 @@ class MetaResearchStore:
         )
 
     def lock_account_in_session(self, session, admission):
+        if admission.audience == "public_sessions":
+            return self.public_service.lock_account(session, admission)
         if admission.transaction is not session.get_transaction():
             raise MetaResearchError("meta_research_invalid_request")
         approval, _, manifest, proposal = _activation(session, admission.approval_id)
@@ -937,6 +1112,8 @@ class MetaResearchStore:
         return account
 
     def bind_run_in_session(self, session, admission, run, input_sha256):
+        if admission.audience == "public_sessions":
+            return self.public_service.bind_run(session, admission, run, input_sha256)
         if admission.transaction is not session.get_transaction() or admission.account is None:
             raise MetaResearchError("meta_research_invalid_request")
         approval, row, manifest, proposal = _activation(session, admission.approval_id)
@@ -999,6 +1176,10 @@ class MetaResearchStore:
     def resume_in_session(
         self, session, request, run_id, expected_lease_token, expected_activation_sha256
     ):
+        if self._public_manifest_requested(session, expected_activation_sha256):
+            return self.public_service.resume(
+                session, request, run_id, expected_lease_token, expected_activation_sha256
+            )
         operator = self._authorize(session, request, write=True)
         value = _original_input(session, _id(run_id), check_input=True)
         if value.activation_sha256 != _digest(expected_activation_sha256):

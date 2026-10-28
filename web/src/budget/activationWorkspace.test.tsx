@@ -61,7 +61,7 @@ describe('exact operator/browser scientific activation', () => {
     const requests = server(); render(<ActivationWorkspace {...settings()} />); await ready(); await prepare()
     const preview = screen.getByRole('region', { name: 'Research activation approval review' }), activate = screen.getByRole('button', { name: 'Activate research for THIS operator and browser' })
     expect(preview).toHaveTextContent('synthetic-fixture-model'); expect(preview).toHaveTextContent('4,096 tokens / 90,000 characters'); expect(preview).toHaveTextContent('45.5s / 75.5s'); expect(preview).toHaveTextContent('20 / 16 / 2'); expect(preview).toHaveTextContent('12 / 12 / 2')
-    expect(preview).toHaveTextContent('Public paid research is unavailable.'); expect(preview).toHaveTextContent('Unknown outcomes keep their conservative hold')
+    expect(preview).toHaveTextContent('This approving operator and browser only.'); expect(preview).toHaveTextContent('Unknown outcomes keep their conservative hold')
     expect(activate).toBeDisabled(); expect(activations(requests.writes)).toHaveLength(0)
     await userEvent.click(within(preview).getByText('Exact activation hashes and complete manifest'))
     expect(within(preview).getByText(activationPreview().manifest_sha256)).toBeVisible()

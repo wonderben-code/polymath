@@ -24,6 +24,7 @@ from polymath.full_text_contracts import (
 )
 from polymath.literature.clients import ArxivClient, parse_arxiv_records
 from polymath.literature.errors import LiteratureError, ProviderError
+from polymath.provider_pacing import ProviderPacingError, ProviderSlot
 from polymath.research.models import _canonical_arxiv
 
 MAX_HTML_BYTES = 2 * 1024 * 1024
@@ -348,8 +349,14 @@ def extract_arxiv_html(
 
 
 class ArxivHtmlClient:
-    def __init__(self, *, transport: httpx.AsyncBaseTransport | None = None):
+    def __init__(
+        self,
+        *,
+        transport: httpx.AsyncBaseTransport | None = None,
+        provider_slot: ProviderSlot | None = None,
+    ):
         self._transport = transport
+        self._provider_slot = provider_slot
 
     async def resolve(self, locator: ArxivFullTextLocator) -> ArxivFullTextLocator:
         try:
@@ -357,9 +364,9 @@ class ArxivHtmlClient:
             if locator.arxiv_version is not None:
                 return locator
             async with asyncio.timeout(FULL_TEXT_TIMEOUT_SECONDS):
-                payload, retrieved_at = await ArxivClient(transport=self._transport)._request(
-                    {"id_list": locator.arxiv_id, "max_results": 1}
-                )
+                payload, retrieved_at = await ArxivClient(
+                    transport=self._transport, provider_slot=self._provider_slot
+                )._request({"id_list": locator.arxiv_id, "max_results": 1})
                 records = parse_arxiv_records(payload, retrieved_at, limit=1)
             if len(records) != 1:
                 raise ValueError
@@ -386,6 +393,8 @@ class ArxivHtmlClient:
             if locator.arxiv_version is None:
                 raise FullTextError("full_text_version_required")
             async with asyncio.timeout(FULL_TEXT_TIMEOUT_SECONDS):
+                if self._provider_slot is not None:
+                    await self._provider_slot("arxiv")
                 async with httpx.AsyncClient(
                     transport=self._transport,
                     timeout=httpx.Timeout(15.0, connect=5.0),
@@ -434,6 +443,9 @@ class ArxivHtmlClient:
                                 raise FullTextError("full_text_response_too_large")
                             payload.extend(chunk)
                         return extract_arxiv_html(bytes(payload), locator, datetime.now(UTC))
+        except ProviderPacingError as error:
+            code = "rate_limited" if error.code == "rate_limited" else "transport_error"
+            raise FullTextError("full_text_" + code) from None
         except FullTextError:
             raise
         except (TimeoutError, httpx.TimeoutException):

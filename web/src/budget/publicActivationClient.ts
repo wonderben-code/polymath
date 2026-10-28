@@ -1,0 +1,71 @@
+import { BudgetError, canonicalProposal } from './client'
+import { parseMetaResearchActivation, parseMetaResearchManifest, parseNativeResearchReview, researchAdminRequest } from './activationClient'
+import { parseProviderAccountAttestation } from './verificationClient'
+import { parseDiscoveryIntent } from '../research/discoveryIntent'
+import { PUBLIC_RESOURCE_CEILINGS } from './publicActivationTypes'
+import type { ActivatePublicResearchRequest, PublicActivationHistory, PublicActivationPreviewRequest, PublicLimits, PublicResearchActivation, PublicResearchManifest, PublicResearchPreview, PublicResourceLimits } from './publicActivationTypes'
+const BASE = '/api/v1/budget/research/public', HASH = /^[a-f\d]{64}$/, UUID = /^[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}$/
+function invalid(): never { throw new BudgetError('invalid_response') }
+function object(value: unknown, required: string[], optional: string[] = []): Record<string, unknown> { if (!value || typeof value !== 'object' || Array.isArray(value)) return invalid(); const item = value as Record<string, unknown>; if (required.some((key) => !Object.hasOwn(item, key)) || Object.keys(item).some((key) => !required.includes(key) && !optional.includes(key))) return invalid(); return item }
+function integer(value: unknown, maximum: number): number { return typeof value === 'number' && Number.isSafeInteger(value) && value >= 1 && value <= maximum ? value : invalid() }
+function hash(value: unknown): string { return typeof value === 'string' && HASH.test(value) ? value : invalid() }
+function id(value: unknown): string { return typeof value === 'string' && UUID.test(value) ? value : invalid() }
+function utc(value: unknown): string { if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|\+00:00)$/.test(value) || !Number.isFinite(Date.parse(value)) || new Date(value).toISOString().slice(0, 19) !== value.slice(0, 19)) return invalid(); return value }
+const QUOTAS = { max_jobs_per_session_day: 12, max_jobs_per_day: 50, max_active_jobs_per_session: 1, max_active_jobs: 5, max_queued_jobs: 4, max_active_jobs_per_network: 2 } as const
+const MONEY = ['public_total_cap_microdollars', 'public_daily_cap_microdollars', 'session_total_cap_microdollars', 'session_daily_cap_microdollars'] as const
+export function parsePublicLimits(value: unknown, allowDefaults = false): PublicLimits {
+  const item = object(value, [...MONEY, ...(allowDefaults ? [] : [...Object.keys(QUOTAS), 'resources'])], allowDefaults ? [...Object.keys(QUOTAS), 'resources'] : [])
+  const amounts = Object.fromEntries(MONEY.map((key) => [key, integer(item[key], 150000000)])) as Pick<PublicLimits, typeof MONEY[number]>
+  const quotas = Object.fromEntries(Object.entries(QUOTAS).map(([key, ceiling]) => [key, item[key] === undefined && allowDefaults ? ceiling : integer(item[key], ceiling)])) as typeof QUOTAS
+  const rawResources = object(item.resources === undefined && allowDefaults ? {} : item.resources, allowDefaults ? [] : Object.keys(PUBLIC_RESOURCE_CEILINGS), allowDefaults ? Object.keys(PUBLIC_RESOURCE_CEILINGS) : [])
+  const resources = Object.fromEntries(Object.entries(PUBLIC_RESOURCE_CEILINGS).map(([key, ceiling]) => [key, rawResources[key] === undefined && allowDefaults ? ceiling : integer(rawResources[key], ceiling)])) as PublicResourceLimits
+  if (amounts.public_daily_cap_microdollars > amounts.public_total_cap_microdollars || amounts.session_total_cap_microdollars > amounts.public_total_cap_microdollars || amounts.session_daily_cap_microdollars > Math.min(amounts.session_total_cap_microdollars, amounts.public_daily_cap_microdollars) || quotas.max_jobs_per_session_day > quotas.max_jobs_per_day || quotas.max_queued_jobs > quotas.max_active_jobs || quotas.max_active_jobs_per_network > quotas.max_active_jobs) return invalid()
+  return { ...amounts, ...quotas, resources }
+}
+export function parsePublicResearchManifest(value: unknown): PublicResearchManifest {
+  const item = object(value, ['protocol', 'audience', 'authorization_mode', 'continues_after_operator_logout', 'readiness_id', 'proposal_sha256', 'proposal', 'account_id', 'model_id', 'endpoint', 'credential_binding_sha256', 'canary', 'review', 'provider_account_attestation', 'native_control_epoch', 'clear_kill_switch', 'task_profiles', 'valid_until', 'public_limits', 'public_policy_sha256', 'sponsor_policy_sha256'], ['discovery_ladder_profile'])
+  if (item.protocol !== 'polymath-meta-public-research-v1' || item.audience !== 'public_sessions' || item.authorization_mode !== 'durable_owner_delegation' || item.continues_after_operator_logout !== true) return invalid()
+  const common = { ...item }; for (const key of ['authorization_mode', 'continues_after_operator_logout', 'public_limits', 'public_policy_sha256', 'sponsor_policy_sha256']) delete common[key]
+  const base = parseMetaResearchManifest({ ...common, protocol: 'polymath-meta-research-activation-v1', audience: 'operator_browser' }), limits = parsePublicLimits(item.public_limits), proposal = base.proposal
+  const reserve = (BigInt(proposal.billable_bounds.input_tokens_absolute) * BigInt(proposal.pricing.input_microdollars_per_million) + 999999n) / 1000000n + (BigInt(proposal.billable_bounds.output_tokens_absolute) * BigInt(proposal.pricing.output_microdollars_per_million) + 999999n) / 1000000n
+  if (limits.public_total_cap_microdollars > proposal.account.hard_cap_microdollars || limits.public_daily_cap_microdollars > proposal.account.daily_cap_microdollars || MONEY.some((key) => BigInt(limits[key]) < reserve)) return invalid()
+  return { ...base, protocol: 'polymath-meta-public-research-v1', audience: 'public_sessions', authorization_mode: 'durable_owner_delegation', continues_after_operator_logout: true, public_limits: limits, public_policy_sha256: hash(item.public_policy_sha256), sponsor_policy_sha256: hash(item.sponsor_policy_sha256) }
+}
+export function parsePublicResearchPreview(value: unknown): PublicResearchPreview { const item = object(value, ['manifest', 'manifest_sha256', 'research_execution_available']); if (item.research_execution_available !== false) return invalid(); return { manifest: parsePublicResearchManifest(item.manifest), manifest_sha256: hash(item.manifest_sha256), research_execution_available: false } }
+export function parsePublicResearchActivation(value: unknown): PublicResearchActivation {
+  const item = object(value, ['id', 'manifest_sha256', 'manifest', 'audience', 'authorization_mode', 'continues_after_operator_logout', 'approval', 'delegation_current', 'created_at']), manifest = parsePublicResearchManifest(item.manifest)
+  if (item.audience !== 'public_sessions' || item.authorization_mode !== 'durable_owner_delegation' || item.continues_after_operator_logout !== true || typeof item.delegation_current !== 'boolean') return invalid()
+  // Reuse exact common approval validation without converting public authority
+  // into a private browser grant or imposing the issuer's session deadline.
+  const common = { ...manifest } as Record<string, unknown>; for (const key of ['authorization_mode', 'continues_after_operator_logout', 'public_limits', 'public_policy_sha256', 'sponsor_policy_sha256']) delete common[key]
+  const parsed = parseMetaResearchActivation({ id: item.id, manifest_sha256: item.manifest_sha256, manifest: { ...common, protocol: 'polymath-meta-research-activation-v1', audience: 'operator_browser' }, audience: 'operator_browser', approval: item.approval, eligible_for_current_browser: false, research_execution_available: false, created_at: item.created_at })
+  if (semantic({ valid_until: parsed.approval.expires_at }) !== semantic({ valid_until: manifest.valid_until }) || item.delegation_current && !parsed.approval.valid) return invalid()
+  return { id: parsed.id, manifest_sha256: parsed.manifest_sha256, manifest, audience: 'public_sessions', authorization_mode: 'durable_owner_delegation', continues_after_operator_logout: true, approval: parsed.approval, delegation_current: item.delegation_current, created_at: parsed.created_at }
+}
+export function parsePublicPreviewRequest(value: unknown): PublicActivationPreviewRequest {
+  const item = object(value, ['readiness_id', 'canary_receipt_id', 'review', 'provider_account_attestation', 'public_limits', 'valid_until'], ['discovery']), discovery = parseDiscoveryIntent(item.discovery, invalid)
+  return { readiness_id: id(item.readiness_id), canary_receipt_id: id(item.canary_receipt_id), review: parseNativeResearchReview(item.review), provider_account_attestation: parseProviderAccountAttestation(item.provider_account_attestation), public_limits: parsePublicLimits(item.public_limits, true), valid_until: utc(item.valid_until), ...(discovery ? { discovery } : {}) }
+}
+function semantic(value: unknown): string {
+  return canonicalProposal(JSON.parse(JSON.stringify(value), (key, item: unknown) => {
+    if (typeof item !== 'string') return item
+    if (['observed_at', 'valid_until'].includes(key)) { const match = /^(.*T\d{2}:\d{2}:\d{2})(?:\.(\d+))?(?:Z|\+00:00)$/.exec(item); if (match) { const fraction = (match[2] ?? '').replace(/0+$/, ''); return `${match[1]}${fraction ? `.${fraction}` : ''}Z` } }
+    if (key === 'url') return new URL(item).href
+    return item
+  }))
+}
+export async function previewPublicResearch(body: PublicActivationPreviewRequest, csrf: string, operatorCsrf: string, signal?: AbortSignal): Promise<PublicResearchPreview> {
+  let exact: PublicActivationPreviewRequest; try { exact = parsePublicPreviewRequest(body) } catch { throw new BudgetError('public_research_invalid_request') }
+  return researchAdminRequest(`${BASE}/preview`, (value) => { const result = parsePublicResearchPreview(value), manifest = result.manifest
+    if (manifest.readiness_id !== exact.readiness_id || manifest.canary.receipt_id !== exact.canary_receipt_id || semantic(manifest.review) !== semantic(exact.review) || semantic(manifest.provider_account_attestation) !== semantic(exact.provider_account_attestation) || semantic({ valid_until: manifest.valid_until }) !== semantic({ valid_until: exact.valid_until }) || canonicalProposal(manifest.public_limits) !== canonicalProposal(exact.public_limits) || (exact.discovery ? manifest.discovery_ladder_profile?.profile.max_stages !== exact.discovery.max_stages || manifest.discovery_ladder_profile.profile.max_depth !== exact.discovery.max_depth : manifest.discovery_ladder_profile !== undefined)) return invalid()
+    return result
+  }, signal, { csrf, operatorCsrf, body: exact })
+}
+export async function activatePublicResearch(body: ActivatePublicResearchRequest, csrf: string, operatorCsrf: string, signal?: AbortSignal): Promise<PublicResearchActivation> {
+  let exact: ActivatePublicResearchRequest; try { exact = { manifest: parsePublicResearchManifest(body.manifest), expected_manifest_sha256: hash(body.expected_manifest_sha256) }; if (Object.keys(body).length !== 2) return invalid() } catch { throw new BudgetError('public_research_invalid_request') }
+  return researchAdminRequest(`${BASE}/activate`, (value) => { const result = parsePublicResearchActivation(value); return result.manifest_sha256 === exact.expected_manifest_sha256 && canonicalProposal(result.manifest) === canonicalProposal(exact.manifest) ? result : invalid() }, signal, { csrf, operatorCsrf, body: exact })
+}
+export async function listPublicActivations(signal?: AbortSignal, before?: string): Promise<PublicActivationHistory> { const query = new URLSearchParams({ limit: '5' }); if (before !== undefined) query.set('before', id(before)); return researchAdminRequest(`${BASE}/activations?${query}`, (value) => { const item = object(value, ['activations', 'next_cursor']); if (!Array.isArray(item.activations) || item.activations.length > 5) return invalid(); const records = item.activations.map(parsePublicResearchActivation), cursor = item.next_cursor === null ? null : id(item.next_cursor); if (new Set(records.map((record) => record.id)).size !== records.length || records.some((record) => record.id === before) || cursor !== null && (cursor !== records.at(-1)?.id || cursor === before)) return invalid(); return { activations: records, next_cursor: cursor } }, signal) }
+export const getPublicActivation = (activationId: string, signal?: AbortSignal) => researchAdminRequest(`${BASE}/activations/${id(activationId)}`, (value) => { const record = parsePublicResearchActivation(value); return record.id === activationId ? record : invalid() }, signal)
+export const revokePublicActivation = (activationId: string, csrf: string, operatorCsrf: string, signal?: AbortSignal) => researchAdminRequest(`${BASE}/activations/${id(activationId)}/revoke`, (value) => { const record = parsePublicResearchActivation(value); return record.id === activationId && record.approval.revoked_at !== null && !record.approval.valid && !record.delegation_current ? record : invalid() }, signal, { csrf, operatorCsrf, body: {} })
+export function loadPublicResearchCapabilities(signal?: AbortSignal) { return researchAdminRequest(`${BASE}/capabilities`, (value): import('./publicActivationTypes').PublicResearchCapabilities => { const item = object(value, ['activation_available', 'inspection_available', 'revoke_available', 'audience', 'reason']); if (item.audience !== 'public_sessions' || typeof item.activation_available !== 'boolean' || typeof item.inspection_available !== 'boolean' || item.inspection_available !== item.revoke_available || item.activation_available && !item.inspection_available || (item.activation_available ? item.reason !== null : item.reason !== 'public_research_unavailable')) return invalid(); return { activation_available: item.activation_available, inspection_available: item.inspection_available, revoke_available: item.inspection_available, audience: 'public_sessions', reason: item.reason as 'public_research_unavailable' | null } }, signal, undefined, true) }

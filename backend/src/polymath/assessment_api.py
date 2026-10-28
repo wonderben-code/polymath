@@ -31,7 +31,11 @@ from polymath.assessments import (
 from polymath.evidence import EvidenceError, EvidenceStore
 from polymath.evidence_models import EvidenceResult
 from polymath.jobs import _event
-from polymath.meta_research_errors import META_RESEARCH_ERROR_STATUSES, MetaResearchError
+from polymath.meta_research_errors import (
+    META_RESEARCH_ERROR_STATUSES,
+    MetaResearchError,
+    retry_headers,
+)
 from polymath.models import ResearchRun
 from polymath.run_api import (
     ACTIVE_STATES,
@@ -67,7 +71,9 @@ class _AssessmentRoute(APIRoute):
                     if error.code in META_RESEARCH_ERROR_STATUSES
                     else ("meta_research_storage_unavailable")
                 )
-                raise _AssessmentHTTPException(META_RESEARCH_ERROR_STATUSES[code], code) from None
+                failure = _AssessmentHTTPException(META_RESEARCH_ERROR_STATUSES[code], code)
+                failure.headers.update(retry_headers(error))
+                raise failure from None
             except HTTPException as error:
                 error.headers = {
                     **(error.headers or {}),

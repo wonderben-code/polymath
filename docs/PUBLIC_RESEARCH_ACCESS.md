@@ -1,9 +1,11 @@
 # Controlled public research access
 
-Status: D2 implementation design, 28 October 2026. This document does not enable
-public research, authorize a paid request, or select a deployment/provider plan.
-Paid calls remain forbidden in this session. Current native execution is limited
-to the `operator_browser` audience described in [META_RESEARCH.md](META_RESEARCH.md).
+Status: D2 implementation contract, 28 October 2026. The local API, native worker,
+resource controls, browser and standalone client are implemented and locally
+verified: 3,358 tests pass, plus isolated synthetic browser/client journeys. This does not enable public research,
+authorize a paid request, or select a deployment/provider plan. Paid calls remain
+forbidden. Existing private approvals retain their `operator_browser` scope and
+hashes, as described in [META_RESEARCH.md](META_RESEARCH.md).
 
 D2 lets an ordinary visitor use the website and HTTP API without an operator
 credential, user account, payment method, Meta key or Zenodo key. The existing
@@ -269,7 +271,7 @@ Introduce the strict public preview/activate shape under the existing budget des
 | `GET /api/v1/budget/research/public/activations` | Bounded current-budget-operator history, cursor/limit at most 20 |
 | `GET /api/v1/budget/research/public/activations/{id}` | Current budget operator; exact immutable private facts and current control state |
 | `POST /api/v1/budget/research/public/activations/{id}/revoke` | Current budget operator + both CSRF domains; explicit stop, native epoch fencing, holds retained |
-| `GET /api/v1/research/access` | Existing requester session only; no session creation, grants, model/provider calls or writes |
+| `GET /api/v1/research/access` | Existing requester session only; no session creation, grants, model/provider calls or scientific/budget writes; operational read-rate counters apply |
 
 Public administration history and stop remain available when public execution
 is off, provided the current budget role is configured. Existing account disable
@@ -291,6 +293,22 @@ remaining_session_jobs_today: integer | null
 retry_after_seconds: bounded integer | null
 ```
 
+The public `limits` projection contains only session total/daily monetary caps
+as decimal strings, `max_jobs_per_session_day`, `max_active_jobs_per_session:1`,
+the five `task_kinds`, and a nullable `discovery_intent` ceiling. It contains no
+rates, native task-profile internals, issuer or account facts. Available public
+access requires a complete hash/deadline/limits binding and known own counters.
+Closed public access may retain that binding with nullable unknown counters;
+an absent binding has no counters. The private `operator_browser` projection is
+always unavailable with `operator_required` and no private activation metadata;
+the existing privileged current-activation route supplies private authority.
+
+`available` describes current funding authority and financial room, not a
+promise that a new admission will pass queue/rate/job-count checks. Exhausting
+the visitor's daily new-job allowance disables new submissions without consuming
+another admission for explicit original-run resume. The original activation,
+financial limits and unknown-work checks still apply to that resume.
+
 The hash identifies the displayed public version; it is not a bearer credential.
 Never expose account IDs, issuer identities, operator/session hashes, key
 bindings, private rates/attestations or other visitors' usage through this route.
@@ -310,7 +328,8 @@ Reads, events, source inspection, retained stages, ordinary owned cancellation
 and exact exports remain usable after paid closure until requester expiry.
 A funding deadline does not become `session_expired`. Cross-owner access still
 returns a generic 404. Public/shared pages continue omitting cookies and never
-opening private sessions. Public research does not auto-share private inputs or
+opening private sessions. Rate/stream counters are operational metadata; reading
+creates no jobs, findings, grants or financial reservations. Public research does not auto-share private inputs or
 grant publication, operator, budget editing or unknown-cost reconciliation rights.
 
 The web App opens its normal owner session, loads access with GET and supplies

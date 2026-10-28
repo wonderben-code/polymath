@@ -33,7 +33,11 @@ from polymath.access_models import BrowserSession, ResearchRunAccess
 from polymath.discovery_contracts import DiscoveryIntent
 from polymath.jobs import JobNotFound, JobRepository, _event
 from polymath.lineage import LineageError, bind_parents, validate_parent_ids
-from polymath.meta_research_errors import META_RESEARCH_ERROR_STATUSES, MetaResearchError
+from polymath.meta_research_errors import (
+    META_RESEARCH_ERROR_STATUSES,
+    MetaResearchError,
+    retry_headers,
+)
 from polymath.models import ResearchEvent, ResearchRun
 
 if TYPE_CHECKING:
@@ -69,7 +73,9 @@ class _PrivateRoute(APIRoute):
                     if error.code in META_RESEARCH_ERROR_STATUSES
                     else ("meta_research_storage_unavailable")
                 )
-                raise _PrivateHTTPException(META_RESEARCH_ERROR_STATUSES[code], code) from None
+                failure = _PrivateHTTPException(META_RESEARCH_ERROR_STATUSES[code], code)
+                failure.headers.update(retry_headers(error))
+                raise failure from None
 
         return handle
 

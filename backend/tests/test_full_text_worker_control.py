@@ -1,7 +1,6 @@
 """Frozen identity reads stop safely before repair dispatch, using synthetic HTTP."""
 
 import asyncio
-from dataclasses import replace
 from threading import Event
 
 import pytest
@@ -11,6 +10,7 @@ from test_full_text import FullTextFixtureModel
 from test_full_text_worker import assert_complete, counts, queued, replacement, resume, worker_for
 from test_worker import database as database_fixture
 
+import polymath.research.controller as research_controller
 from polymath.budget import BudgetService
 from polymath.evidence_models import EvidenceResult
 from polymath.full_text import FullTextStore
@@ -27,10 +27,16 @@ async def test_identity_context_failure_requires_explicit_resume_without_new_cha
 ):
     run_id, model, requests = queued(database), FullTextFixtureModel(), []
     worker = worker_for(database, model, requests)
-    worker.limits = replace(worker.limits, tool_timeout_seconds=0.5)
     original = FullTextStore.owned_identity_context
+    original_identity_context = research_controller._extra_identity_context
     read_finished, release, thread_finished = Event(), Event(), Event()
     first = True
+
+    async def first_identity_timeout(tools, timeout):
+        # Exercise the real wait_for cancellation at the injected read only.
+        # Healthy replay retains the exact original worker profile and does not
+        # impose a half-second deadline on every saved-window/cache transaction.
+        return await original_identity_context(tools, 0.5 if first else timeout)
 
     def lost_after_read(store, lease):
         nonlocal first
@@ -47,6 +53,7 @@ async def test_identity_context_failure_requires_explicit_resume_without_new_cha
         return result
 
     monkeypatch.setattr(FullTextStore, "owned_identity_context", lost_after_read)
+    monkeypatch.setattr(research_controller, "_extra_identity_context", first_identity_timeout)
     try:
         outcome = await worker.run_once("identity-control-first-worker")
         assert outcome.status == "interrupted"

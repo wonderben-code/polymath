@@ -33,19 +33,19 @@ from polymath.evidence_models import (
 )
 from polymath.ingestion_models import (
     IngestionPage,
-    IngestionProviderGate,
     IngestionTick,
     LiteratureWatch,
     WatchSeenSourceVersion,
 )
 from polymath.jobs import JobLease, _clear_lease, _event, _owned
 from polymath.models import ResearchRun
+from polymath.provider_pacing import PROVIDER_INTERVALS as PROVIDER_INTERVALS
+from polymath.provider_pacing import ProviderPacingError, acquire_provider_slot
 from polymath.run_api import ACTIVE_STATES, QUEUE_LOCK_KEY
 
 PROVIDERS = ("openalex", "arxiv")
 WATCH_QUOTA_LOCK = 7_691_121_408
 TERMINAL_STATES = ("succeeded", "failed", "cancelled")
-PROVIDER_INTERVALS = {"openalex": 1.0, "arxiv": 3.0}
 MAX_WATCH_SOURCE_VERSIONS = 2000
 
 
@@ -787,33 +787,24 @@ class IngestionRepository:
     def acquire_provider_slot(self, lease: JobLease, provider: str) -> float:
         _provider(provider)
         with Session(self.engine) as session, session.begin():
-            _worker_context(session, lease)
-            gate = session.scalar(
-                select(IngestionProviderGate)
-                .where(IngestionProviderGate.provider == provider)
-                .with_for_update()
-                .execution_options(populate_existing=True)
-            )
-            if gate is None:
-                raise IngestionError("ingestion_provider_gate_unavailable")
-            # Ownership may expire while another worker holds the global gate.
-            watch, _, _ = _worker_context(session, lease)
-            if (
-                session.scalar(
-                    select(func.count())
-                    .select_from(WatchSeenSourceVersion)
-                    .where(WatchSeenSourceVersion.watch_id == watch.id)
-                )
-                >= MAX_WATCH_SOURCE_VERSIONS
-            ):
-                raise IngestionError("ingestion_watch_source_limit")
-            now = _now(session)
-            if gate.next_allowed_at > now:
-                return (gate.next_allowed_at - now).total_seconds()
-            gate.next_allowed_at = now + timedelta(seconds=PROVIDER_INTERVALS[provider])
-            gate.sequence += 1
-            _browser(session, watch.owner_session_hash)
-            return 0.0
+
+            def authorize(current_session):
+                watch, _, _ = _worker_context(current_session, lease)
+                if (
+                    current_session.scalar(
+                        select(func.count())
+                        .select_from(WatchSeenSourceVersion)
+                        .where(WatchSeenSourceVersion.watch_id == watch.id)
+                    )
+                    >= MAX_WATCH_SOURCE_VERSIONS
+                ):
+                    raise IngestionError("ingestion_watch_source_limit")
+                _browser(current_session, watch.owner_session_hash)
+
+            try:
+                return acquire_provider_slot(session, provider, authorize=authorize)
+            except ProviderPacingError:
+                raise IngestionError("ingestion_provider_gate_unavailable") from None
 
     def commit_page(
         self,

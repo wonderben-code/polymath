@@ -7,9 +7,12 @@ This is the product-outcome roadmap. [ARCHITECTURE.md](ARCHITECTURE.md) explains
 Verified 28 October: local implementation now includes all three modes, native
 Meta composition, automatic Surprise discovery ladders, owned memory/map,
 collection/reassessment, Formalise/Write, exact publication controls and revocable
-public reading. The latest local regression has 2,978 passing tests. Next is
-controlled visitor research access. Real Meta/scientific evaluation, approved
-Zenodo publication, hosting and submission remain open gates; paid calls stay off.
+public reading and controlled visitor research with explicit durable funding.
+The latest local regression has 3,358 passing tests. Next are pinned scientific
+context and claim-bound Ask overviews, broader Explore branching/ranking, richer
+claim/source/public-memory retrieval and deployment/operations. Real Meta/scientific
+evaluation, approved Zenodo publication, hosting and submission remain open gates;
+paid calls stay off.
 
 ## Release scope
 

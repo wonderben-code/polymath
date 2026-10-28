@@ -1,6 +1,7 @@
 import { createContext, useContext } from 'react'
 import type { ReactNode } from 'react'
 import type { EligibleActivation } from '../budget/activationTypes'
+import type { ResearchAccess } from './access'
 import type { NativeSubmissionContext } from './nativeAdmission'
 
 export interface NativeResearchContextValue {
@@ -8,6 +9,9 @@ export interface NativeResearchContextValue {
   phase: 'not_required' | 'disabled' | 'loading' | 'ready' | 'operator_required' | 'activation_required' | 'error' | 'expired'
   activation: EligibleActivation | null
   submission: NativeSubmissionContext | null
+  access?: ResearchAccess | null
+  retryAfterSeconds?: number | null
+  canResume?: boolean
   canSubmit: boolean
   pollPaused: boolean
   reason: string | null

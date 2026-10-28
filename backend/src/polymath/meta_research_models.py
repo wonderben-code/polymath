@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, String, Uuid, func
+from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, String, UniqueConstraint, Uuid, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -26,6 +26,17 @@ class MetaResearchManifestRecord(Base):
 
 class MetaResearchApproval(Base):
     __tablename__ = "meta_research_approvals"
+    __table_args__ = (
+        UniqueConstraint(
+            "id",
+            "manifest_sha256",
+            "operator_session_hash",
+            "browser_session_hash",
+            "actor_id",
+            "expires_at",
+            name="uq_native_public_delegation_authority",
+        ),
+    )
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     manifest_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("meta_research_manifests.id"), unique=True
@@ -55,6 +66,16 @@ class MetaResearchRevocation(Base):
 
 class NativeResearchRunBinding(Base):
     __tablename__ = "meta_research_run_bindings"
+    __table_args__ = (
+        UniqueConstraint(
+            "run_id",
+            "approval_id",
+            "manifest_sha256",
+            "account_id",
+            "browser_session_hash",
+            name="uq_native_research_public_binding",
+        ),
+    )
     run_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("research_runs.id"), primary_key=True
     )

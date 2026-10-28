@@ -16,6 +16,7 @@ from polymath.literature.clients import (
     validate_result_limit,
 )
 from polymath.literature.errors import LiteratureError, ProviderError
+from polymath.provider_pacing import ProviderSlot
 from polymath.research.models import (
     ArxivFullTextLocator,
     FullTextAvailability,
@@ -42,13 +43,16 @@ class OpenLiteratureTools:
         openalex_api_key: SecretStr | None = None,
         transport: httpx.AsyncBaseTransport | None = None,
         results_per_provider: int = 5,
+        provider_slot: ProviderSlot | None = None,
     ) -> None:
         from polymath.literature.full_text import ArxivHtmlClient
 
         validate_result_limit(results_per_provider)
-        self._openalex = OpenAlexClient(api_key=openalex_api_key, transport=transport)
-        self._arxiv = ArxivClient(transport=transport)
-        self._html = ArxivHtmlClient(transport=transport)
+        self._openalex = OpenAlexClient(
+            api_key=openalex_api_key, transport=transport, provider_slot=provider_slot
+        )
+        self._arxiv = ArxivClient(transport=transport, provider_slot=provider_slot)
+        self._html = ArxivHtmlClient(transport=transport, provider_slot=provider_slot)
         self._limit = results_per_provider
         self._discovered: dict[str, DiscoveredSource] = {}
         self._full_text: dict[str, FullTextAvailability] = {}

@@ -2,7 +2,7 @@ import { parseDiscoveryStage } from '../discovery/client'
 import { parseDiscoveryIntent } from '../research/discoveryIntent'
 import type { DiscoveryStage, DiscoveryStageMetadata } from '../discovery/types'
 import { parseBibliography } from '../research/bibliography'
-import { nativeAdmissionFailure, parseNativeRunControl, validNativeSubmission } from '../research/nativeAdmission'
+import { nativeSubmissionHeaders, nativeAdmissionFailure, parseNativeRunControl, validNativeSubmission } from '../research/nativeAdmission'
 import type { NativeSubmissionContext } from '../research/nativeAdmission'
 import { parseSourceCoverage, validateSourceCoverageContext } from '../research/sourceCoverage'
 import { parseResult } from '../research/client'
@@ -10,7 +10,7 @@ import type { AnswerFinding, BridgeFinding, ClaimQuote, FieldSelection, MemoryRe
 import type { AssessmentBasis, AssessmentCancellation, AssessmentCapabilities, AssessmentCitation, AssessmentDisposition, AssessmentHistory, AssessmentJob, AssessmentJobHistory, AssessmentJobStatus, AssessmentQuote, AssessmentRecord, AssessmentResult, AssessmentSourceReference, CreateAssessmentJob, FindingHead, FindingVersion, ObservedAssessmentSource } from './types'
 
 export class AssessmentError extends Error {
-  constructor(public readonly code: string, public readonly uncertain = false) { super(code); this.name = 'AssessmentError' }
+  constructor(public readonly code: string, public readonly uncertain = false, public readonly retryAfterSeconds: number | null = null) { super(code); this.name = 'AssessmentError' }
 }
 
 const BASE = '/api/v1/assessments'
@@ -213,13 +213,14 @@ async function request<T>(path: string, parse: (value: unknown) => T, signal?: A
   try {
     sent = true
     const response = await fetch(path, { method: write ? 'POST' : 'GET', credentials: 'same-origin', cache: 'no-store', redirect: 'error', signal: controller.signal,
-      headers: { Accept: 'application/json', ...(write ? { 'X-CSRF-Token': write.csrf, ...(write.body === undefined ? {} : { 'Content-Type': 'application/json' }), ...(write.native ? { 'X-Operator-CSRF-Token': write.native.operatorCsrfToken } : {}) } : {}) }, ...(write?.body === undefined ? {} : { body: JSON.stringify(write.body) }) })
+      headers: { Accept: 'application/json', ...(write ? { 'X-CSRF-Token': write.csrf, ...(write.body === undefined ? {} : { 'Content-Type': 'application/json' }), ...(write.native ? nativeSubmissionHeaders(write.native) : {}) } : {}) }, ...(write?.body === undefined ? {} : { body: JSON.stringify(write.body) }) })
     if (!response.ok && [401, 403, 409, 503].includes(response.status)) {
       let detail: unknown
       try { detail = object(await json(response.clone())).detail } catch { /* Keep untrusted errors out of the UI. */ }
       if (nativeAdmissionFailure(response.status, detail)) throw new AssessmentError('native_authority_changed')
     }
     if (response.status === 401 || response.status === 403) throw new AssessmentError('session_expired')
+    if (response.status === 429) { const retry = response.headers.get('retry-after'); if (retry && /^\d{1,5}$/.test(retry) && Number(retry) <= 86400) throw new AssessmentError('resource_limited', false, Number(retry)) }
     if (!response.ok) {
       let detail: string | undefined
       try { const problem = object(await json(response)); if (typeof problem.detail === 'string' && CODES.has(problem.detail)) detail = problem.detail } catch { /* Untrusted error text is never shown. */ }

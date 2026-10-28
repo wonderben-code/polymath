@@ -23,6 +23,7 @@ function merge(previous: ArtifactJob | undefined, incoming: ArtifactJob): Artifa
 function failureMessage(error: unknown): string {
   if (!(error instanceof ResearchApiError)) return 'The document service could not be reached. Reload saved work before trying again.'
   switch (error.code) {
+    case 'resource_limited': return `A request or visitor allowance limit was reached. Wait${error.retryAfterSeconds === null ? '' : ` at least ${error.retryAfterSeconds} seconds`} before trying again. No action was retried; saved work is retained.`
     case 'queue_limit': return 'An investigation or writing task is already active, or the queue is full. Finish or cancel it before starting another.'
     case 'run_unavailable': return 'This saved finding or document is unavailable in your current session.'
     case 'unavailable': return 'Generation is unavailable right now. Your saved work is retained.'

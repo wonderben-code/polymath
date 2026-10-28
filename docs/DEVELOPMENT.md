@@ -91,6 +91,24 @@ Owner routes under `/api/v1/shares` retain normal session/CSRF/origin controls. 
 
 The `/operator/budget` page and `/api/v1/budget` routes prepare disabled operator-attested Meta proposals, inspect counted spending/holds and explicitly disable an account. `BUDGET_READINESS_ENABLED=false` and an empty `BUDGET_ADMIN_ACTOR_IDS` keep preparation unavailable by default. An explicitly allowed operator needs the current browser and operator sessions plus both CSRF domains. Preparation cannot activate execution, verify pricing, run a probe, clear a kill switch or release a hold. New accounts are disabled/unverified/killed; existing caps, flags and ledger history remain intact. Every response states native readiness has not run. The server ceiling is at most150,000,000 microdollars ($150); it is not proof of provider credits or a configured external spend limit. See [META_READINESS.md](META_READINESS.md) for exact facts, integer rounding, immutable audit and the separate native-verification/activation stages.
 
+The separate public funding panel issues a strict durable delegation with an
+exact UTC deadline and explicit spending-after-logout confirmation. Public
+scientific requests use only the visitor cookie/CSRF and exact current public
+hash; publisher/budget authority remains separate. `PUBLIC_META_RESEARCH_ENABLED`
+and `PUBLIC_RESOURCE_LIMITS_ENABLED` default false. Public funding needs native
+execution plus resource controls and a reviewed current delegation; flags or keys
+alone grant nothing. Schema0023 adds immutable sponsor/requester bindings and
+persistent rate/stream state on the same ledger. One native job runs per account;
+other visitors wait in the bounded queue. Unknown work pauses the account.
+See [PUBLIC_RESEARCH_ACCESS.md](PUBLIC_RESEARCH_ACCESS.md).
+
+Resource gates use the configured transport peer, never arbitrary forwarding
+headers. Actual HTTPS/reverse-proxy trust must be verified on the selected host.
+Operational rate counters can change on GET without creating sessions, science,
+grants or charges. Budget closure keeps saved reads and cancellation available.
+Policy/credential rollout begins with a persisted epoch stop, then old process
+shutdown and configuration reload; fresh approval alone rearms spending.
+
 Compose forwards the optional server operator identity and budget preparation settings; defaults create no operator authority. Store bootstrap credentials in secure server settings or the ignored local `.env`, not in chat, Git or proposal JSON. This setting cannot enable research, publication or collection.
 
 ## External HTTP client

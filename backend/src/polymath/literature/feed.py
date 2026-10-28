@@ -176,11 +176,11 @@ def _minute(value: datetime) -> str:
 
 
 class OpenLiteratureFeed:
-    def __init__(self, *, transport: httpx.AsyncBaseTransport | None = None):
+    def __init__(self, *, transport: httpx.AsyncBaseTransport | None = None, provider_slot=None):
         # These existing clients enforce fixed HTTPS endpoints, wall-clock and
         # byte caps, no redirects, sanitized failures, and no credential lookup.
-        self._openalex = OpenAlexClient(transport=transport)
-        self._arxiv = ArxivClient(transport=transport)
+        self._openalex = OpenAlexClient(transport=transport, provider_slot=provider_slot)
+        self._arxiv = ArxivClient(transport=transport, provider_slot=provider_slot)
 
     async def fetch_page(
         self,

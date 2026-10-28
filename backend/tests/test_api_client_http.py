@@ -65,6 +65,14 @@ def api_server(database):
         research_availability=lambda: gates.research,
         sharing_availability=lambda: gates.sharing,
     )
+    with serve_app(app) as server:
+        server.gates = gates
+        yield server
+
+
+@contextmanager
+def serve_app(app):
+    """Real HTTP fixture shared by legacy and native-public SDK journeys."""
     requests = []
 
     class RecordingApp:
@@ -76,6 +84,8 @@ def api_server(database):
                         "method": scope["method"],
                         "path": scope["path"],
                         "cookie": b"cookie" in headers,
+                        "operator_header": any(b"operator" in name for name in headers),
+                        "operator_cookie": b"polymath_operator" in headers.get(b"cookie", b""),
                         "last_event_id": headers.get(b"last-event-id", b"").decode("ascii"),
                     }
                 )
@@ -113,7 +123,7 @@ def api_server(database):
             time.sleep(0.01)
         assert server.started and not errors, "Loopback fixture server failed to start"
         yield SimpleNamespace(
-            base_url=f"http://127.0.0.1:{sock.getsockname()[1]}", gates=gates, requests=requests
+            base_url=f"http://127.0.0.1:{sock.getsockname()[1]}", requests=requests
         )
     finally:
         server.should_exit = True
@@ -260,16 +270,7 @@ async def test_external_http_artifact_export_matches_exact_saved_markdown_hash(
         worker = setup_worker(database, AdaptiveFixture())
         source = await worker.run_once("loopback-document-research")
         assert source.status == "succeeded" and source.result_id
-        created = owner_json(
-            api_server,
-            cookie_path,
-            "POST",
-            "/api/v1/artifacts/jobs",
-            {
-                "kind": "write_summary",
-                "source_result_id": source.result_id,
-            },
-        )
+        created = client.create_artifact("write_summary", source.result_id)
         model = ArtifactFixture()
         worker.model_factory = lambda _: model
         outcome = await worker.run_once("loopback-document-writer")

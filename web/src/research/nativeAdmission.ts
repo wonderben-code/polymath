@@ -1,8 +1,5 @@
-/** Ephemeral admission from the current browser/operator activation only. */
-export interface NativeSubmissionContext {
-  operatorCsrfToken: string
-  expectedActivationSha256: string
-}
+/** Ephemeral admission: public visitors never carry an operator credential. */
+export type NativeSubmissionContext = { audience?: 'operator_browser'; operatorCsrfToken: string; expectedActivationSha256: string } | { audience: 'public_sessions'; expectedActivationSha256: string; operatorCsrfToken?: never }
 export interface NativeRunControl { activation_sha256: string; expected_lease_token: string; can_resume: boolean }
 
 export function parseNativeRunControl(value: unknown, invalid: () => never): NativeRunControl | undefined {
@@ -14,11 +11,13 @@ export function parseNativeRunControl(value: unknown, invalid: () => never): Nat
 }
 
 export function validNativeSubmission(value: NativeSubmissionContext): boolean {
-  return /^[a-f\d]{64}$/.test(value.operatorCsrfToken) && /^[a-f\d]{64}$/.test(value.expectedActivationSha256)
+  if (!value || typeof value.expectedActivationSha256 !== 'string' || !/^[a-f\d]{64}$/.test(value.expectedActivationSha256)) return false
+  return value.audience === 'public_sessions' ? !Object.hasOwn(value, 'operatorCsrfToken') : (value.audience === undefined || value.audience === 'operator_browser') && typeof value.operatorCsrfToken === 'string' && /^[a-f\d]{64}$/.test(value.operatorCsrfToken)
 }
+export function nativeSubmissionHeaders(value: NativeSubmissionContext): Record<string, string> { return value.audience === 'public_sessions' ? {} : { 'X-Operator-CSRF-Token': value.operatorCsrfToken } }
 
 export function nativeAdmissionFailure(status: number, detail: unknown): boolean {
-  if (typeof detail !== 'string') return false
+  if (typeof detail !== 'string' || detail === 'public_research_requester_expired') return false
   if (['operator_session_required', 'operator_csrf_check_failed', 'operator_unavailable', 'readiness_role_unavailable', 'readiness_actor_forbidden'].includes(detail)) return true
-  return detail.startsWith('meta_research_') && [401, 403, 409, 503].includes(status) && detail !== 'meta_research_storage_unavailable'
+  return (detail.startsWith('meta_research_') || detail.startsWith('public_research_')) && [401, 403, 409, 503].includes(status) && !['meta_research_storage_unavailable', 'public_research_storage_unavailable', 'public_research_resource_unavailable'].includes(detail)
 }

@@ -1,6 +1,6 @@
 import { parseActivity, ResearchApiError } from '../research/client'
 import { parseBibliography } from '../research/bibliography'
-import { nativeAdmissionFailure, parseNativeRunControl, validNativeSubmission } from '../research/nativeAdmission'
+import { nativeSubmissionHeaders, nativeAdmissionFailure, parseNativeRunControl, validNativeSubmission } from '../research/nativeAdmission'
 import type { NativeSubmissionContext } from '../research/nativeAdmission'
 import { parseSourceCoverage, validateSourceCoverageContext } from '../research/sourceCoverage'
 import type { ArtifactHistory, ArtifactJob, ArtifactKind, ArtifactPassage, ArtifactResult, CitedText, DocumentDraft, Expression, FiniteCheckResult, FiniteConjecture, FormalisationDraft, Relation, SavedArtifact } from './types'
@@ -215,7 +215,7 @@ async function request(path: string, signal?: AbortSignal, write?: { csrf: strin
     if (write?.native && !validNativeSubmission(write.native)) throw new ResearchApiError('native_authority_changed')
     const response = await fetch(path, {
       signal: controller.signal, credentials: 'same-origin', cache: 'no-store', redirect: 'error', method: write ? 'POST' : 'GET',
-      headers: { Accept: 'application/json', ...(write ? { 'X-CSRF-Token': write.csrf, 'Content-Type': 'application/json', ...(write.native ? { 'X-Operator-CSRF-Token': write.native.operatorCsrfToken } : {}) } : {}) },
+      headers: { Accept: 'application/json', ...(write ? { 'X-CSRF-Token': write.csrf, 'Content-Type': 'application/json', ...(write.native ? nativeSubmissionHeaders(write.native) : {}) } : {}) },
       ...(write?.body === undefined ? {} : { body: JSON.stringify(write.body) }),
     })
     if (!response.ok && [401, 403, 409, 503].includes(response.status)) {
@@ -227,7 +227,7 @@ async function request(path: string, signal?: AbortSignal, write?: { csrf: strin
     if (response.status === 403) throw new ResearchApiError('session_changed')
     if (response.status === 404) throw new ResearchApiError('run_unavailable')
     if (response.status === 422) throw new ResearchApiError('invalid_request')
-    if (response.status === 429) throw new ResearchApiError('queue_limit')
+    if (response.status === 429) { const retry = response.headers.get('retry-after'), seconds = retry && /^\d{1,5}$/.test(retry) && Number(retry) <= 86400 ? Number(retry) : null; throw new ResearchApiError(seconds === null ? 'queue_limit' : 'resource_limited', seconds) }
     if (!response.ok) throw new ResearchApiError('unavailable')
     return await json(response)
   } catch (error) {

@@ -1,3 +1,4 @@
+import { privateAccess } from './accessFixtures.test-support'
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useNativeResearchContext } from './useNativeResearchContext'
@@ -12,6 +13,7 @@ function server(handler?: Handler) {
   const fetch = vi.fn(async (input: RequestInfo | URL, options?: RequestInit) => {
     const path = input.toString(), response = await handler?.(path, options)
     if (response) return response
+    if (path === '/api/v1/research/access') return Response.json(privateAccess())
     if (path === '/api/v1/operator/session') return Response.json(state.operator)
     if (path === '/api/v1/budget/research/current') return Response.json(state.current)
     throw new Error(`Unexpected synthetic native context route: ${path}`)
@@ -37,7 +39,7 @@ describe('ephemeral same-browser native research context', () => {
     await waitFor(() => expect(result.current.phase).toBe('ready'))
     expect(result.current.submission).toEqual({ operatorCsrfToken: OPERATOR_CSRF, expectedActivationSha256: requests.state.current.activation!.manifest_sha256 })
     expect(result.current.canSubmit).toBe(true)
-    expect(requests.fetch.mock.calls.map(([path]) => path)).toEqual(['/api/v1/operator/session', '/api/v1/budget/research/current'])
+    expect(requests.fetch.mock.calls.map(([path]) => path)).toEqual(['/api/v1/research/access', '/api/v1/operator/session', '/api/v1/budget/research/current'])
     for (const [, options] of requests.fetch.mock.calls) expect(options).toMatchObject({ method: 'GET', credentials: 'same-origin', cache: 'no-store' })
     expect(localStorage.getItem(OPERATOR_CSRF)).toBeNull(); expect(sessionStorage.getItem(OPERATOR_CSRF)).toBeNull()
     expect(props.onBrowserExpired).not.toHaveBeenCalled()
@@ -47,7 +49,7 @@ describe('ephemeral same-browser native research context', () => {
     const { result } = renderHook(() => useNativeResearchContext(settings()))
     await waitFor(() => expect(result.current.phase).toBe('operator_required'))
     expect(result.current.canSubmit).toBe(false); expect(result.current.submission).toBeNull()
-    expect(requests.fetch.mock.calls.map(([path]) => path)).toEqual(['/api/v1/operator/session'])
+    expect(requests.fetch.mock.calls.map(([path]) => path)).toEqual(['/api/v1/research/access', '/api/v1/operator/session'])
   })
   it('does not inherit another browser’s activation from configuration or operator identity', async () => {
     const requests = server(); requests.state.current = currentActivation(null)
@@ -55,7 +57,7 @@ describe('ephemeral same-browser native research context', () => {
     await waitFor(() => expect(result.current.phase).toBe('activation_required'))
     expect(result.current.activation).toBeNull(); expect(result.current.submission).toBeNull()
     expect(result.current.canSubmit).toBe(false); expect(result.current.reason).toBe('meta_research_activation_required')
-    expect(requests.fetch.mock.calls).toHaveLength(2)
+    expect(requests.fetch.mock.calls).toHaveLength(3)
   })
   it.each([[401, 'research_session_required', 'expired', true], [401, 'operator_session_required', 'operator_required', false], [403, 'meta_research_actor_forbidden', 'operator_required', false], [503, 'readiness_role_unavailable', 'operator_required', false], [409, 'meta_research_authority_expired', 'error', false]] as const)('clears paid context on %s/%s while preserving browser expiry distinction', async (status, detail, expectedPhase, browser) => {
     let reject = false
@@ -74,7 +76,7 @@ describe('ephemeral same-browser native research context', () => {
     await waitFor(() => expect(result.current.phase).toBe('ready'))
     act(() => result.current.invalidate('meta_research_authority_expired'))
     expect(result.current.phase).toBe('expired'); expect(result.current.submission).toBeNull(); expect(result.current.activation).toBeNull(); expect(result.current.canSubmit).toBe(false)
-    expect(props.onBrowserExpired).not.toHaveBeenCalled(); expect(requests.fetch).toHaveBeenCalledTimes(2)
+    expect(props.onBrowserExpired).not.toHaveBeenCalled(); expect(requests.fetch).toHaveBeenCalledTimes(3)
   })
   it('expires an exact activation deadline without submitting or renewing paid authority', async () => {
     vi.useFakeTimers(); vi.spyOn(Date, 'now').mockRestore(); vi.setSystemTime(new Date(DATE))
@@ -83,7 +85,7 @@ describe('ephemeral same-browser native research context', () => {
     expect(result.current.phase).toBe('ready')
     await act(async () => { await vi.advanceTimersByTimeAsync(1000) })
     expect(result.current.phase).toBe('expired'); expect(result.current.activation).toBeNull(); expect(result.current.submission).toBeNull(); expect(result.current.canSubmit).toBe(false)
-    expect(props.onBrowserExpired).not.toHaveBeenCalled(); expect(requests.fetch).toHaveBeenCalledTimes(2)
+    expect(props.onBrowserExpired).not.toHaveBeenCalled(); expect(requests.fetch).toHaveBeenCalledTimes(3)
   })
   it('temporarily blocks for a prior in-flight request and restores only through bounded current GET polling', async () => {
     vi.useFakeTimers(); vi.spyOn(Date, 'now').mockRestore(); vi.setSystemTime(new Date(DATE))
@@ -94,7 +96,7 @@ describe('ephemeral same-browser native research context', () => {
     requests.state.current = currentActivation()
     await act(async () => { await vi.advanceTimersByTimeAsync(10000) })
     expect(result.current.phase).toBe('ready'); expect(result.current.canSubmit).toBe(true); expect(result.current.submission?.operatorCsrfToken).toBe(OPERATOR_CSRF)
-    expect(requests.fetch.mock.calls.map(([path]) => path)).toEqual(['/api/v1/operator/session', '/api/v1/budget/research/current', '/api/v1/budget/research/current'])
+    expect(requests.fetch.mock.calls.map(([path]) => path)).toEqual(['/api/v1/research/access', '/api/v1/operator/session', '/api/v1/budget/research/current', '/api/v1/budget/research/current'])
     expect(requests.fetch.mock.calls.every(([, options]) => options?.method === 'GET')).toBe(true)
   })
   it('pauses after sixty successful reads and closes admission until an explicit GET-only refresh', async () => {
@@ -105,10 +107,10 @@ describe('ephemeral same-browser native research context', () => {
     expect(result.current.pollPaused).toBe(true); expect(result.current.canSubmit).toBe(false); expect(result.current.submission).toBeNull()
     expect(requests.fetch.mock.calls.filter(([path]) => path.toString().endsWith('/current'))).toHaveLength(60)
     await act(async () => { await vi.advanceTimersByTimeAsync(30000) })
-    expect(requests.fetch).toHaveBeenCalledTimes(61)
+    expect(requests.fetch).toHaveBeenCalledTimes(62)
     act(() => result.current.refresh()); await flush()
     expect(result.current.pollPaused).toBe(false); expect(result.current.canSubmit).toBe(true)
-    expect(requests.fetch).toHaveBeenCalledTimes(63)
+    expect(requests.fetch).toHaveBeenCalledTimes(65)
     expect(requests.fetch.mock.calls.every(([, options]) => options?.method === 'GET')).toBe(true)
   })
   it('fences delayed current reads across browser CSRF rotation and never exposes stale activation', async () => {

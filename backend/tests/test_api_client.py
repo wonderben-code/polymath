@@ -239,6 +239,9 @@ def test_private_get_never_bootstraps_and_writes_send_csrf_origin_once(tmp_path,
     pending.extend(
         (
             Response(session_body, response_headers=session_headers),
+            Response(
+                b'{"native_research_required":false,"research_available":true,"meta_configured":false}'
+            ),
             Response(b'{"id":"' + RUN.encode() + b'"}', status=201),
         )
     )
@@ -248,6 +251,8 @@ def test_private_get_never_bootstraps_and_writes_send_csrf_origin_once(tmp_path,
     assert request_headers["Origin"] == ORIGIN and request_headers["X-CSRF-Token"] == CSRF
     assert json.loads(body) == {"mode": "surprise", "goal": "", "parent_result_ids": []}
     assert len([request for request in requests if request[0] == "POST"]) == 1
+    assert requests[-2][1] == "/api/v1/capabilities"
+    assert "Cookie" not in requests[-2][3]
 
 
 @pytest.mark.parametrize(
@@ -454,7 +459,9 @@ def test_private_cli_requires_explicit_persistence_before_client_or_network(
 def test_invalid_creation_input_never_reaches_session_or_write(arguments, monkeypatch):
     client = client_module.PolymathClient(ORIGIN)
     monkeypatch.setattr(
-        client, "_write", lambda *args, **kwargs: pytest.fail("invalid create reached write")
+        client,
+        "_scientific_write",
+        lambda *args, **kwargs: pytest.fail("invalid create reached write"),
     )
     with pytest.raises(client_module.ClientError):
         client.create_run(**arguments)

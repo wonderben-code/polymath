@@ -909,12 +909,20 @@ class ResearchWorker:
         ]
         | None = None,
         native_only: bool = False,
+        native_claim_account_id: str | None = None,
+        tools_context_factory: Callable[[_RunContext, RunSnapshot], LiteratureTools] | None = None,
         discovery_store_factory: Callable[[Engine], Any] | None = None,
     ):
         if type(execution_enabled) is not bool:
             raise ValueError("execution_enabled must be a bool")
         if type(native_only) is not bool:
             raise ValueError("native_only must be a bool")
+        if native_claim_account_id is not None and (
+            not native_only
+            or not isinstance(native_claim_account_id, str)
+            or not 1 <= len(native_claim_account_id) <= 120
+        ):
+            raise ValueError("Native claim scope requires one configured account")
         if policy is None and not (native_only and runtime_profile_resolver is not None):
             raise ValueError("A worker requires an explicit policy or a native run policy resolver")
         if native_only and (runtime_profile_resolver is None or recorded_model_factory is None):
@@ -928,6 +936,8 @@ class ResearchWorker:
         self.runtime_profile_resolver = runtime_profile_resolver
         self.recorded_model_factory = recorded_model_factory
         self.native_only = native_only
+        self.native_claim_account_id = native_claim_account_id
+        self.tools_context_factory = tools_context_factory
         self.discovery_store_factory = discovery_store_factory or _discovery_store
         self.jobs, self.budget = JobRepository(engine), BudgetService(engine)
 
@@ -979,6 +989,7 @@ class ResearchWorker:
             ),
             lease_seconds=self.policy.lease_seconds if self.policy is not None else 60,
             native_only=self.native_only,
+            native_account_id=self.native_claim_account_id,
         )
         if lease is None:
             return WorkerOutcome("idle")
@@ -1141,7 +1152,13 @@ class ResearchWorker:
                 store = AssessmentStore(self.engine)
                 controller = AssessmentController(
                     model,
-                    _RecordedAssessmentTools(context, store, self.tools_factory(snapshot)),
+                    _RecordedAssessmentTools(
+                        context,
+                        store,
+                        self.tools_context_factory(context, snapshot)
+                        if self.tools_context_factory is not None
+                        else self.tools_factory(snapshot),
+                    ),
                     assessment_limits,
                     on_event=public_event,
                 )
@@ -1194,7 +1211,12 @@ class ResearchWorker:
                     evidence_refs=[saved_artifact.artifact_ref],
                 )
                 return WorkerOutcome(status, str(lease.run_id), artifact_id=str(saved_artifact.id))
-            recorded_tools = _RecordedTools(context, self.tools_factory(snapshot))
+            recorded_tools = _RecordedTools(
+                context,
+                self.tools_context_factory(context, snapshot)
+                if self.tools_context_factory is not None
+                else self.tools_factory(snapshot),
+            )
             discovery_sink = (
                 _RecordedDiscoverySink(context, discovery_store, model)
                 if discovery_intent is not None
@@ -1258,7 +1280,13 @@ class ResearchWorker:
                 )
                 with suppress(Exception):
                     await asyncio.to_thread(discovery_store.record_interruption, lease, reason)
-            await self._stop(lease)
+            from polymath.jobs import PUBLIC_INTERRUPTION_REASONS
+
+            public_reason = str(error) if isinstance(error, ExecutionStopped) else None
+            if public_reason in PUBLIC_INTERRUPTION_REASONS:
+                await self._stop(lease, reason=public_reason)
+            else:
+                await self._stop(lease)
             if not lost.is_set() and asyncio.current_task().cancelling():
                 raise asyncio.CancelledError from None
             return WorkerOutcome(
@@ -1278,13 +1306,16 @@ class ResearchWorker:
         finally:
             await stop_heartbeat()
 
-    async def _stop(self, lease: JobLease) -> None:
+    async def _stop(self, lease: JobLease, *, reason: str | None = None) -> None:
         snapshot = await asyncio.to_thread(self.jobs.get, lease.run_id)
         if snapshot.status == "cancel_requested":
             await asyncio.to_thread(self.jobs.finalize_cancellation, lease.run_id)
         elif snapshot.status == "running":
             try:
-                await asyncio.to_thread(self.jobs.interrupt, lease)
+                if reason is None:
+                    await asyncio.to_thread(self.jobs.interrupt, lease)
+                else:
+                    await asyncio.to_thread(self.jobs.interrupt, lease, reason=reason)
             except LeaseLost:
                 await asyncio.to_thread(self.jobs.interrupt_expired)
 

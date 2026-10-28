@@ -38,6 +38,23 @@ MAX_STREAM_BYTES = 20 * 1024 * 1024
 MAX_CURSOR = 2**63 - 1
 TOKEN = re.compile(r"[A-Za-z0-9_-]{43}")
 DIGEST = re.compile(r"[a-f0-9]{64}")
+PUBLIC_ACCESS_REASONS = frozenset(
+    {
+        "public_research_disabled",
+        "public_research_activation_required",
+        "public_research_authority_expired",
+        "public_research_stopped",
+        "public_research_frozen",
+        "public_research_budget_exhausted",
+        "public_research_daily_budget_exhausted",
+        "public_research_session_budget_exhausted",
+        "public_research_session_daily_budget_exhausted",
+        "public_research_prior_unresolved",
+        "public_research_resource_unavailable",
+        "operator_required",
+        "research_unavailable",
+    }
+)
 SAFE_ERRORS = {
     "research_session_required",
     "csrf_check_failed",
@@ -62,6 +79,7 @@ SAFE_ERRORS = {
     "discovery_storage_unavailable",
     "invalid_discovery_request",
 }
+SAFE_ERRORS.update(PUBLIC_ACCESS_REASONS)
 SECRET_FIELDS = {
     "csrf_token",
     "cookie",
@@ -161,6 +179,112 @@ def _query(value):
     except UnicodeError:
         raise ClientError("invalid_arguments") from None
     return value
+
+
+def _research_access(value):
+    try:
+        if not isinstance(value, dict) or set(value) != {
+            "protocol",
+            "audience",
+            "available",
+            "reason",
+            "expected_activation_sha256",
+            "expires_at",
+            "limits",
+            "remaining_session_allowance_microdollars",
+            "remaining_session_jobs_today",
+            "retry_after_seconds",
+        }:
+            raise ValueError
+        audience, available, reason = value["audience"], value["available"], value["reason"]
+        if (
+            value["protocol"] != "polymath-research-access-v1"
+            or audience not in (None, "public_sessions", "operator_browser")
+            or type(available) is not bool
+            or (reason is not None and reason not in PUBLIC_ACCESS_REASONS)
+            or available != (reason is None)
+        ):
+            raise ValueError
+        if value["retry_after_seconds"] is not None:
+            _integer(value["retry_after_seconds"], 0, 86400)
+        metadata = [
+            value[key]
+            for key in (
+                "expected_activation_sha256",
+                "expires_at",
+                "limits",
+            )
+        ]
+        counters = (
+            value["remaining_session_allowance_microdollars"],
+            value["remaining_session_jobs_today"],
+        )
+        if audience != "public_sessions":
+            if available or any(item is not None for item in (*metadata, *counters)):
+                raise ValueError
+            if audience == "operator_browser" and reason != "operator_required":
+                raise ValueError
+            return value
+        if all(item is None for item in metadata) and not available:
+            if any(item is not None for item in counters):
+                raise ValueError
+            return value
+        if any(item is None for item in metadata):
+            raise ValueError
+        if available and any(item is None for item in counters):
+            raise ValueError
+        digest, expiry = value["expected_activation_sha256"], value["expires_at"]
+        if (
+            not isinstance(digest, str)
+            or not DIGEST.fullmatch(digest)
+            or not isinstance(expiry, str)
+            or not re.fullmatch(
+                r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|\+00:00)", expiry
+            )
+            or datetime.fromisoformat(expiry).utcoffset().total_seconds() != 0
+        ):
+            raise ValueError
+        limits = value["limits"]
+        if not isinstance(limits, dict) or set(limits) != {
+            "session_total_cap_microdollars",
+            "session_daily_cap_microdollars",
+            "max_jobs_per_session_day",
+            "max_active_jobs_per_session",
+            "task_kinds",
+            "discovery_intent",
+        }:
+            raise ValueError
+        total, daily, remaining = (
+            limits["session_total_cap_microdollars"],
+            limits["session_daily_cap_microdollars"],
+            value["remaining_session_allowance_microdollars"],
+        )
+        for amount in (total, daily, *((remaining,) if remaining is not None else ())):
+            if not isinstance(amount, str) or not re.fullmatch(r"(?:0|[1-9][0-9]{0,8})", amount):
+                raise ValueError
+        if not 1 <= int(daily) <= int(total) <= 150_000_000 or (
+            remaining is not None and int(remaining) > int(total)
+        ):
+            raise ValueError
+        _integer(limits["max_jobs_per_session_day"], 1, 12)
+        _integer(limits["max_active_jobs_per_session"], 1, 1)
+        if value["remaining_session_jobs_today"] is not None:
+            _integer(value["remaining_session_jobs_today"], 0, limits["max_jobs_per_session_day"])
+        tasks = limits["task_kinds"]
+        if (
+            not isinstance(tasks, list)
+            or len(tasks) != 5
+            or set(tasks)
+            != {"research", "formalise", "write_summary", "write_paper", "reassess_finding"}
+        ):
+            raise ValueError
+        if limits["discovery_intent"] is not None:
+            _discovery_intent(limits["discovery_intent"])
+        if available and int(remaining) == 0:
+            raise ValueError
+        return value
+    except (ValueError, TypeError, KeyError, AttributeError, ClientError):
+        raise ClientError("invalid_research_access_response") from None
 
 
 def _discovery_intent(value):
@@ -862,6 +986,9 @@ class PolymathClient:
 
     def _write(self, path, body=None, *, allow_new=False):
         self._session(allow_new=allow_new)
+        return self._send_write(path, body)
+
+    def _send_write(self, path, body):
         return self._redact(
             self._json(
                 "POST",
@@ -871,6 +998,59 @@ class PolymathClient:
                 headers={"X-CSRF-Token": self._csrf, "Origin": self.origin},
             )
         )
+
+    def capabilities(self):
+        value = self._redact(self._json("GET", "/api/v1/capabilities"))
+        if (
+            type(value.get("native_research_required")) is not bool
+            or type(value.get("research_available")) is not bool
+            or type(value.get("meta_configured")) is not bool
+        ):
+            raise ClientError("invalid_capabilities_response")
+        return value
+
+    def research_access(self):
+        value = self._private_json("/api/v1/research/access")
+        return _research_access(value)
+
+    def _scientific_write(
+        self, path, body, *, allow_new=False, expected_activation_sha256=None, require_native=False
+    ):
+        if expected_activation_sha256 is not None and (
+            not isinstance(expected_activation_sha256, str)
+            or not DIGEST.fullmatch(expected_activation_sha256)
+        ):
+            raise ClientError("invalid_arguments")
+        self._session(allow_new=allow_new)
+        capabilities = self.capabilities()
+        if capabilities["native_research_required"]:
+            access = self.research_access()
+            if not access["available"]:
+                raise ClientError(access["reason"] or "research_access_unavailable", 503)
+            if access["audience"] != "public_sessions":
+                raise ClientError("research_operator_context_required", 403)
+            current_hash = access["expected_activation_sha256"]
+            if (
+                expected_activation_sha256 is not None
+                and expected_activation_sha256 != current_hash
+            ):
+                raise ClientError("research_activation_changed", 409)
+            if not require_native and access["remaining_session_jobs_today"] == 0:
+                raise ClientError("public_research_resource_unavailable", 429)
+            intent = body.get("discovery_intent")
+            if intent is not None:
+                approved = access["limits"]["discovery_intent"]
+                if approved is None or (
+                    intent["max_stages"] > approved["max_stages"]
+                    or intent["max_depth"] > approved["max_depth"]
+                ):
+                    raise ClientError("research_discovery_not_approved", 409)
+            body = {**body, "expected_activation_sha256": current_hash}
+        elif require_native or expected_activation_sha256 is not None:
+            raise ClientError("research_native_access_required", 409)
+        elif not capabilities["research_available"]:
+            raise ClientError("research_unavailable", 503)
+        return self._send_write(path, body)
 
     def public_library(self, query="", limit=20, before=None):
         params = {"q": _query(query), "limit": _integer(limit, 1, 20)}
@@ -1017,7 +1197,15 @@ class PolymathClient:
         except (ValueError, TypeError, KeyError, AttributeError, ClientError):
             raise ClientError("invalid_discovery_response") from None
 
-    def create_run(self, mode, goal="", parent_result_ids=(), *, discovery_intent=None):
+    def create_run(
+        self,
+        mode,
+        goal="",
+        parent_result_ids=(),
+        *,
+        discovery_intent=None,
+        expected_activation_sha256=None,
+    ):
         if (
             mode not in ("explore", "ask", "surprise")
             or not isinstance(goal, str)
@@ -1042,13 +1230,80 @@ class PolymathClient:
             if mode != "surprise":
                 raise ClientError("invalid_arguments")
             body["discovery_intent"] = _discovery_intent(discovery_intent)
-        return self._write("/api/v1/runs", body, allow_new=True)
+        return self._scientific_write(
+            "/api/v1/runs",
+            body,
+            allow_new=True,
+            expected_activation_sha256=expected_activation_sha256,
+        )
+
+    def resume_run(self, run_id, expected_lease_token, expected_activation_sha256):
+        identifier = canonical_uuid(run_id)
+        if (
+            not isinstance(expected_lease_token, str)
+            or not re.fullmatch(r"(?:0|[1-9][0-9]{0,18})", expected_lease_token)
+            or int(expected_lease_token) > MAX_CURSOR
+            or not isinstance(expected_activation_sha256, str)
+            or not DIGEST.fullmatch(expected_activation_sha256)
+        ):
+            raise ClientError("invalid_arguments")
+        return self._scientific_write(
+            "/api/v1/runs/" + identifier + "/resume",
+            {"expected_lease_token": expected_lease_token},
+            expected_activation_sha256=expected_activation_sha256,
+            require_native=True,
+        )
 
     def cancel_run(self, run_id):
         return self._write("/api/v1/runs/" + canonical_uuid(run_id) + "/cancel")
 
     def get_artifact(self, artifact_id):
         return self._private_json("/api/v1/artifacts/" + canonical_uuid(artifact_id))
+
+    def create_artifact(
+        self, kind, source_result_id, formalisation_id=None, *, expected_activation_sha256=None
+    ):
+        if kind not in ("formalise", "write_summary", "write_paper"):
+            raise ClientError("invalid_arguments")
+        body = {"kind": kind, "source_result_id": canonical_uuid(source_result_id)}
+        if formalisation_id is not None:
+            if kind == "formalise":
+                raise ClientError("invalid_arguments")
+            body["formalisation_id"] = canonical_uuid(formalisation_id)
+        return self._scientific_write(
+            "/api/v1/artifacts/jobs",
+            body,
+            expected_activation_sha256=expected_activation_sha256,
+        )
+
+    def create_assessment(
+        self,
+        source_result_id,
+        watch_id,
+        new_source_version_ids,
+        expected_head_revision,
+        *,
+        expected_activation_sha256=None,
+    ):
+        if (
+            not isinstance(new_source_version_ids, (list, tuple))
+            or not 1 <= len(new_source_version_ids) <= 5
+        ):
+            raise ClientError("invalid_arguments")
+        versions = [canonical_uuid(value) for value in new_source_version_ids]
+        if len(set(versions)) != len(versions):
+            raise ClientError("invalid_arguments")
+        body = {
+            "source_result_id": canonical_uuid(source_result_id),
+            "watch_id": canonical_uuid(watch_id),
+            "new_source_version_ids": versions,
+            "expected_head_revision": _integer(expected_head_revision, 0, 2**31 - 1),
+        }
+        return self._scientific_write(
+            "/api/v1/assessments/jobs",
+            body,
+            expected_activation_sha256=expected_activation_sha256,
+        )
 
     def export_artifact(self, artifact_id, output):
         identifier = canonical_uuid(artifact_id)
@@ -1217,12 +1472,19 @@ def parser():
     public.add_parser("map").add_argument("--query", default="")
     public.add_parser("finding").add_argument("public_id")
     commands.add_parser("session").add_subparsers(dest="action", required=True).add_parser("init")
+    commands.add_parser("research").add_subparsers(dest="action", required=True).add_parser(
+        "access"
+    )
     runs = commands.add_parser("runs").add_subparsers(dest="action", required=True)
     listing = runs.add_parser("list")
     listing.add_argument("--limit", type=int, default=20)
     listing.add_argument("--before")
     for action in ("show", "result", "cancel"):
         runs.add_parser(action).add_argument("run_id")
+    resume = runs.add_parser("resume")
+    resume.add_argument("run_id")
+    resume.add_argument("--expected-lease-token", required=True)
+    resume.add_argument("--expected-activation-sha256", required=True)
     events = runs.add_parser("events")
     events.add_argument("run_id")
     events.add_argument("--after", type=int, default=0)
@@ -1238,6 +1500,7 @@ def parser():
     create.add_argument("--discovery-ladder", action="store_true")
     create.add_argument("--max-stages", type=int)
     create.add_argument("--max-depth", type=int)
+    create.add_argument("--expected-activation-sha256")
     discovery = commands.add_parser("discovery").add_subparsers(dest="action", required=True)
     for action in ("show", "stages"):
         discovery.add_parser(action).add_argument("run_id")
@@ -1246,9 +1509,23 @@ def parser():
     stage.add_argument("stage_id")
     artifacts = commands.add_parser("artifacts").add_subparsers(dest="action", required=True)
     artifacts.add_parser("show").add_argument("artifact_id")
+    artifact_create = artifacts.add_parser("create")
+    artifact_create.add_argument(
+        "--kind", choices=("formalise", "write_summary", "write_paper"), required=True
+    )
+    artifact_create.add_argument("--source-result", required=True)
+    artifact_create.add_argument("--formalisation")
+    artifact_create.add_argument("--expected-activation-sha256")
     export = artifacts.add_parser("export")
     export.add_argument("artifact_id")
     export.add_argument("--output", required=True)
+    assessments = commands.add_parser("assessments").add_subparsers(dest="action", required=True)
+    reassess = assessments.add_parser("create")
+    reassess.add_argument("--source-result", required=True)
+    reassess.add_argument("--watch", required=True)
+    reassess.add_argument("--new-source-version", action="append", required=True)
+    reassess.add_argument("--expected-head-revision", type=int, required=True)
+    reassess.add_argument("--expected-activation-sha256")
     return result
 
 
@@ -1273,14 +1550,30 @@ def main(argv=None):
                     value = client.public_finding(args.public_id)
             elif args.command == "session":
                 value = client.init_session()
+            elif args.command == "research":
+                value = client.research_access()
             elif args.command == "artifacts":
-                value = (
-                    client.get_artifact(args.artifact_id)
-                    if args.action == "show"
-                    else client.export_artifact(args.artifact_id, args.output)
-                )
+                if args.action == "show":
+                    value = client.get_artifact(args.artifact_id)
+                elif args.action == "create":
+                    value = client.create_artifact(
+                        args.kind,
+                        args.source_result,
+                        args.formalisation,
+                        expected_activation_sha256=args.expected_activation_sha256,
+                    )
+                else:
+                    value = client.export_artifact(args.artifact_id, args.output)
                 if args.action == "export" and args.output == "-":
                     return 0
+            elif args.command == "assessments":
+                value = client.create_assessment(
+                    args.source_result,
+                    args.watch,
+                    args.new_source_version,
+                    args.expected_head_revision,
+                    expected_activation_sha256=args.expected_activation_sha256,
+                )
             elif args.command == "discovery":
                 if args.action == "show":
                     value = client.get_discovery(args.run_id)
@@ -1296,6 +1589,10 @@ def main(argv=None):
                 value = client.get_result(args.run_id)
             elif args.action == "cancel":
                 value = client.cancel_run(args.run_id)
+            elif args.action == "resume":
+                value = client.resume_run(
+                    args.run_id, args.expected_lease_token, args.expected_activation_sha256
+                )
             elif args.action == "events":
                 for event in client.events(
                     args.run_id,
@@ -1338,6 +1635,11 @@ def main(argv=None):
                     goal,
                     args.parent_result,
                     **({"discovery_intent": intent} if intent is not None else {}),
+                    **(
+                        {"expected_activation_sha256": args.expected_activation_sha256}
+                        if args.expected_activation_sha256 is not None
+                        else {}
+                    ),
                 )
             print(json.dumps(value, ensure_ascii=False, indent=2))
             return 0

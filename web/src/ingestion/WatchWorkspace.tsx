@@ -1,3 +1,4 @@
+import { useNativeResearchSubmission } from '../research/nativeContext'
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Bibliography } from '../research/bibliography'
@@ -65,6 +66,7 @@ function TickCard({ tick }: { tick: WatchTick }) {
 }
 
 export function WatchWorkspace({ enabled, csrfToken, findings = [], onSessionExpired, openSource, onSourcesChanged, canReassess = false, onAssessmentApplied, onAssessmentBusyChange, onOpenFinding }: WatchWorkspaceProps) {
+  const nativeAuthority = useNativeResearchSubmission(), publicReads = nativeAuthority.required && nativeAuthority.access?.audience !== 'operator_browser'
   const uid = useId()
   const [capabilities, setCapabilities] = useState<WatchCapabilities | null>(null)
   const [watches, setWatches] = useState<LiteratureWatch[]>([])
@@ -155,9 +157,9 @@ export function WatchWorkspace({ enabled, csrfToken, findings = [], onSessionExp
   useEffect(() => {
     if (!enabled || phase !== 'ready' || !watches.length || uncertain || busy) return
     if (polls.current >= 120) { setPollStopped(true); return }
-    const timer = window.setTimeout(() => { polls.current++; setRevision((previous) => previous + 1) }, 5000)
+    const timer = window.setTimeout(() => { polls.current++; setRevision((previous) => previous + 1) }, publicReads ? 30000 : 5000)
     return () => window.clearTimeout(timer)
-  }, [enabled, phase, watches, revision, uncertain, busy])
+  }, [enabled, phase, watches, revision, uncertain, busy, publicReads])
 
   useEffect(() => {
     if (!enabled || !watches.length) return

@@ -32,6 +32,7 @@ function latest(previous: AssessmentJob | undefined, incoming: AssessmentJob): A
 }
 function failureMessage(error: unknown): string {
   if (!(error instanceof AssessmentError)) return 'The saved assessment could not be checked. Reload its history before continuing.'
+  if (error.code === 'resource_limited') return `A request or visitor allowance limit was reached. Wait${error.retryAfterSeconds === null ? '' : ` at least ${error.retryAfterSeconds} seconds`} before trying again. No reassessment was retried.`
   if (['queue_limit', 'research_queue_full', 'research_session_queue_full'].includes(error.code)) return 'A research, writing, or assessment task is already active, or the queue is full. Finish or cancel existing work before starting another.'
   if (['assessment_changed', 'assessment_source_changed', 'assessment_head_changed'].includes(error.code)) return 'The finding or its current head changed. Reload the exact versions and review the selection again.'
   if (['not_found', 'assessment_not_found', 'assessment_source_not_found', 'assessment_not_available'].includes(error.code)) return 'This finding, assessment, or saved source is unavailable in this browser session.'

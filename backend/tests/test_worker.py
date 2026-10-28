@@ -49,7 +49,11 @@ def database(monkeypatch):
         admin.dispose()
 
 
-def setup_worker(engine, model, *, enabled=True, tools_factory=None):
+def setup_worker(engine, model, *, enabled=True, tools_factory=None, lease_seconds=60):
+    # Functional journeys use the production lease, rather than making a
+    # three-second host scheduling deadline part of their scientific assertions.
+    # Keep fast heartbeats for directed cancellation tests; expiry tests control
+    # their own clock boundary or select an explicit shorter lease.
     budget = BudgetService(engine)
     budget.create_account(
         "fixture", hard_cap_microdollars=10_000, daily_cap_microdollars=10_000, max_in_flight=1
@@ -62,7 +66,7 @@ def setup_worker(engine, model, *, enabled=True, tools_factory=None):
         input_microdollars_per_million=1_000_000,
         output_microdollars_per_million=1_000_000,
         run_cap_microdollars=5_000,
-        lease_seconds=3,
+        lease_seconds=lease_seconds,
         heartbeat_seconds=0.05,
     )
     return ResearchWorker(
@@ -326,7 +330,7 @@ async def test_worker_cannot_bypass_disabled_budget_account(database):
 async def test_heartbeat_cannot_cancel_worker_while_it_records_its_own_stop(database):
     jobs = JobRepository(database)
     run = jobs.create(mode="explore", goal="Synthetic slow cleanup exercise")
-    worker = setup_worker(database, AdaptiveFixture())
+    worker = setup_worker(database, AdaptiveFixture(), lease_seconds=3)
     BudgetService(database).disable_execution("fixture")
     interrupt = worker.jobs.interrupt
 

@@ -16,6 +16,8 @@ from polymath import (  # noqa: F401
     meta_research_models,
     models,
     operator_models,
+    public_research_models,
+    public_resource_models,
     publication_job_models,
     publication_models,
     readiness_models,
