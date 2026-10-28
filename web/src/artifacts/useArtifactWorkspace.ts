@@ -5,7 +5,7 @@ import {
   cancelArtifactJob, createArtifactJob, getArtifact, getArtifactJob, listArtifactJobs,
 } from './client'
 import type { ArtifactJob, ArtifactKind, SavedArtifact } from './types'
-import { useNativeResearchSubmission } from '../research/nativeContext'
+import { hasScientificCapability, scientificSelectionReady, useNativeResearchSubmission } from '../research/nativeContext'
 
 const TERMINAL = new Set(['succeeded', 'failed', 'cancelled', 'interrupted'])
 const BLOCKING = new Set(['queued', 'running', 'waiting_retry', 'cancel_requested', 'interrupted'])
@@ -29,6 +29,9 @@ function failureMessage(error: unknown): string {
     case 'unavailable': return 'Generation is unavailable right now. Your saved work is retained.'
     case 'invalid_response': return 'The saved document could not be read. Reload saved work before continuing.'
     case 'invalid_request': return 'The selected finding or conjecture could not be used. Reload saved work before trying again.'
+    case 'scientific_variant_unavailable': return 'The approved writing features changed. Refresh research access before trying again; this task was not retried.'
+    case 'scientific_context_unavailable': return 'The saved scientific context cannot currently be verified. Saved work is retained; no alternative task was started.'
+    case 'scientific_context_too_large': return 'This finding’s scientific context exceeds the reviewed size limit. No task or credit reservation was created.'
     case 'native_authority_changed': return 'Native research authority changed or expired. Refresh the current activation; no writing or formalisation request was retried.'
     default: return 'The document service could not be reached. Reload saved work before trying again.'
   }
@@ -69,7 +72,8 @@ export function useArtifactWorkspace({ sourceResultId, csrfToken, enabled, canGe
     return job
   }, [])
 
-  const fail = useCallback((failure: unknown) => {
+  const fail = useCallback((failure: unknown, expectedHash?: string) => {
+    if (failure instanceof ResearchApiError && failure.code === 'scientific_variant_unavailable') { native.invalidateScientific?.(expectedHash); setError(failureMessage(failure)); return }
     if (failure instanceof ResearchApiError && failure.code === 'native_authority_changed') { native.invalidate(); setError(failureMessage(failure)); return }
     if (failure instanceof ResearchApiError && (failure.code === 'session_expired' || failure.code === 'session_changed')) {
       version.current += 1
@@ -82,7 +86,7 @@ export function useArtifactWorkspace({ sourceResultId, csrfToken, enabled, canGe
       setError('Your research session expired or changed. Reload saved research to continue.')
       onSessionExpired()
     } else setError(failureMessage(failure))
-  }, [onSessionExpired, native.invalidate])
+  }, [onSessionExpired, native.invalidate, native.invalidateScientific])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -141,7 +145,7 @@ export function useArtifactWorkspace({ sourceResultId, csrfToken, enabled, canGe
       loadingArtifact = true
       try {
         const saved = await getArtifact(job.artifact_id, controller.signal)
-        if (saved.run_id !== job.id || saved.source_result_id !== sourceResultId || saved.kind !== job.task_kind) throw new ResearchApiError('invalid_response')
+        if (saved.run_id !== job.id || saved.source_result_id !== sourceResultId || saved.kind !== job.task_kind || !!job.scientific_context_intent !== !!saved.scientific_context || job.scientific_context_sha256 !== saved.scientific_context?.context_sha256) throw new ResearchApiError('invalid_response')
         if (isActive()) setArtifact(saved)
       } catch (failure) { if (isActive()) fail(failure) }
       finally { loadingArtifact = false }
@@ -235,13 +239,13 @@ export function useArtifactWorkspace({ sourceResultId, csrfToken, enabled, canGe
   }, [phase])
 
   const create = useCallback(async (kind: ArtifactKind, formalisationId?: string) => {
-    if (!enabled || !canGenerate || !native.canSubmit || !csrfToken || phase !== 'ready' || unconfirmedCreate || mutation.current || jobs.some((job) => BLOCKING.has(job.status))) return
+    if (!scientificSelectionReady(native) || !enabled || !canGenerate || !native.canSubmit || !csrfToken || phase !== 'ready' || unconfirmedCreate || mutation.current || jobs.some((job) => BLOCKING.has(job.status))) return
     const controller = new AbortController()
     const current = version.current
     mutation.current = controller
     setSubmitting(true); setError('')
     try {
-      const response = await createArtifactJob(kind, sourceResultId, csrfToken, controller.signal, formalisationId, native.submission ?? undefined)
+      const response = await createArtifactJob(kind, sourceResultId, csrfToken, controller.signal, formalisationId, native.submission ?? undefined, hasScientificCapability(native, 'artifact_scientific_context_v1') ? { protocol: 'polymath-artifact-scientific-context-v1' } : undefined)
       if (controller.signal.aborted || current !== version.current) return
       const job = remember(response)
       setJobs((previous) => [job, ...previous.filter((item) => item.id !== job.id)])
@@ -254,10 +258,10 @@ export function useArtifactWorkspace({ sourceResultId, csrfToken, enabled, canGe
           setUnconfirmedCreate(true)
           setError('Could not confirm whether this task was queued. Reload saved work before trying again.')
         }
-        else fail(failure)
+        else fail(failure, native.submission?.expectedActivationSha256)
       }
     } finally { if (mutation.current === controller) { mutation.current = null; setSubmitting(false) } }
-  }, [enabled, canGenerate, csrfToken, phase, sourceResultId, jobs, unconfirmedCreate, remember, fail, native.canSubmit, native.submission])
+  }, [enabled, canGenerate, csrfToken, phase, sourceResultId, jobs, unconfirmedCreate, remember, fail, native.canSubmit, native.submission, native.scientificCapabilities, native.scientificPhase])
 
   const cancel = useCallback(async () => {
     if (!enabled || !csrfToken || !activeJob || mutation.current || !BLOCKING.has(activeJob.status)) return
@@ -295,7 +299,7 @@ export function useArtifactWorkspace({ sourceResultId, csrfToken, enabled, canGe
   return {
     phase, jobs, selectedId, activeJob, artifact, events, error, connection, submitting, cancelling,
     nextCursor, loadingMore, loadMore, selectJob, create, cancel,
-    canCreate: enabled && canGenerate && native.canSubmit && !!csrfToken && phase === 'ready' && !submitting && !cancelling && !blocking && !unconfirmedCreate,
+    canCreate: scientificSelectionReady(native) && enabled && canGenerate && native.canSubmit && !!csrfToken && phase === 'ready' && !submitting && !cancelling && !blocking && !unconfirmedCreate,
     busy: submitting || cancelling || blocking,
     refresh: () => setRefreshVersion((value) => value + 1),
   }

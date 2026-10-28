@@ -7,6 +7,7 @@ scientific validity, causal equivalence, novelty, or independent corroboration.
 from __future__ import annotations
 
 import hashlib
+import json
 import unicodedata
 import uuid
 from typing import Annotated
@@ -34,12 +35,15 @@ from polymath.evidence_models import (
 from polymath.ingestion_models import LiteratureWatch, WatchSeenSourceVersion
 from polymath.lineage_models import ResearchRunParent
 from polymath.models import ResearchRun
+from polymath.research.models import AnswerFinding
 from polymath.run_api import (
     _authenticated,
     _private_response,
     _PrivateHTTPException,
     _PrivateRoute,
 )
+from polymath.scientific_context_contracts import validate_result_overview
+from polymath.sharing_contracts import classified_answer_navigation_summary
 
 MAX_CANDIDATES = 60
 MAX_NODES = 200
@@ -82,13 +86,27 @@ def _finding_item(row: EvidenceResult, session: Session, owner_hash: str) -> dic
     found = _finding(row.payload)
     if found is None:
         return None
-    _, finding = found
+    result, finding = found
     if finding["outcome"] == "bridge":
         title = _text(finding.get("title"), 300)
         summary = _text(finding.get("explanation"))
     else:
         title = _text(finding.get("question"), 4000)
         summary = _text(finding.get("summary"), 6000)
+    if "overview_binding" in result:
+        try:
+            from polymath.evidence import _canonical, _hash
+
+            if (
+                result.get("status") != row.status
+                or _hash(_canonical(row.payload)) != row.content_sha256
+            ):
+                return None
+            validate_result_overview(result)
+            answer = AnswerFinding.model_validate_json(json.dumps(finding))
+            summary = classified_answer_navigation_summary(claim.label for claim in answer.claims)
+        except (ValueError, TypeError):
+            return None
     if title is None:
         return None
     assessment = result_assessment_state(session, owner_hash, row.id)

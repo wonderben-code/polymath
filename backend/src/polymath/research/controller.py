@@ -23,6 +23,7 @@ from polymath.research.meta import ModelError, ResearchModel
 from polymath.research.models import (
     ACTION_ADAPTER,
     AnswerFinding,
+    AskOverviewBinding,
     BridgeFinding,
     ConcludeAction,
     FieldSelection,
@@ -54,6 +55,7 @@ from polymath.research.models import (
 if TYPE_CHECKING:
     from polymath.discovery_contracts import DiscoveryIntent, DiscoveryOutcome, DiscoverySink
     from polymath.full_text_contracts import FullTextIndex
+    from polymath.scientific_context_contracts import AskOverviewIntent
 
 
 class LiteratureTools(Protocol):
@@ -507,6 +509,7 @@ class ResearchController:
         mode: ResearchMode = "explore",
         parent_result_ids: tuple[str, ...] = (),
         discovery: DiscoveryIntent | None = None,
+        ask_overview_intent: AskOverviewIntent | None = None,
     ) -> ResearchResult | DiscoveryOutcome:
         from polymath.discovery_contracts import (
             DISCOVERY_ACTION_ADAPTER,
@@ -532,6 +535,19 @@ class ResearchController:
             discovery_search_identity_refs,
         )
 
+        ask_adapter = None
+        if ask_overview_intent is not None:
+            from polymath.research.ask_overview import ASK_OVERVIEW_ACTION_ADAPTER
+            from polymath.scientific_context_contracts import AskOverviewIntent
+
+            if not isinstance(ask_overview_intent, AskOverviewIntent):
+                raise ValueError("ask_overview_intent_invalid")
+            ask_overview_intent = AskOverviewIntent.model_validate_json(
+                ask_overview_intent.model_dump_json()
+            )
+            if mode != "ask" or discovery is not None or parent_result_ids:
+                raise ValueError("ask_overview_wrong_mode")
+            ask_adapter = ASK_OVERVIEW_ACTION_ADAPTER
         ladder = None
         if discovery is not None:
             discovery = DiscoveryIntent.model_validate_json(discovery.model_dump_json())
@@ -584,6 +600,10 @@ class ResearchController:
         ]
         if ladder is not None:
             messages = discovery_initial_messages(goal, discovery, self.memory is not None)
+        elif ask_adapter is not None:
+            from polymath.research.ask_overview import ask_overview_initial_messages
+
+            messages = ask_overview_initial_messages(goal, memory_available=self.memory is not None)
         discovered: dict[str, SourceReference] = {}
         full_text_availability: dict[str, FullTextAvailability] = {}
         opened: dict[str, FullTextIndex] = {}
@@ -610,6 +630,7 @@ class ResearchController:
             finding: BridgeFinding | AnswerFinding | InsufficientFinding | None = None,
             quotes: tuple[VerifiedQuote, ...] = (),
             error_code: str | None = None,
+            overview_binding: AskOverviewBinding | None = None,
         ) -> ResearchResult:
             return ResearchResult(
                 status=status,
@@ -636,6 +657,7 @@ class ResearchController:
                     calls_without_usage=unknown_usage,
                 ),
                 error_code=error_code,
+                **({"overview_binding": overview_binding} if overview_binding is not None else {}),
             )
 
         def result(status: str, **values):
@@ -777,12 +799,26 @@ class ResearchController:
             if not isinstance(reply.content, str) or len(reply.content) > 16_000:
                 return result("failed", error_code="model_invalid_response")
             messages.append({"role": "assistant", "content": reply.content})
+            overview_binding = None
             try:
                 action = (
-                    DISCOVERY_ACTION_ADAPTER if ladder is not None else ACTION_ADAPTER
+                    DISCOVERY_ACTION_ADAPTER
+                    if ladder is not None
+                    else ask_adapter
+                    if ask_adapter is not None
+                    else ACTION_ADAPTER
                 ).validate_json(reply.content)
-            except ValidationError:
-                if await reject("invalid_action_schema"):
+                if ask_adapter is not None:
+                    from polymath.research.ask_overview import normalise_ask_overview_conclusion
+
+                    action, overview_binding = normalise_ask_overview_conclusion(action)
+            except ValidationError as exc:
+                code = "invalid_action_schema"
+                if ask_adapter is not None:
+                    from polymath.research.ask_overview import ask_overview_validation_error
+
+                    code = ask_overview_validation_error(exc)
+                if await reject(code):
                     return result("failed", error_code="repair_limit")
                 continue
             actions += 1
@@ -1332,6 +1368,15 @@ class ResearchController:
                     if isinstance(action.conclusion, AnswerFinding)
                     else "Recorded a candidate bridge with matching quotations and limitations.",
                 )
-                return result(action.conclusion.outcome, finding=action.conclusion, quotes=quotes)
+                return result(
+                    action.conclusion.outcome,
+                    finding=action.conclusion,
+                    quotes=quotes,
+                    **(
+                        {"overview_binding": overview_binding}
+                        if overview_binding is not None
+                        else {}
+                    ),
+                )
         await event("stopped", "Stopped at the configured research call or action limit.")
         return result("limit_reached", error_code="research_limit")

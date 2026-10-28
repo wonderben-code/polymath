@@ -38,6 +38,14 @@ MAX_STREAM_BYTES = 20 * 1024 * 1024
 MAX_CURSOR = 2**63 - 1
 TOKEN = re.compile(r"[A-Za-z0-9_-]{43}")
 DIGEST = re.compile(r"[a-f0-9]{64}")
+ASK_OVERVIEW_PROTOCOL = "polymath-ask-claim-overview-v1"
+ARTIFACT_CONTEXT_PROTOCOL = "polymath-artifact-scientific-context-v1"
+ASSESSMENT_OVERVIEW_PROTOCOL = "polymath-ask-reassessment-overview-v1"
+SCIENTIFIC_CAPABILITIES = (
+    "artifact_scientific_context_v1",
+    "ask_claim_overview_v1",
+    "ask_reassessment_overview_v1",
+)
 PUBLIC_ACCESS_REASONS = frozenset(
     {
         "public_research_disabled",
@@ -78,6 +86,16 @@ SAFE_ERRORS = {
     "discovery_not_found",
     "discovery_storage_unavailable",
     "invalid_discovery_request",
+    "public_request_rate_limited",
+    "public_resource_controls_unavailable",
+    "ask_reassessment_overview_required",
+    "meta_research_scientific_protocol_unavailable",
+    "scientific_context_not_available",
+    "scientific_context_integrity_failed",
+    "scientific_context_admission_closed",
+    "scientific_context_admission_changed",
+    "ask_overview_wrong_run",
+    "artifact_context_too_large",
 }
 SAFE_ERRORS.update(PUBLIC_ACCESS_REASONS)
 SECRET_FIELDS = {
@@ -95,9 +113,10 @@ SECRET_FIELDS = {
 class ClientError(Exception):
     """A static code and optional HTTP status; never an underlying exception."""
 
-    def __init__(self, code, status=None):
+    def __init__(self, code, status=None, retry_after_seconds=None):
         super().__init__(code)
         self.code, self.status = code, status
+        self.retry_after_seconds = retry_after_seconds
 
 
 def canonical_origin(value):
@@ -196,7 +215,11 @@ def _research_access(value):
             "retry_after_seconds",
         }:
             raise ValueError
-        audience, available, reason = value["audience"], value["available"], value["reason"]
+        audience, available, reason = (
+            value["audience"],
+            value["available"],
+            value["reason"],
+        )
         if (
             value["protocol"] != "polymath-research-access-v1"
             or audience not in (None, "public_sessions", "operator_browser")
@@ -239,7 +262,8 @@ def _research_access(value):
             or not DIGEST.fullmatch(digest)
             or not isinstance(expiry, str)
             or not re.fullmatch(
-                r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|\+00:00)", expiry
+                r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|\+00:00)",
+                expiry,
             )
             or datetime.fromisoformat(expiry).utcoffset().total_seconds() != 0
         ):
@@ -269,13 +293,23 @@ def _research_access(value):
         _integer(limits["max_jobs_per_session_day"], 1, 12)
         _integer(limits["max_active_jobs_per_session"], 1, 1)
         if value["remaining_session_jobs_today"] is not None:
-            _integer(value["remaining_session_jobs_today"], 0, limits["max_jobs_per_session_day"])
+            _integer(
+                value["remaining_session_jobs_today"],
+                0,
+                limits["max_jobs_per_session_day"],
+            )
         tasks = limits["task_kinds"]
         if (
             not isinstance(tasks, list)
             or len(tasks) != 5
             or set(tasks)
-            != {"research", "formalise", "write_summary", "write_paper", "reassess_finding"}
+            != {
+                "research",
+                "formalise",
+                "write_summary",
+                "write_paper",
+                "reassess_finding",
+            }
         ):
             raise ValueError
         if limits["discovery_intent"] is not None:
@@ -301,8 +335,422 @@ def _discovery_intent(value):
     }
 
 
+def _scientific_intent(value, protocol):
+    if not isinstance(value, dict) or value != {"protocol": protocol}:
+        raise ClientError("invalid_arguments")
+    return {"protocol": protocol}
+
+
+def _research_protocols(value):
+    try:
+        if not isinstance(value, dict) or set(value) != {
+            "protocol",
+            "activation_sha256",
+            "capabilities",
+        }:
+            raise ValueError
+        digest, capabilities = value["activation_sha256"], value["capabilities"]
+        if (
+            value["protocol"] != "polymath-research-protocols-v1"
+            or digest is not None
+            and (not isinstance(digest, str) or not DIGEST.fullmatch(digest))
+            or not isinstance(capabilities, list)
+            or capabilities != [item for item in SCIENTIFIC_CAPABILITIES if item in capabilities]
+            or digest is None
+            and capabilities
+        ):
+            raise ValueError
+        return value
+    except (ValueError, TypeError, KeyError, AttributeError):
+        raise ClientError("invalid_research_protocols_response") from None
+
+
+def _answer_overview(value, *, finding_key="finding", public=False):
+    """Check supplied overview integrity; scientific support remains server-verified."""
+    if not isinstance(value, dict) or "overview_binding" not in value:
+        return value
+    try:
+        binding, finding = value["overview_binding"], value[finding_key]
+        if (
+            not isinstance(binding, dict)
+            or set(binding) != {"protocol", "claim_ids"}
+            or binding["protocol"] != ASK_OVERVIEW_PROTOCOL
+            or not isinstance(finding, dict)
+            or finding.get("kind" if public else "outcome") != "answer"
+            or "mode" in value
+            and value["mode"] != "ask"
+            or "status" in value
+            and value["status"] != "answer"
+        ):
+            raise ValueError
+        ids, claims = binding["claim_ids"], finding.get("claims")
+        if (
+            not isinstance(ids, list)
+            or not 1 <= len(ids) <= 8
+            or not all(
+                isinstance(item, str) and re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]{0,63}", item)
+                for item in ids
+            )
+            or len(set(ids)) != len(ids)
+            or not isinstance(claims, list)
+            or not 1 <= len(claims) <= 8
+        ):
+            raise ValueError
+        by_id = {}
+        for ordinal, claim in enumerate(claims, 1):
+            evidence_key = "citation_ids" if public else "evidence"
+            if (
+                not isinstance(claim, dict)
+                or not isinstance(claim.get("id"), str)
+                or not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]{0,63}", claim["id"])
+                or public
+                and claim["id"] != f"claim-{ordinal}"
+                or claim["id"] in by_id
+                or not isinstance(claim.get("text"), str)
+                or not 1 <= len(claim["text"]) <= 2000
+                or not claim["text"].strip()
+                or claim.get("label") not in ("known", "postulated", "speculative")
+                or not isinstance(claim.get(evidence_key), list)
+                or not 1 <= len(claim[evidence_key]) <= 8
+                or claim["label"] == "postulated"
+                and (
+                    not isinstance(claim.get("derivation"), str) or not claim["derivation"].strip()
+                )
+                or claim["label"] == "speculative"
+                and not claim.get("caveats")
+            ):
+                raise ValueError
+            citations = claim[evidence_key]
+            if public:
+                if any(
+                    not isinstance(item, str) or not re.fullmatch(r"citation-[1-9][0-9]?", item)
+                    for item in citations
+                ) or len(set(citations)) != len(citations):
+                    raise ValueError
+            elif any(
+                not isinstance(item, dict)
+                or set(item) != {"source_id", "quote", "supports"}
+                or any(not isinstance(item[key], str) or not item[key].strip() for key in item)
+                for item in citations
+            ):
+                raise ValueError
+            by_id[claim["id"]] = claim
+        if any(item not in by_id for item in ids):
+            raise ValueError
+        summary = "\n\n".join(by_id[item]["text"] for item in ids)
+        summary.encode("utf-8")
+        if len(summary) > 3000 or finding.get("summary") != summary:
+            raise ValueError
+        return value
+    except (ValueError, TypeError, KeyError, AttributeError):
+        raise ClientError("invalid_overview_response") from None
+
+
+def _public_scientific_metadata_unchecked(value):
+    def private_context(item):
+        if isinstance(item, dict):
+            if set(item) & {
+                "scientific_context",
+                "scientific_context_sha256",
+                "ancestry_nodes",
+                "ancestry_edges",
+                "applied_assessments",
+                "source_revision",
+            }:
+                raise ClientError("invalid_public_scientific_response")
+            for child in item.values():
+                private_context(child)
+        elif isinstance(item, list):
+            for child in item:
+                private_context(child)
+
+    private_context(value)
+    projection = value.get("projection") if isinstance(value, dict) else None
+    if isinstance(projection, dict) and "overview_binding" in projection:
+        _answer_overview(projection, public=True)
+        citations = projection.get("citations")
+        if not isinstance(citations, list) or not 1 <= len(citations) <= 64:
+            raise ClientError("invalid_public_scientific_response")
+        citation_ids = set()
+        for ordinal, item in enumerate(citations, 1):
+            if not isinstance(item, dict) or item.get("id") != f"citation-{ordinal}":
+                raise ClientError("invalid_public_scientific_response")
+            citation_ids.add(item["id"])
+        if any(
+            not set(claim["citation_ids"]) <= citation_ids
+            for claim in projection["finding"]["claims"]
+        ):
+            raise ClientError("invalid_public_scientific_response")
+        encoded = json.dumps(
+            projection,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
+        ).encode("utf-8")
+        if hashlib.sha256(encoded).hexdigest() != value.get("projection_sha256"):
+            raise ClientError("invalid_public_scientific_response")
+    return value
+
+
+def _public_scientific_metadata(value):
+    try:
+        return _public_scientific_metadata_unchecked(value)
+    except (ValueError, TypeError, KeyError, AttributeError, RecursionError):
+        raise ClientError("invalid_public_scientific_response") from None
+
+
+def _scientific_history(value):
+    """Validate only present protocol extensions; legacy response bodies pass through."""
+    if not isinstance(value, dict):
+        return value
+    try:
+        fields = (
+            ("ask_overview_intent", ASK_OVERVIEW_PROTOCOL),
+            ("assessment_overview_intent", ASSESSMENT_OVERVIEW_PROTOCOL),
+            ("scientific_context_intent", ARTIFACT_CONTEXT_PROTOCOL),
+        )
+        for name, protocol in fields:
+            if name in value:
+                _scientific_intent(value[name], protocol)
+        if ("scientific_context_intent" in value) != ("scientific_context_sha256" in value):
+            raise ValueError
+        if "scientific_context_sha256" in value:
+            digest = value["scientific_context_sha256"]
+            if not isinstance(digest, str) or not DIGEST.fullmatch(digest):
+                raise ValueError
+        for key in ("runs", "jobs"):
+            if isinstance(value.get(key), list):
+                for item in value[key]:
+                    _scientific_history(item)
+        return value
+    except (ValueError, TypeError, KeyError, AttributeError, ClientError):
+        raise ClientError("invalid_scientific_history_response") from None
+
+
+def _artifact_scientific_context(value):
+    if not isinstance(value, dict) or "scientific_context" not in value:
+        return value
+    try:
+        binding = value["scientific_context"]
+        if not isinstance(binding, dict) or set(binding) != {
+            "context",
+            "context_sha256",
+        }:
+            raise ValueError
+        context, digest = binding["context"], binding["context_sha256"]
+        if (
+            not isinstance(context, dict)
+            or set(context)
+            != {
+                "protocol",
+                "source_reference",
+                "source_revision",
+                "stage_origin",
+                "ancestry_nodes",
+                "ancestry_edges",
+                "prior_formalisation",
+            }
+            or context["protocol"] != ARTIFACT_CONTEXT_PROTOCOL
+            or not isinstance(digest, str)
+            or not DIGEST.fullmatch(digest)
+        ):
+            raise ValueError
+        encoded = json.dumps(
+            context,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
+        ).encode("utf-8")
+        if len(encoded) > 262_144 or hashlib.sha256(encoded).hexdigest() != digest:
+            raise ValueError
+        reference = _discovery_reference(context["source_reference"])
+        if reference != {
+            "result_id": value.get("source_result_id"),
+            "run_id": value.get("source_run_id"),
+            "content_sha256": value.get("source_sha256"),
+        }:
+            raise ValueError
+        revision, nodes, edges = (
+            context["source_revision"],
+            context["ancestry_nodes"],
+            context["ancestry_edges"],
+        )
+        if (
+            not isinstance(revision, dict)
+            or set(revision)
+            != {
+                "root_reference",
+                "current_reference",
+                "revision",
+                "state_at_admission",
+                "applied_assessments",
+            }
+            or revision["current_reference"] != reference
+            or revision["state_at_admission"] != "supported"
+            or not isinstance(revision["applied_assessments"], list)
+            or len(revision["applied_assessments"]) != _integer(revision["revision"], 0, 64)
+            or not isinstance(nodes, list)
+            or not 1 <= len(nodes) <= 128
+            or not isinstance(edges, list)
+            or len(edges) > 512
+        ):
+            raise ValueError
+        _discovery_reference(revision["root_reference"])
+        cursor, supported = revision["root_reference"], True
+        for ordinal, assessment in enumerate(revision["applied_assessments"], 1):
+            if (
+                not isinstance(assessment, dict)
+                or assessment.get("applied") is not True
+                or assessment.get("head_revision") != ordinal
+                or type(assessment.get("head_revision")) is not int
+                or assessment.get("prior_reference") != cursor
+                or assessment.get("disposition") not in ("unchanged", "revised", "unsupported")
+            ):
+                raise ValueError
+            canonical_uuid(assessment["assessment_id"])
+            canonical_uuid(assessment["run_id"])
+            candidate = assessment.get("candidate_reference")
+            if (assessment["disposition"] == "revised") != (candidate is not None):
+                raise ValueError
+            if candidate is not None:
+                candidate = _discovery_reference(candidate)
+                if candidate["run_id"] != assessment["run_id"]:
+                    raise ValueError
+                cursor, supported = candidate, True
+            elif assessment["disposition"] == "unsupported":
+                supported = False
+        if cursor != reference or not supported:
+            raise ValueError
+
+        def stage_origin(origin, exact_reference=None):
+            if origin is None:
+                return None
+            if not isinstance(origin, dict) or set(origin) != {
+                "receipt",
+                "receipt_sha256",
+                "relationship",
+                "revision_of",
+            }:
+                raise ValueError
+            receipt = origin["receipt"]
+            _discovery_receipt(receipt, canonical_uuid(receipt["run_id"]))
+            receipt_digest = hashlib.sha256(
+                json.dumps(
+                    receipt,
+                    ensure_ascii=False,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                    allow_nan=False,
+                ).encode("utf-8")
+            ).hexdigest()
+            receipt_reference = {
+                "result_id": receipt["result_id"],
+                "run_id": receipt["run_id"],
+                "content_sha256": receipt["result_sha256"],
+            }
+            if receipt_digest != origin["receipt_sha256"] or origin["relationship"] not in (
+                "exact_stage_result",
+                "reassessed_descendant",
+            ):
+                raise ValueError
+            if origin["revision_of"] is not None:
+                _discovery_reference(origin["revision_of"])
+            if exact_reference is not None and (
+                receipt_reference != exact_reference
+                or origin["relationship"] != "exact_stage_result"
+            ):
+                raise ValueError
+            return receipt_reference
+
+        original = stage_origin(context["stage_origin"])
+        if original is not None and (
+            (original == reference)
+            != (context["stage_origin"]["relationship"] == "exact_stage_result")
+        ):
+            raise ValueError
+        known = {}
+        for node in nodes:
+            if not isinstance(node, dict) or set(node) != {
+                "reference",
+                "finding",
+                "stage_origin",
+                "overview_binding",
+            }:
+                raise ValueError
+            ref = _discovery_reference(node["reference"])
+            if ref["result_id"] in known:
+                raise ValueError
+            known[ref["result_id"]] = ref
+            if not isinstance(node["finding"], dict) or node["finding"].get("outcome") not in (
+                "bridge",
+                "answer",
+            ):
+                raise ValueError
+            if node["overview_binding"] is not None:
+                _answer_overview(
+                    {
+                        "finding": node["finding"],
+                        "overview_binding": node["overview_binding"],
+                    }
+                )
+            if node["stage_origin"] is not None:
+                if node["finding"]["outcome"] != "bridge":
+                    raise ValueError
+                stage_origin(node["stage_origin"], ref)
+        if nodes[0]["reference"] != reference:
+            raise ValueError
+        adjacency = {identifier: [] for identifier in known}
+        for edge in edges:
+            if not isinstance(edge, dict) or set(edge) != {
+                "child",
+                "parent",
+                "ordinal",
+                "kind",
+                "assessment_id",
+                "assessment_sha256",
+            }:
+                raise ValueError
+            child, parent = (
+                _discovery_reference(edge["child"]),
+                _discovery_reference(edge["parent"]),
+            )
+            if (
+                known.get(child["result_id"]) != child
+                or known.get(parent["result_id"]) != parent
+                or child["result_id"] == parent["result_id"]
+                or edge["kind"] not in ("premise", "revision", "reassessment")
+            ):
+                raise ValueError
+            _integer(edge["ordinal"], 0, 4)
+            adjacency[child["result_id"]].append(parent["result_id"])
+        visiting, visited = set(), set()
+
+        def visit(identifier):
+            if identifier in visiting:
+                raise ValueError
+            if identifier not in visited:
+                visiting.add(identifier)
+                for parent in adjacency[identifier]:
+                    visit(parent)
+                visiting.remove(identifier)
+                visited.add(identifier)
+
+        visit(reference["result_id"])
+        if len(visited) != len(nodes):
+            raise ValueError
+        return value
+    except (ValueError, TypeError, KeyError, AttributeError, ClientError):
+        raise ClientError("invalid_artifact_context_response") from None
+
+
 def _discovery_reference(value):
-    if not isinstance(value, dict) or set(value) != {"result_id", "run_id", "content_sha256"}:
+    if not isinstance(value, dict) or set(value) != {
+        "result_id",
+        "run_id",
+        "content_sha256",
+    }:
         raise ValueError
     canonical_uuid(value["result_id"])
     canonical_uuid(value["run_id"])
@@ -445,7 +893,12 @@ def _discovery_detail(value, run_id, stage_id=None):
     support = []
     revision = False
     for ordinal, edge in enumerate(edges):
-        if not isinstance(edge, dict) or set(edge) != {"kind", "ordinal", "reference", "stage_id"}:
+        if not isinstance(edge, dict) or set(edge) != {
+            "kind",
+            "ordinal",
+            "reference",
+            "stage_id",
+        }:
             raise ValueError
         reference = _discovery_reference(edge["reference"])
         if (
@@ -893,7 +1346,15 @@ class PolymathClient:
                 )
                 if method == "POST" and code == "research_storage_unavailable":
                     code = "write_outcome_unknown"
-                raise ClientError(code, response.status)
+                retry = response.headers.get("Retry-After")
+                retry = (
+                    int(retry)
+                    if isinstance(retry, str)
+                    and re.fullmatch(r"[0-9]{1,5}", retry)
+                    and int(retry) <= 86400
+                    else None
+                )
+                raise ClientError(code, response.status, retry)
             if not 200 <= response.status < 300:
                 raise ClientError("unexpected_response", response.status)
             if response.length not in (None, 0):
@@ -969,7 +1430,14 @@ class PolymathClient:
             self._secrets.update((cookie.value, csrf))
             if previous is not None and previous != cookie.value and not explicit:
                 raise ClientError("owner_session_changed")
-        except (ValueError, UnicodeError, KeyError, TypeError, AttributeError, RecursionError):
+        except (
+            ValueError,
+            UnicodeError,
+            KeyError,
+            TypeError,
+            AttributeError,
+            RecursionError,
+        ):
             raise ClientError("invalid_session_response") from None
         self._jar, self._csrf, self._ever_owner = candidate, csrf, True
         self._persist_owner()
@@ -1013,8 +1481,83 @@ class PolymathClient:
         value = self._private_json("/api/v1/research/access")
         return _research_access(value)
 
+    def research_protocols(self):
+        return _research_protocols(self._private_json("/api/v1/research/protocols"))
+
+    def get_assessment_finding(self, result_id):
+        identifier = canonical_uuid(result_id)
+        value = self._private_json("/api/v1/assessments/findings/" + identifier)
+        try:
+            if (
+                not isinstance(value, dict)
+                or value.get("id") != identifier
+                or not isinstance(value.get("payload"), dict)
+            ):
+                raise ValueError
+            canonical_uuid(value["run_id"])
+            result = value["payload"]
+            if (
+                result.get("status") not in ("bridge", "answer")
+                or result.get("mode") not in ("explore", "ask", "surprise")
+                or not isinstance(result.get("finding"), dict)
+                or result["finding"].get("outcome") != result["status"]
+                or (result["status"] == "answer") != (result["mode"] == "ask")
+            ):
+                raise ValueError
+            _answer_overview(result)
+            return value
+        except (ValueError, TypeError, KeyError, AttributeError, ClientError):
+            raise ClientError("invalid_assessment_finding_response") from None
+
+    def _select_scientific_protocol(self, path, body, current_hash):
+        selection = None
+        if path == "/api/v1/runs" and body.get("mode") == "ask":
+            selection = (
+                "ask_claim_overview_v1",
+                "ask_overview_intent",
+                ASK_OVERVIEW_PROTOCOL,
+            )
+        elif path == "/api/v1/artifacts/jobs":
+            selection = (
+                "artifact_scientific_context_v1",
+                "scientific_context_intent",
+                ARTIFACT_CONTEXT_PROTOCOL,
+            )
+        elif path == "/api/v1/assessments/jobs":
+            selection = (
+                "ask_reassessment_overview_v1",
+                "assessment_overview_intent",
+                ASSESSMENT_OVERVIEW_PROTOCOL,
+            )
+        if selection is None:
+            return body
+        protocols = self.research_protocols()
+        if protocols["activation_sha256"] != current_hash:
+            raise ClientError("research_activation_changed", 409)
+        capability, field, protocol = selection
+        approved = capability in protocols["capabilities"]
+        if path == "/api/v1/assessments/jobs":
+            source = self.get_assessment_finding(body["source_result_id"])["payload"]
+            if source["status"] != "answer":
+                if field in body:
+                    raise ClientError("scientific_context_protocol_unavailable", 409)
+                return body
+            if "overview_binding" in source and not approved:
+                raise ClientError("ask_reassessment_overview_required", 409)
+        if approved:
+            return {**body, field: {"protocol": protocol}}
+        if field in body:
+            raise ClientError("scientific_context_protocol_unavailable", 409)
+        return body
+
     def _scientific_write(
-        self, path, body, *, allow_new=False, expected_activation_sha256=None, require_native=False
+        self,
+        path,
+        body,
+        *,
+        allow_new=False,
+        expected_activation_sha256=None,
+        require_native=False,
     ):
         if expected_activation_sha256 is not None and (
             not isinstance(expected_activation_sha256, str)
@@ -1045,11 +1588,21 @@ class PolymathClient:
                     or intent["max_depth"] > approved["max_depth"]
                 ):
                     raise ClientError("research_discovery_not_approved", 409)
+            body = self._select_scientific_protocol(path, body, current_hash)
             body = {**body, "expected_activation_sha256": current_hash}
         elif require_native or expected_activation_sha256 is not None:
             raise ClientError("research_native_access_required", 409)
         elif not capabilities["research_available"]:
             raise ClientError("research_unavailable", 503)
+        elif any(
+            field in body
+            for field in (
+                "ask_overview_intent",
+                "scientific_context_intent",
+                "assessment_overview_intent",
+            )
+        ):
+            raise ClientError("scientific_context_protocol_unavailable", 409)
         return self._send_write(path, body)
 
     def public_library(self, query="", limit=20, before=None):
@@ -1068,19 +1621,23 @@ class PolymathClient:
     def public_finding(self, public_id):
         if not isinstance(public_id, str) or TOKEN.fullmatch(public_id) is None:
             raise ClientError("invalid_identifier")
-        return self._redact(self._json("GET", "/api/v1/public/findings/" + public_id))
+        return _public_scientific_metadata(
+            self._redact(self._json("GET", "/api/v1/public/findings/" + public_id))
+        )
 
     def list_runs(self, limit=20, before=None):
         params = {"limit": _integer(limit, 1, 50)}
         if before is not None:
             params["before"] = canonical_uuid(before)
-        return self._private_json("/api/v1/runs?" + urlencode(params))
+        return _scientific_history(self._private_json("/api/v1/runs?" + urlencode(params)))
 
     def get_run(self, run_id):
-        return self._private_json("/api/v1/runs/" + canonical_uuid(run_id))
+        return _scientific_history(self._private_json("/api/v1/runs/" + canonical_uuid(run_id)))
 
     def get_result(self, run_id):
-        return self._private_json("/api/v1/runs/" + canonical_uuid(run_id) + "/result")
+        return _answer_overview(
+            self._private_json("/api/v1/runs/" + canonical_uuid(run_id) + "/result")
+        )
 
     def get_discovery(self, run_id):
         identifier = canonical_uuid(run_id)
@@ -1204,6 +1761,7 @@ class PolymathClient:
         parent_result_ids=(),
         *,
         discovery_intent=None,
+        ask_overview_intent=None,
         expected_activation_sha256=None,
     ):
         if (
@@ -1230,6 +1788,12 @@ class PolymathClient:
             if mode != "surprise":
                 raise ClientError("invalid_arguments")
             body["discovery_intent"] = _discovery_intent(discovery_intent)
+        if ask_overview_intent is not None:
+            if mode != "ask" or discovery_intent is not None:
+                raise ClientError("invalid_arguments")
+            body["ask_overview_intent"] = _scientific_intent(
+                ask_overview_intent, ASK_OVERVIEW_PROTOCOL
+            )
         return self._scientific_write(
             "/api/v1/runs",
             body,
@@ -1258,10 +1822,33 @@ class PolymathClient:
         return self._write("/api/v1/runs/" + canonical_uuid(run_id) + "/cancel")
 
     def get_artifact(self, artifact_id):
-        return self._private_json("/api/v1/artifacts/" + canonical_uuid(artifact_id))
+        return _artifact_scientific_context(
+            self._private_json("/api/v1/artifacts/" + canonical_uuid(artifact_id))
+        )
+
+    def list_artifact_jobs(self, *, source_result_id=None, limit=20, before=None):
+        params = {"limit": _integer(limit, 1, 50)}
+        if source_result_id is not None:
+            params["source_result_id"] = canonical_uuid(source_result_id)
+        if before is not None:
+            params["before"] = canonical_uuid(before)
+        return _scientific_history(
+            self._private_json("/api/v1/artifacts/jobs?" + urlencode(params))
+        )
+
+    def get_artifact_job(self, run_id):
+        return _scientific_history(
+            self._private_json("/api/v1/artifacts/jobs/" + canonical_uuid(run_id))
+        )
 
     def create_artifact(
-        self, kind, source_result_id, formalisation_id=None, *, expected_activation_sha256=None
+        self,
+        kind,
+        source_result_id,
+        formalisation_id=None,
+        *,
+        scientific_context_intent=None,
+        expected_activation_sha256=None,
     ):
         if kind not in ("formalise", "write_summary", "write_paper"):
             raise ClientError("invalid_arguments")
@@ -1270,6 +1857,10 @@ class PolymathClient:
             if kind == "formalise":
                 raise ClientError("invalid_arguments")
             body["formalisation_id"] = canonical_uuid(formalisation_id)
+        if scientific_context_intent is not None:
+            body["scientific_context_intent"] = _scientific_intent(
+                scientific_context_intent, ARTIFACT_CONTEXT_PROTOCOL
+            )
         return self._scientific_write(
             "/api/v1/artifacts/jobs",
             body,
@@ -1283,6 +1874,7 @@ class PolymathClient:
         new_source_version_ids,
         expected_head_revision,
         *,
+        assessment_overview_intent=None,
         expected_activation_sha256=None,
     ):
         if (
@@ -1299,6 +1891,10 @@ class PolymathClient:
             "new_source_version_ids": versions,
             "expected_head_revision": _integer(expected_head_revision, 0, 2**31 - 1),
         }
+        if assessment_overview_intent is not None:
+            body["assessment_overview_intent"] = _scientific_intent(
+                assessment_overview_intent, ASSESSMENT_OVERVIEW_PROTOCOL
+            )
         return self._scientific_write(
             "/api/v1/assessments/jobs",
             body,
@@ -1472,9 +2068,9 @@ def parser():
     public.add_parser("map").add_argument("--query", default="")
     public.add_parser("finding").add_argument("public_id")
     commands.add_parser("session").add_subparsers(dest="action", required=True).add_parser("init")
-    commands.add_parser("research").add_subparsers(dest="action", required=True).add_parser(
-        "access"
-    )
+    research = commands.add_parser("research").add_subparsers(dest="action", required=True)
+    research.add_parser("access")
+    research.add_parser("protocols")
     runs = commands.add_parser("runs").add_subparsers(dest="action", required=True)
     listing = runs.add_parser("list")
     listing.add_argument("--limit", type=int, default=20)
@@ -1501,6 +2097,7 @@ def parser():
     create.add_argument("--max-stages", type=int)
     create.add_argument("--max-depth", type=int)
     create.add_argument("--expected-activation-sha256")
+    create.add_argument("--claim-overview", action="store_true")
     discovery = commands.add_parser("discovery").add_subparsers(dest="action", required=True)
     for action in ("show", "stages"):
         discovery.add_parser(action).add_argument("run_id")
@@ -1516,6 +2113,7 @@ def parser():
     artifact_create.add_argument("--source-result", required=True)
     artifact_create.add_argument("--formalisation")
     artifact_create.add_argument("--expected-activation-sha256")
+    artifact_create.add_argument("--scientific-context", action="store_true")
     export = artifacts.add_parser("export")
     export.add_argument("artifact_id")
     export.add_argument("--output", required=True)
@@ -1526,6 +2124,7 @@ def parser():
     reassess.add_argument("--new-source-version", action="append", required=True)
     reassess.add_argument("--expected-head-revision", type=int, required=True)
     reassess.add_argument("--expected-activation-sha256")
+    reassess.add_argument("--claim-overview", action="store_true")
     return result
 
 
@@ -1551,7 +2150,11 @@ def main(argv=None):
             elif args.command == "session":
                 value = client.init_session()
             elif args.command == "research":
-                value = client.research_access()
+                value = (
+                    client.research_access()
+                    if args.action == "access"
+                    else client.research_protocols()
+                )
             elif args.command == "artifacts":
                 if args.action == "show":
                     value = client.get_artifact(args.artifact_id)
@@ -1560,6 +2163,9 @@ def main(argv=None):
                         args.kind,
                         args.source_result,
                         args.formalisation,
+                        scientific_context_intent={"protocol": ARTIFACT_CONTEXT_PROTOCOL}
+                        if args.scientific_context
+                        else None,
                         expected_activation_sha256=args.expected_activation_sha256,
                     )
                 else:
@@ -1572,6 +2178,9 @@ def main(argv=None):
                     args.watch,
                     args.new_source_version,
                     args.expected_head_revision,
+                    assessment_overview_intent={"protocol": ASSESSMENT_OVERVIEW_PROTOCOL}
+                    if args.claim_overview
+                    else None,
                     expected_activation_sha256=args.expected_activation_sha256,
                 )
             elif args.command == "discovery":
@@ -1591,7 +2200,9 @@ def main(argv=None):
                 value = client.cancel_run(args.run_id)
             elif args.action == "resume":
                 value = client.resume_run(
-                    args.run_id, args.expected_lease_token, args.expected_activation_sha256
+                    args.run_id,
+                    args.expected_lease_token,
+                    args.expected_activation_sha256,
                 )
             elif args.action == "events":
                 for event in client.events(
@@ -1636,6 +2247,11 @@ def main(argv=None):
                     args.parent_result,
                     **({"discovery_intent": intent} if intent is not None else {}),
                     **(
+                        {"ask_overview_intent": {"protocol": ASK_OVERVIEW_PROTOCOL}}
+                        if args.claim_overview
+                        else {}
+                    ),
+                    **(
                         {"expected_activation_sha256": args.expected_activation_sha256}
                         if args.expected_activation_sha256 is not None
                         else {}
@@ -1644,7 +2260,10 @@ def main(argv=None):
             print(json.dumps(value, ensure_ascii=False, indent=2))
             return 0
     except ClientError as error:
-        print(json.dumps({"error": error.code, "status": error.status}), file=sys.stderr)
+        data = {"error": error.code, "status": error.status}
+        if error.retry_after_seconds is not None:
+            data["retry_after_seconds"] = error.retry_after_seconds
+        print(json.dumps(data), file=sys.stderr)
         return 2
     except (KeyboardInterrupt, BrokenPipeError):
         return 130

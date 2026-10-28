@@ -35,6 +35,11 @@ from polymath.meta_readiness_contracts import (
     proposal_sha256,
     quote_proposal,
 )
+from polymath.scientific_context_contracts import (
+    ArtifactScientificContextIntent,
+    AskOverviewIntent,
+    AskReassessmentOverviewIntent,
+)
 
 if TYPE_CHECKING:
     from polymath.research.meta import ModelReply
@@ -346,6 +351,202 @@ class NativeTaskProfileBinding(_ReadinessModel):
         return self
 
 
+SCIENTIFIC_CONTEXT_PROFILES_PROTOCOL = "polymath-scientific-context-profiles-v1"
+ScientificCapability = Literal[
+    "artifact_scientific_context_v1", "ask_claim_overview_v1", "ask_reassessment_overview_v1"
+]
+SCIENTIFIC_CAPABILITIES = (
+    "artifact_scientific_context_v1",
+    "ask_claim_overview_v1",
+    "ask_reassessment_overview_v1",
+)
+SCIENTIFIC_PROFILE_ROWS = (
+    (
+        "artifact_scientific_context_v1",
+        "formalise",
+        None,
+        "polymath-meta-artifact-scientific-context-v1",
+    ),
+    (
+        "artifact_scientific_context_v1",
+        "write_summary",
+        None,
+        "polymath-meta-artifact-scientific-context-v1",
+    ),
+    (
+        "artifact_scientific_context_v1",
+        "write_paper",
+        None,
+        "polymath-meta-artifact-scientific-context-v1",
+    ),
+    ("ask_claim_overview_v1", "research", "ask", "polymath-meta-ask-claim-overview-v1"),
+    (
+        "ask_reassessment_overview_v1",
+        "reassess_finding",
+        "ask",
+        "polymath-meta-ask-reassessment-overview-v1",
+    ),
+)
+
+
+class ScientificContextIntent(_ReadinessModel):
+    """Operator requests server derivation; this is not supplied profile authority."""
+
+    protocol: Literal["polymath-scientific-context-profiles-v1"] = (
+        SCIENTIFIC_CONTEXT_PROFILES_PROTOCOL
+    )
+
+
+class NativeScientificContextProfileBinding(_ReadinessModel):
+    capability: ScientificCapability
+    mode: Literal["ask"] | None
+    profile: NativeTaskProfile
+    profile_sha256: Digest
+
+    @model_validator(mode="after")
+    def exact_profile(self):
+        if self.profile_sha256 != task_profile_sha256(self.profile):
+            raise ValueError("scientific_context_profile_hash_mismatch")
+        row = (self.capability, self.profile.task_kind, self.mode, self.profile.controller_protocol)
+        if row not in SCIENTIFIC_PROFILE_ROWS:
+            raise ValueError("scientific_context_profile_scope_invalid")
+        return self
+
+
+class NativeScientificContextProfiles(_ReadinessModel):
+    protocol: Literal["polymath-scientific-context-profiles-v1"] = (
+        SCIENTIFIC_CONTEXT_PROFILES_PROTOCOL
+    )
+    bindings: Annotated[
+        tuple[NativeScientificContextProfileBinding, ...], Field(min_length=5, max_length=5)
+    ]
+
+    @field_validator("bindings", mode="before")
+    @classmethod
+    def json_bindings(cls, value):
+        if isinstance(value, list):
+            return tuple(
+                NativeScientificContextProfileBinding.model_validate_json(_canonical(item))
+                if isinstance(item, dict)
+                else item
+                for item in value
+            )
+        return value
+
+    @model_validator(mode="after")
+    def exact_order(self):
+        rows = tuple(
+            (item.capability, item.profile.task_kind, item.mode, item.profile.controller_protocol)
+            for item in self.bindings
+        )
+        if rows != SCIENTIFIC_PROFILE_ROWS:
+            raise ValueError("scientific_context_profile_order_invalid")
+        return self
+
+
+def validate_historical_scientific_context_profiles(extension, proposal) -> None:
+    """Check saved identity/ceilings without loading current controller code."""
+    value = NativeScientificContextProfiles.model_validate_json(extension.model_dump_json())
+    proposal = MetaReadinessProposal.model_validate_json(proposal.model_dump_json())
+    limits = proposal.application_limits
+    for item in value.bindings:
+        profile = item.profile
+        if (
+            profile.max_model_calls > limits.max_model_calls
+            or profile.max_output_tokens != limits.max_output_tokens
+            or profile.max_context_characters != limits.max_context_characters
+            or profile.request_timeout_seconds != limits.request_timeout_seconds
+        ):
+            raise ValueError("historical_scientific_profile_exceeds_proposal")
+
+
+def _scientific_protocol_payload(capability, task_kind):
+    """Fresh only. Missing actual variant helpers is an unavailable protocol."""
+    try:
+        if capability == "artifact_scientific_context_v1":
+            from polymath.artifact_controller import artifact_scientific_context_protocol_payload
+
+            return artifact_scientific_context_protocol_payload(task_kind)
+        if capability == "ask_claim_overview_v1" and task_kind == "research":
+            from polymath.research.ask_overview import ask_overview_protocol_payload
+
+            return ask_overview_protocol_payload()
+        if capability == "ask_reassessment_overview_v1" and task_kind == "reassess_finding":
+            from polymath.assessment_overview import ask_reassessment_overview_protocol_payload
+
+            return ask_reassessment_overview_protocol_payload()
+    except ImportError:
+        raise ValueError("scientific_context_protocol_unavailable") from None
+    raise ValueError("scientific_context_profile_scope_invalid")
+
+
+def scientific_controller_sha256(capability: ScientificCapability, task_kind: TaskKind) -> str:
+    return _sha(_scientific_protocol_payload(capability, task_kind))
+
+
+def minimum_scientific_context_characters(capability, task_kind) -> int:
+    try:
+        if capability == "artifact_scientific_context_v1":
+            from polymath.artifact_controller import (
+                minimum_artifact_scientific_context_characters,
+            )
+
+            return minimum_artifact_scientific_context_characters(task_kind)
+        if capability == "ask_claim_overview_v1" and task_kind == "research":
+            from polymath.research.ask_overview import ask_overview_initial_messages
+
+            return sum(
+                len(item["content"])
+                for item in ask_overview_initial_messages("", memory_available=True)
+            )
+        if capability == "ask_reassessment_overview_v1" and task_kind == "reassess_finding":
+            from polymath.assessment_overview import ask_reassessment_overview_initial_messages
+
+            return sum(
+                len(item["content"]) for item in ask_reassessment_overview_initial_messages(None)
+            )
+    except ImportError:
+        raise ValueError("scientific_context_protocol_unavailable") from None
+    raise ValueError("scientific_context_profile_scope_invalid")
+
+
+def derive_scientific_context_profiles(proposal) -> NativeScientificContextProfiles:
+    proposal = MetaReadinessProposal.model_validate_json(proposal.model_dump_json())
+    base = {item.profile.task_kind: item.profile for item in derive_task_profiles(proposal)}
+    bindings = []
+    for capability, task_kind, mode, protocol in SCIENTIFIC_PROFILE_ROWS:
+        if proposal.application_limits.max_context_characters < (
+            minimum_scientific_context_characters(capability, task_kind)
+        ):
+            raise ValueError("scientific_context_fixed_prompt_exceeds_proposal")
+        original = base[task_kind]
+        profile = NativeTaskProfile.model_validate_json(
+            _canonical(
+                original.model_dump(mode="json")
+                | {
+                    "controller_protocol": protocol,
+                    "controller_sha256": scientific_controller_sha256(capability, task_kind),
+                }
+            )
+        )
+        bindings.append(
+            NativeScientificContextProfileBinding(
+                capability=capability,
+                mode=mode,
+                profile=profile,
+                profile_sha256=task_profile_sha256(profile),
+            )
+        )
+    return NativeScientificContextProfiles(bindings=tuple(bindings))
+
+
+def validate_current_scientific_context_profiles(extension, proposal) -> None:
+    validate_historical_scientific_context_profiles(extension, proposal)
+    value = NativeScientificContextProfiles.model_validate_json(extension.model_dump_json())
+    if value != derive_scientific_context_profiles(proposal):
+        raise ValueError("scientific_context_profile_changed")
+
+
 class NativeDiscoveryProfile(_ReadinessModel):
     task_kind: Literal["research"] = "research"
     discovery_protocol: Literal["polymath-surprise-ladder-v1"] = "polymath-surprise-ladder-v1"
@@ -524,6 +725,7 @@ class MetaResearchManifest(_ReadinessModel):
         tuple[NativeTaskProfileBinding, ...], Field(min_length=5, max_length=5)
     ]
     discovery_ladder_profile: NativeDiscoveryProfileBinding | None = None
+    scientific_context_profiles: NativeScientificContextProfiles | None = None
     valid_until: datetime
 
     @model_serializer(mode="wrap")
@@ -531,6 +733,8 @@ class MetaResearchManifest(_ReadinessModel):
         value = handler(self)
         if self.discovery_ladder_profile is None:
             value.pop("discovery_ladder_profile", None)
+        if self.scientific_context_profiles is None:
+            value.pop("scientific_context_profiles", None)
         return value
 
     @field_validator("valid_until", mode="before")
@@ -580,6 +784,10 @@ class MetaResearchManifest(_ReadinessModel):
                 != proposal.application_limits.request_timeout_seconds
             ):
                 raise ValueError("historical native profile exceeds its original reviewed proposal")
+        if self.scientific_context_profiles is not None:
+            validate_historical_scientific_context_profiles(
+                self.scientific_context_profiles, proposal
+            )
         if self.valid_until > min(
             proposal.valid_until, self.review.valid_until, attestation.valid_until
         ) or self.valid_until <= max(
@@ -609,6 +817,7 @@ def build_research_manifest(
     provider_account_attestation: ProviderAccountAttestation,
     valid_until: datetime,
     discovery=None,
+    scientific_context: ScientificContextIntent | None = None,
 ) -> MetaResearchManifest:
     if (
         not policy.configured
@@ -616,6 +825,8 @@ def build_research_manifest(
         or policy.model_id != proposal.model_id
     ):
         raise ValueError("native research policy does not bind the saved readiness proposal")
+    if scientific_context is not None:
+        ScientificContextIntent.model_validate_json(scientific_context.model_dump_json())
     return MetaResearchManifest(
         readiness_id=readiness_id,
         proposal_sha256=proposal_sha256(proposal),
@@ -630,6 +841,9 @@ def build_research_manifest(
         task_profiles=derive_task_profiles(proposal),
         discovery_ladder_profile=derive_discovery_ladder_profile(proposal, discovery)
         if discovery is not None
+        else None,
+        scientific_context_profiles=derive_scientific_context_profiles(proposal)
+        if scientific_context is not None
         else None,
         valid_until=valid_until,
     )
@@ -677,6 +891,76 @@ def profile_for_task(
         if binding.profile.task_kind == task_kind:
             return binding.profile
     raise ValueError("unsupported native scientific task")
+
+
+def select_scientific_profile(
+    manifest, task_kind, mode, *, discovery=None, scientific_intent=None
+) -> NativeTaskProfile | NativeDiscoveryProfile:
+    """Select only original approved profiles, never current prompt defaults."""
+    from polymath.public_research_contracts import (
+        PublicResearchManifest,
+        public_profile_for_task,
+        validate_public_research_manifest,
+    )
+
+    public = isinstance(manifest, PublicResearchManifest)
+    if scientific_intent is None:
+        selector = public_profile_for_task if public else profile_for_task
+        return selector(manifest, task_kind, discovery=discovery)
+    if public:
+        validate_public_research_manifest(manifest)
+    else:
+        validate_research_manifest(manifest)
+    if discovery is not None:
+        raise ValueError("scientific_context_intents_conflict")
+    if isinstance(scientific_intent, ArtifactScientificContextIntent):
+        ArtifactScientificContextIntent.model_validate_json(scientific_intent.model_dump_json())
+        capability = "artifact_scientific_context_v1"
+        if task_kind not in ("formalise", "write_summary", "write_paper"):
+            raise ValueError("scientific_context_intent_scope_invalid")
+    elif isinstance(scientific_intent, AskOverviewIntent):
+        AskOverviewIntent.model_validate_json(scientific_intent.model_dump_json())
+        capability = "ask_claim_overview_v1"
+        if task_kind != "research" or mode != "ask":
+            raise ValueError("scientific_context_intent_scope_invalid")
+    elif isinstance(scientific_intent, AskReassessmentOverviewIntent):
+        AskReassessmentOverviewIntent.model_validate_json(scientific_intent.model_dump_json())
+        capability = "ask_reassessment_overview_v1"
+        if task_kind != "reassess_finding" or mode != "ask":
+            raise ValueError("scientific_context_intent_scope_invalid")
+    else:
+        raise ValueError("scientific_context_intent_invalid")
+    if mode not in ("explore", "ask", "surprise"):
+        raise ValueError("scientific_context_intent_scope_invalid")
+    extension = manifest.scientific_context_profiles
+    if extension is None:
+        raise ValueError("scientific_context_profile_not_approved")
+    for binding in extension.bindings:
+        if binding.capability == capability and binding.profile.task_kind == task_kind:
+            if binding.mode is not None and binding.mode != mode:
+                raise ValueError("scientific_context_intent_scope_invalid")
+            return binding.profile
+    raise ValueError("scientific_context_profile_not_approved")
+
+
+class PublicResearchProtocols(_ReadinessModel):
+    protocol: Literal["polymath-research-protocols-v1"] = "polymath-research-protocols-v1"
+    activation_sha256: Digest | None
+    capabilities: Annotated[tuple[ScientificCapability, ...], Field(max_length=3)]
+
+    @field_validator("capabilities", mode="before")
+    @classmethod
+    def json_capabilities(cls, value):
+        return tuple(value) if isinstance(value, list) else value
+
+    @model_validator(mode="after")
+    def exact_scope(self):
+        actual = tuple(item for item in SCIENTIFIC_CAPABILITIES if item in self.capabilities)
+        if self.capabilities != actual:
+            raise ValueError("scientific_capabilities_order_invalid")
+        if self.activation_sha256 is None and self.capabilities:
+            raise ValueError("scientific_capabilities_without_public_activation")
+        return self
 
 
 class MetaUsageAssessment(_ReadinessModel):

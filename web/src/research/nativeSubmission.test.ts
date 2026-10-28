@@ -148,7 +148,7 @@ describe('unknown scientific enqueue in the shared native workspace', () => {
     expect(result.current.runs).toEqual([])
   })
   it.each(['malformed', 'storage503'] as const)('locks an unknown artifact enqueue (%s) until its owned saved-work GET refresh', async (failure) => {
-    const context: NativeResearchContextValue = { required: true, phase: 'ready', activation: currentActivation().activation, submission: native, canSubmit: true, pollPaused: false, reason: null, invalidate: vi.fn(), refresh: vi.fn() }
+    const context: NativeResearchContextValue = { required: true, phase: 'ready', scientificPhase: 'ready', scientificCapabilities: [], activation: currentActivation().activation, submission: native, canSubmit: true, pollPaused: false, reason: null, invalidate: vi.fn(), refresh: vi.fn() }
     const wrapper = ({ children }: { children: ReactNode }) => createElement(NativeResearchProvider, { value: context, children })
     const fetch = vi.fn(async (input: RequestInfo | URL, options?: RequestInit) => {
       const path = input.toString()

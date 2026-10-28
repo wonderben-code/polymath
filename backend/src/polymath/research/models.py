@@ -478,6 +478,26 @@ class AnswerFinding(StrictModel):
         return self
 
 
+class AskOverviewBinding(StrictModel):
+    """Exact selected claim IDs; ownership/admission are verified by the store."""
+
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True, hide_input_in_errors=True)
+
+    protocol: Literal["polymath-ask-claim-overview-v1"] = "polymath-ask-claim-overview-v1"
+    claim_ids: Annotated[tuple[ClaimId, ...], Field(min_length=1, max_length=8)]
+
+    @field_validator("claim_ids", mode="before")
+    @classmethod
+    def json_claim_ids(cls, value):
+        return tuple(value) if type(value) is list else value
+
+    @model_validator(mode="after")
+    def distinct_ids(self):
+        if len(set(self.claim_ids)) != len(self.claim_ids):
+            raise ValueError("ask_overview_duplicate_claim")
+        return self
+
+
 class MemoryReadReference(StrictModel):
     """An immutable finding read by this run, not independent scientific evidence."""
 
@@ -518,10 +538,29 @@ class MemorySourceReference(StrictModel):
 class MemoryFinding(StrictModel):
     reference: MemoryFindingReference
     finding: BridgeFinding | AnswerFinding
+    overview_binding: AskOverviewBinding | None = None
     sources: Annotated[tuple[MemorySourceReference, ...], Field(max_length=64)]
+
+    @field_validator("overview_binding", mode="before")
+    @classmethod
+    def forbid_explicit_null_overview(cls, value):
+        if value is None:
+            raise ValueError("ask_overview_binding_invalid")
+        return value
+
+    @model_serializer(mode="wrap")
+    def preserve_absent_overview(self, handler):
+        data = handler(self)
+        if self.overview_binding is None:
+            data.pop("overview_binding", None)
+        return data
 
     @model_validator(mode="after")
     def consistent_reference(self) -> MemoryFinding:
+        if self.overview_binding is not None:
+            from polymath.scientific_context_contracts import validate_answer_overview
+
+            validate_answer_overview(self.finding, self.overview_binding)
         _validate_public_text(self.model_dump())
         if self.reference.outcome != self.finding.outcome:
             raise ValueError("memory finding outcome must match its reference")
@@ -591,6 +630,7 @@ class ResearchResult(StrictModel):
     status: Literal["bridge", "answer", "insufficient_evidence", "limit_reached", "failed"]
     mode: ResearchMode = "explore"
     finding: BridgeFinding | AnswerFinding | InsufficientFinding | None = None
+    overview_binding: AskOverviewBinding | None = None
     field_selections: Annotated[tuple[FieldSelection, ...], Field(max_length=3)] = ()
     memory_reads: Annotated[tuple[MemoryReadReference, ...], Field(max_length=10)] = ()
     quotes: tuple[VerifiedQuote, ...] = ()
@@ -601,3 +641,29 @@ class ResearchResult(StrictModel):
     validation_scope: Literal["source_identity_and_quote_integrity"] = (
         "source_identity_and_quote_integrity"
     )
+
+    @field_validator("overview_binding", mode="before")
+    @classmethod
+    def forbid_explicit_null_overview(cls, value):
+        if value is None:
+            raise ValueError("ask_overview_binding_invalid")
+        return value
+
+    @model_serializer(mode="wrap")
+    def preserve_absent_overview(self, handler):
+        data = handler(self)
+        if self.overview_binding is None:
+            data.pop("overview_binding", None)
+        return data
+
+    @model_validator(mode="after")
+    def exact_overview_binding(self):
+        if self.overview_binding is not None:
+            # Local import keeps the legacy research/discovery action adapters
+            # independent of the optional scientific-context contract module.
+            from polymath.scientific_context_contracts import validate_answer_overview
+
+            if self.mode != "ask" or self.status != "answer":
+                raise ValueError("ask_overview_wrong_result")
+            validate_answer_overview(self.finding, self.overview_binding)
+        return self

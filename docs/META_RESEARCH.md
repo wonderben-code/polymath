@@ -32,6 +32,17 @@ deployment remain unverified. Free
 reading, public shared findings and scheduled literature ingestion retain their
 existing boundaries; activation alone does not create automatic paid jobs.
 
+
+An optional `scientific_context_profiles` extension now binds three pinned-context
+artifact variants, claim-linked Ask overviews and bound-Ask reassessment. Preview
+accepts the explicit server-derived `scientific_context` protocol marker; each
+new variant uses its immutable admitted intent and original profile. Fresh grants
+compare the current variant, while keyless late accounting uses original saved
+facts. No extra calls or money allowance is added. Public capability discovery
+uses a separate read-only route; D2 access remains unchanged. See
+[SCIENTIFIC_CONTEXT.md](SCIENTIFIC_CONTEXT.md) and [API.md](API.md). Legacy
+approvals/absent inputs remain exact and acquire no new protocol implicitly.
+
 ## One exact activation on the existing ledger
 
 `MetaResearchManifest` binds these facts:

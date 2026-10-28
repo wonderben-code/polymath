@@ -403,6 +403,24 @@ class EvidenceStore:
         except ValueError:
             raise EvidenceError("selected_paper_version_conflict") from None
         self._validate_parent_evidence(session, run, result, quote_rows)
+        from polymath.access_models import ResearchRunAccess
+        from polymath.scientific_context_store import (
+            ContextStoreError,
+            validate_result_overview_for_run,
+        )
+
+        owner_hash = session.scalar(
+            select(ResearchRunAccess.session_hash).where(ResearchRunAccess.run_id == run.id)
+        )
+        try:
+            validate_result_overview_for_run(
+                session,
+                owner_hash=owner_hash,
+                run_id=run.id,
+                result=result.model_dump(mode="json"),
+            )
+        except ContextStoreError as error:
+            raise EvidenceError(getattr(error, "code", str(error))) from None
         payload = result.model_dump(mode="json")
         payload["sources"] = []
         envelope = {"result": payload, "source_artifacts": refs}
@@ -681,6 +699,13 @@ class EvidenceStore:
     def _stored_result(session: Session, stored: EvidenceResult) -> StoredResult:
         envelope = json.loads(json.dumps(stored.payload))
         payload = envelope["result"]
+        if "overview_binding" in payload:
+            from polymath.scientific_context_contracts import validate_result_overview
+
+            try:
+                validate_result_overview(payload)
+            except (ValueError, TypeError):
+                raise EvidenceError("stored_overview_integrity_failed") from None
         payload["sources"] = []
         for ref in envelope["source_artifacts"]:
             row = session.execute(

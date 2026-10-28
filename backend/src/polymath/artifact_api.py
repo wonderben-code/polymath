@@ -12,14 +12,21 @@ from typing import TYPE_CHECKING, Annotated, Literal
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import Response
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from sqlalchemy import Engine, func, select, text, tuple_
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from polymath.access_models import ResearchRunAccess
 from polymath.artifact_models import ArtifactRequest, GeneratedArtifact
-from polymath.artifacts import ArtifactError, ArtifactStore, bind_request, source_for_request
+from polymath.artifacts import (
+    ArtifactError,
+    ArtifactStore,
+    _context,
+    bind_request,
+    preflight_artifact_context,
+    source_for_request,
+)
 from polymath.jobs import _event
 from polymath.models import ResearchRun
 from polymath.run_api import (
@@ -33,6 +40,8 @@ from polymath.run_api import (
     _PrivateRoute,
     _summary,
 )
+from polymath.scientific_context_contracts import ArtifactScientificContextIntent
+from polymath.scientific_context_store import ContextStoreError
 
 if TYPE_CHECKING:
     from polymath.meta_research import MetaResearchStore
@@ -53,6 +62,14 @@ class CreateArtifactJob(BaseModel):
     source_result_id: str = Field(min_length=36, max_length=36)
     formalisation_id: str | None = Field(default=None, min_length=36, max_length=36)
     expected_activation_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    scientific_context_intent: ArtifactScientificContextIntent | None = None
+
+    @field_validator("scientific_context_intent", mode="before")
+    @classmethod
+    def explicit_context_is_not_null(cls, value):
+        if value is None:
+            raise ValueError("scientific_context_intent_invalid")
+        return value
 
     @model_validator(mode="after")
     def canonical_identifiers(self) -> CreateArtifactJob:
@@ -174,17 +191,47 @@ def create_artifact_router(
                     body.kind,
                     body.source_result_id,
                     body.formalisation_id,
+                    **(
+                        {"scientific_context_intent": body.scientific_context_intent}
+                        if body.scientific_context_intent is not None
+                        else {}
+                    ),
                 )
                 if admission is not None:
                     from polymath.meta_research import native_run_input_sha256
 
                     session.flush()
-                    native_store.bind_run_in_session(
+                    binding = native_store.bind_run_in_session(
                         session, admission, run, native_run_input_sha256(session, run)
                     )
+                    if body.scientific_context_intent is not None:
+                        basis, _ = _context(session, run)
+                        preflight_artifact_context(
+                            run.task_kind,
+                            basis,
+                            max_context_characters=binding.profile["max_context_characters"],
+                        )
                 _event(session, run, "created", "queued", f"{ARTIFACT_GOALS[body.kind]} queued")
                 return _summary(run, session=session)
-        except ArtifactError:
+        except ContextStoreError as error:
+            code = error.code
+            raise _PrivateHTTPException(
+                422 if code == "artifact_context_too_large" else 409,
+                code
+                if code
+                in {
+                    "artifact_context_too_large",
+                    "scientific_context_integrity_failed",
+                    "scientific_context_not_available",
+                    "scientific_context_admission_closed",
+                }
+                else "scientific_context_not_available",
+            ) from None
+        except ArtifactError as error:
+            if str(error) == "artifact_context_too_large" or (
+                body.scientific_context_intent is not None and str(error) == "artifact_size_limit"
+            ):
+                raise _PrivateHTTPException(422, "artifact_context_too_large") from None
             raise _PrivateHTTPException(404, "artifact_source_not_found") from None
         except SQLAlchemyError:
             raise _storage_error() from None

@@ -890,6 +890,16 @@ class _RecordedDiscoveryTools:
         return result
 
 
+def _load_scientific_intent(engine, lease):
+    from sqlalchemy.orm import Session
+
+    from polymath.jobs import _owned
+    from polymath.scientific_context_store import load_scientific_intent
+
+    with Session(engine) as session, session.begin():
+        return load_scientific_intent(session, _owned(session, lease))
+
+
 class ResearchWorker:
     def __init__(
         self,
@@ -1053,6 +1063,7 @@ class ResearchWorker:
         pulse = asyncio.create_task(heartbeat())
         discovery_store = None
         discovery_intent = None
+        scientific_intent = None
 
         async def stop_heartbeat() -> None:
             closing.set()
@@ -1062,6 +1073,7 @@ class ResearchWorker:
 
         try:
             snapshot = await context.checkpoint()
+            scientific_intent = await asyncio.to_thread(_load_scientific_intent, self.engine, lease)
             discovery_store = self.discovery_store_factory(self.engine)
             discovery_intent = await asyncio.to_thread(discovery_store.load_intent, lease)
             if discovery_intent is not None:
@@ -1111,6 +1123,8 @@ class ResearchWorker:
                 fingerprint_input["native_run_binding"] = profile.protocol_binding
             if discovery_intent is not None:
                 fingerprint_input["discovery_intent"] = discovery_intent.model_dump(mode="json")
+            if scientific_intent is not None:
+                fingerprint_input["scientific_intent"] = scientific_intent.model_dump(mode="json")
             fingerprint = _digest(fingerprint_input)
             existing = snapshot.checkpoint.get("worker_protocol")
             if existing is not None and existing != fingerprint:
@@ -1162,7 +1176,14 @@ class ResearchWorker:
                     assessment_limits,
                     on_event=public_event,
                 )
-                assessment = await controller.reassess(assessment_basis)
+                assessment = await controller.reassess(
+                    assessment_basis,
+                    **(
+                        {"ask_reassessment_overview_intent": scientific_intent}
+                        if scientific_intent is not None
+                        else {}
+                    ),
+                )
                 await context.check_owner()
                 current = await asyncio.to_thread(self.jobs.get, lease.run_id)
                 if current.external_request_in_flight:
@@ -1237,6 +1258,11 @@ class ResearchWorker:
                 mode=snapshot.mode,
                 parent_result_ids=tuple(parent.result_id for parent in parents),
                 **({"discovery": discovery_intent} if discovery_intent is not None else {}),
+                **(
+                    {"ask_overview_intent": scientific_intent}
+                    if scientific_intent is not None
+                    else {}
+                ),
             )
             await context.check_owner()
             current = await asyncio.to_thread(self.jobs.get, lease.run_id)

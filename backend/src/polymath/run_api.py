@@ -24,7 +24,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, R
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import StreamingResponse
 from fastapi.routing import APIRoute
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from sqlalchemy import Engine, func, select, text, tuple_
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -39,6 +39,7 @@ from polymath.meta_research_errors import (
     retry_headers,
 )
 from polymath.models import ResearchEvent, ResearchRun
+from polymath.scientific_context_contracts import AskOverviewIntent
 
 if TYPE_CHECKING:
     from polymath.meta_research import MetaResearchStore
@@ -88,6 +89,14 @@ class CreateRun(BaseModel):
     parent_result_ids: list[str] = Field(default_factory=list, max_length=4)
     expected_activation_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     discovery_intent: DiscoveryIntent | None = None
+    ask_overview_intent: AskOverviewIntent | None = None
+
+    @field_validator("ask_overview_intent", mode="before")
+    @classmethod
+    def explicit_ask_protocol(cls, value):
+        if value is None:
+            raise ValueError("An explicit Ask protocol is required")
+        return value
 
     @model_validator(mode="after")
     def validate_goal(self) -> CreateRun:
@@ -99,7 +108,27 @@ class CreateRun(BaseModel):
         validate_parent_ids(self.parent_result_ids, self.mode)
         if self.discovery_intent is not None and self.mode != "surprise":
             raise ValueError("A discovery ladder requires Surprise mode")
+        if self.ask_overview_intent is not None and (
+            self.mode != "ask" or self.discovery_intent is not None or self.parent_result_ids
+        ):
+            raise ValueError("A claim-bound overview requires an ordinary Ask investigation")
         return self
+
+
+def _scientific_context_error(error) -> _PrivateHTTPException:
+    """Only fixed context-store failure codes may enter a private response."""
+    code = getattr(error, "code", str(error))
+    if code in (
+        "scientific_context_not_available",
+        "scientific_context_integrity_failed",
+        "scientific_context_admission_closed",
+        "scientific_context_admission_changed",
+        "ask_reassessment_overview_required",
+    ):
+        return _PrivateHTTPException(409, code)
+    if code in ("ask_overview_wrong_run", "artifact_context_too_large"):
+        return _PrivateHTTPException(422, code)
+    return _storage_error()
 
 
 def _token(request: Request) -> str | None:
@@ -210,7 +239,24 @@ def _summary(run: ResearchRun, *, session: Session | None = None) -> dict:
     if session is not None:
         from polymath.discovery_admission import load_discovery_intent
         from polymath.meta_research import native_run_controls, native_run_outcome_unknown
+        from polymath.scientific_context_store import ContextStoreError, load_scientific_intent
 
+        try:
+            scientific = load_scientific_intent(session, run)
+        except ContextStoreError as error:
+            raise _scientific_context_error(error) from None
+        if scientific is not None:
+            key = {
+                "polymath-artifact-scientific-context-v1": "scientific_context_intent",
+                "polymath-ask-claim-overview-v1": "ask_overview_intent",
+                "polymath-ask-reassessment-overview-v1": "assessment_overview_intent",
+            }[scientific.protocol]
+            result[key] = scientific.model_dump(mode="json")
+            if key == "scientific_context_intent":
+                from polymath.scientific_context_models import ArtifactContextBinding
+
+                context = session.get(ArtifactContextBinding, run.id)
+                result["scientific_context_sha256"] = context.context_sha256
         intent = load_discovery_intent(session, run)
         if intent is not None:
             result["discovery_intent"] = intent.model_dump(mode="json")
@@ -345,6 +391,22 @@ def create_run_router(
                     session.flush()
                     bind_discovery_intent(session, run, body.discovery_intent)
                 bind_parents(session, run, owner.token_hash, body.parent_result_ids)
+                if body.ask_overview_intent is not None:
+                    from polymath.scientific_context_store import (
+                        ContextStoreError,
+                        bind_ask_overview_intent,
+                    )
+
+                    session.flush()
+                    try:
+                        bind_ask_overview_intent(
+                            session,
+                            run=run,
+                            owner_hash=owner.token_hash,
+                            intent=body.ask_overview_intent,
+                        )
+                    except ContextStoreError as error:
+                        raise _scientific_context_error(error) from None
                 if admission is not None:
                     from polymath.meta_research import native_run_input_sha256
 

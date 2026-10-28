@@ -35,6 +35,7 @@ from polymath.sharing_contracts import (
     PublicFindingProjection,
     PublicIdentifiers,
     PublicMapping,
+    PublicOverviewBinding,
     PublicPaper,
     PublicQuoteExcerpt,
     PublicScholarlyLink,
@@ -366,6 +367,17 @@ def build_public_projection(
             field_selection=None
             if selection is None
             else PublicFieldSelection(fields=selection.fields, rationale=selection.rationale),
+            **(
+                {
+                    "overview_binding": PublicOverviewBinding(
+                        claim_ids=tuple(
+                            claims[identifier] for identifier in result.overview_binding.claim_ids
+                        )
+                    )
+                }
+                if result.overview_binding is not None
+                else {}
+            ),
         )
         canonical_projection_json(projection)
         return projection

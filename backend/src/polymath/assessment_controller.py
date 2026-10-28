@@ -12,7 +12,7 @@ import json
 import math
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Annotated, Protocol
+from typing import TYPE_CHECKING, Annotated, Protocol
 
 from pydantic import Field, TypeAdapter, ValidationError
 
@@ -53,6 +53,10 @@ from polymath.research.models import (
     Usage,
     _validate_public_text,
 )
+
+if TYPE_CHECKING:
+    from polymath.scientific_context_contracts import AskReassessmentOverviewIntent
+
 
 AssessmentAction = Annotated[
     ReadAssessmentSourceAction
@@ -232,10 +236,30 @@ class AssessmentController:
         self.limits = limits or AssessmentLimits()
         self.on_event = on_event
 
-    async def reassess(self, basis: AssessmentBasis) -> AssessmentResult:
+    async def reassess(
+        self,
+        basis: AssessmentBasis,
+        *,
+        ask_reassessment_overview_intent: AskReassessmentOverviewIntent | None = None,
+    ) -> AssessmentResult:
         if not isinstance(basis, AssessmentBasis):
             raise ValueError("An exact version-bound reassessment basis is required")
         basis = AssessmentBasis.model_validate_json(basis.model_dump_json())
+        overview_adapter = None
+        if ask_reassessment_overview_intent is not None:
+            from polymath.assessment_overview import ASK_REASSESSMENT_OVERVIEW_ACTION_ADAPTER
+            from polymath.scientific_context_contracts import AskReassessmentOverviewIntent
+
+            if not isinstance(ask_reassessment_overview_intent, AskReassessmentOverviewIntent):
+                raise ValueError("ask_reassessment_overview_intent_invalid")
+            ask_reassessment_overview_intent = AskReassessmentOverviewIntent.model_validate_json(
+                ask_reassessment_overview_intent.model_dump_json()
+            )
+            if basis.mode != "ask" or not isinstance(basis.prior_finding, AnswerFinding):
+                raise ValueError("ask_reassessment_overview_wrong_mode")
+            overview_adapter = ASK_REASSESSMENT_OVERVIEW_ACTION_ADAPTER
+        elif basis.prior_overview_binding is not None:
+            raise ValueError("ask_reassessment_overview_required")
         schema = json.dumps(ASSESSMENT_ACTION_ADAPTER.json_schema(), separators=(",", ":"))
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT + "\nAction schema:\n" + schema},
@@ -244,6 +268,10 @@ class AssessmentController:
                 "content": json.dumps({"assessment_basis": basis.model_dump(mode="json")}),
             },
         ]
+        if overview_adapter is not None:
+            from polymath.assessment_overview import ask_reassessment_overview_initial_messages
+
+            messages = ask_reassessment_overview_initial_messages(basis)
         references = {item.retrieval_id: item for item in basis.sources}
         discovered: dict[str, SourceReference] = {}
         full_text: dict[str, FullTextAvailability] = {}
@@ -384,11 +412,25 @@ class AssessmentController:
             if not isinstance(reply.content, str) or not 1 <= len(reply.content) <= 16000:
                 return result("failed", error_code="model_invalid_response")
             messages.append({"role": "assistant", "content": reply.content})
+            overview_binding = None
             try:
-                action = ASSESSMENT_ACTION_ADAPTER.validate_json(reply.content)
+                action = (
+                    overview_adapter if overview_adapter is not None else ASSESSMENT_ACTION_ADAPTER
+                ).validate_json(reply.content)
                 _validate_public_text(action.model_dump(mode="json"))
-            except (ValidationError, ValueError):
-                if await reject("invalid_assessment_action_schema"):
+                if overview_adapter is not None:
+                    from polymath.assessment_overview import normalise_ask_reassessment_conclusion
+
+                    action, overview_binding = normalise_ask_reassessment_conclusion(action)
+            except (ValidationError, ValueError) as error:
+                code = "invalid_assessment_action_schema"
+                if overview_adapter is not None and isinstance(error, ValidationError):
+                    from polymath.research.ask_overview import ask_overview_validation_error
+
+                    reviewed = ask_overview_validation_error(error)
+                    if reviewed != "invalid_action_schema":
+                        code = reviewed
+                if await reject(code):
                     return result("failed", error_code="repair_limit")
                 continue
             actions += 1
@@ -638,11 +680,20 @@ class AssessmentController:
                             sources=tuple(selected.values()),
                             events=tuple(events),
                             usage=usage(),
+                            **(
+                                {"overview_binding": overview_binding}
+                                if overview_binding is not None
+                                else {}
+                            ),
                         )
                     quotes = verify_assessment_quotes(action.rationale, observed)
                     proposed = result("completed", judgement=action, revised=revised, quotes=quotes)
                     validate_assessment_result(
-                        proposed, basis, observed, alias_context=extra_context
+                        proposed,
+                        basis,
+                        observed,
+                        alias_context=extra_context,
+                        expected_overview=overview_adapter is not None,
                     )
                 except ValueError as error:
                     code = (

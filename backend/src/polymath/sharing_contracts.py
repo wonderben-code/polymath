@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Iterable
 from datetime import date
 from typing import Annotated, Literal
 
@@ -341,6 +342,35 @@ class PublicAnswer(PublicModel):
     ]
 
 
+class PublicOverviewBinding(PublicModel):
+    protocol: Literal["polymath-ask-claim-overview-v1"] = "polymath-ask-claim-overview-v1"
+    claim_ids: Annotated[tuple[PublicClaimId, ...], Field(min_length=1, max_length=8)]
+
+    @model_validator(mode="after")
+    def distinct_claims(self):
+        if len(set(self.claim_ids)) != len(self.claim_ids):
+            raise ValueError("public_overview_duplicate_claim")
+        return self
+
+
+def classified_answer_navigation_summary(labels: Iterable[str]) -> str:
+    """Describe an answer record without turning a clipped claim into an overview."""
+    counts = dict.fromkeys(("known", "postulated", "speculative"), 0)
+    count = 0
+    for label in labels:
+        if count >= 8 or type(label) is not str or label not in counts:
+            raise ValueError("invalid_navigation_claims")
+        counts[label] += 1
+        count += 1
+    if count == 0:
+        raise ValueError("invalid_navigation_claims")
+    return (
+        f"Saved Ask answer with {count} classified claims "
+        f"(known: {counts['known']}, postulated: {counts['postulated']}, "
+        f"speculative: {counts['speculative']}). Open for exact claims and citations."
+    )
+
+
 class PublicFieldSelection(PublicModel):
     fields: Annotated[
         tuple[Annotated[Text, Field(max_length=100)], ...], Field(min_length=2, max_length=4)
@@ -358,6 +388,16 @@ class PublicFindingProjection(PublicModel):
     papers: Annotated[tuple[PublicPaper, ...], Field(min_length=1, max_length=64)]
     citations: Annotated[tuple[PublicCitation, ...], Field(min_length=1, max_length=64)]
     field_selection: PublicFieldSelection | None = None
+    overview_binding: PublicOverviewBinding | None = None
+
+    @field_validator("overview_binding", mode="before")
+    @classmethod
+    def present_binding(cls, value):
+        if value is None:
+            raise ValueError("public_overview_binding_null")
+        if isinstance(value, dict):
+            return PublicOverviewBinding.model_validate_json(json.dumps(value))
+        return value
 
     @model_validator(mode="after")
     def complete_associations(self):
@@ -393,6 +433,15 @@ class PublicFindingProjection(PublicModel):
                 f"claim-{index + 1}" for index in range(len(self.finding.claims))
             ]:
                 raise ValueError("public Ask claims must use deterministic local ordinals")
+            if self.overview_binding is not None:
+                by_id = {claim.id: claim for claim in self.finding.claims}
+                if any(identifier not in by_id for identifier in self.overview_binding.claim_ids):
+                    raise ValueError("public_overview_unknown_claim")
+                overview = "\n\n".join(
+                    by_id[identifier].text for identifier in self.overview_binding.claim_ids
+                )
+                if self.finding.summary != overview:
+                    raise ValueError("public_overview_summary_mismatch")
             associated = []
             for claim in self.finding.claims:
                 associated.extend(claim.citation_ids)
@@ -403,6 +452,8 @@ class PublicFindingProjection(PublicModel):
                 ):
                     raise ValueError("public citations must retain their exact claim association")
         else:
+            if self.overview_binding is not None:
+                raise ValueError("public_overview_wrong_finding")
             if self.mode == "ask" or any(item.side == "answer" for item in self.citations):
                 raise ValueError("public bridges require bridge citation sides")
             if {item.side for item in self.citations} != {"left", "right"}:
@@ -441,4 +492,6 @@ class PublicFindingProjection(PublicModel):
         data = handler(self)
         if self.field_selection is None:
             data.pop("field_selection", None)
+        if self.overview_binding is None:
+            data.pop("overview_binding", None)
         return data

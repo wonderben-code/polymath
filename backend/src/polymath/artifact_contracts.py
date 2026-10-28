@@ -9,7 +9,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from typing import Annotated, Literal
 
-from pydantic import Field, TypeAdapter, model_validator
+from pydantic import Field, TypeAdapter, field_validator, model_serializer, model_validator
 
 from polymath.math_checks import FiniteCheckResult, FiniteConjecture, validate_check
 from polymath.research.models import (
@@ -25,6 +25,10 @@ from polymath.research.models import (
     Text,
     Usage,
     _validate_public_text,
+)
+from polymath.scientific_context_contracts import (
+    ArtifactScientificContextBinding,
+    validate_context_for_finding,
 )
 
 ArtifactKind = Literal["formalise", "write_summary", "write_paper"]
@@ -130,6 +134,21 @@ class ArtifactBasis(ArtifactModel):
     formalisation_id: ArtifactId | None = None
     formalisation: FormalisationDraft | None = None
     formalisation_checks: Annotated[tuple[FiniteCheckResult, ...], Field(max_length=3)] = ()
+    scientific_context: ArtifactScientificContextBinding | None = None
+
+    @field_validator("scientific_context", mode="before")
+    @classmethod
+    def reject_explicit_null_context(cls, value):
+        if value is None:
+            raise ValueError("scientific_context_binding_invalid")
+        return value
+
+    @model_serializer(mode="wrap")
+    def preserve_legacy_basis(self, handler):
+        value = handler(self)
+        if self.scientific_context is None:
+            value.pop("scientific_context", None)
+        return value
 
     @model_validator(mode="after")
     def require_exact_basis(self) -> ArtifactBasis:
@@ -169,6 +188,13 @@ class ArtifactBasis(ArtifactModel):
                 raise ValueError("answer passages must bind a saved claim")
         elif any(passage.claim_id is not None for passage in self.passages):
             raise ValueError("bridge passages cannot claim answer bindings")
+        if self.scientific_context is not None:
+            validate_context_for_finding(self.scientific_context, self.reference, self.finding)
+            prior = self.scientific_context.context.prior_formalisation
+            if (prior is None) != (self.formalisation_id is None) or (
+                prior is not None and prior.artifact_id != self.formalisation_id
+            ):
+                raise ValueError("scientific_context_formalisation_mismatch")
         return self
 
 

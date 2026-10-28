@@ -128,6 +128,23 @@ def native_run_input_sha256(session, run):
                 )
             ],
         }
+    from polymath.scientific_context_contracts import (
+        ArtifactScientificContextIntent,
+        AskOverviewIntent,
+        AskReassessmentOverviewIntent,
+    )
+    from polymath.scientific_context_store import load_scientific_intent
+
+    intent = load_scientific_intent(session, run)
+    if isinstance(intent, ArtifactScientificContextIntent):
+        from polymath.scientific_context_models import ArtifactContextBinding
+
+        context = session.get(ArtifactContextBinding, run.id)
+        value["artifact"]["scientific_context_sha256"] = context.context_sha256
+    elif isinstance(intent, AskOverviewIntent):
+        value["ask_overview_intent"] = intent.model_dump(mode="json")
+    elif isinstance(intent, AskReassessmentOverviewIntent):
+        value["assessment_overview_intent"] = intent.model_dump(mode="json")
     return _hash(_canonical(value))
 
 
@@ -401,9 +418,10 @@ def _activation(session, approval_id):
 
 
 def _original_input(session, run_id, *, check_input=False):
-    from polymath.meta_research_contracts import profile_for_task, task_profile_sha256
-    from polymath.public_research_contracts import PublicResearchManifest, public_profile_for_task
+    from polymath.meta_research_contracts import select_scientific_profile, task_profile_sha256
+    from polymath.public_research_contracts import PublicResearchManifest
     from polymath.public_research_models import PublicResearchRunAccess
+    from polymath.scientific_context_store import load_scientific_intent
 
     binding = session.get(NativeResearchRunBinding, run_id)
     if binding is None:
@@ -412,8 +430,16 @@ def _original_input(session, run_id, *, check_input=False):
     run = session.get(ResearchRun, run_id)
     discovery = load_discovery_intent(session, run)
     public = isinstance(manifest, PublicResearchManifest)
-    selector = public_profile_for_task if public else profile_for_task
-    profile = selector(manifest, binding.task_kind, discovery=discovery)
+    try:
+        profile = select_scientific_profile(
+            manifest,
+            binding.task_kind,
+            run.mode,
+            discovery=discovery,
+            scientific_intent=load_scientific_intent(session, run),
+        )
+    except ValueError:
+        raise MetaResearchError("meta_research_storage_unavailable") from None
     owner = session.get(ResearchRunAccess, run_id)
     public_access = session.get(PublicResearchRunAccess, run_id)
     if public:
@@ -546,10 +572,18 @@ class MetaResearchStore:
         from polymath.meta_research_contracts import (
             derive_discovery_ladder_profile,
             derive_task_profiles,
+            validate_current_scientific_context_profiles,
         )
 
         if manifest.task_profiles != derive_task_profiles(proposal):
             raise MetaResearchError("meta_research_authority_expired")
+        if manifest.scientific_context_profiles is not None:
+            try:
+                validate_current_scientific_context_profiles(
+                    manifest.scientific_context_profiles, proposal
+                )
+            except ValueError:
+                raise MetaResearchError("meta_research_authority_expired") from None
         if manifest.discovery_ladder_profile is not None:
             from polymath.discovery_contracts import DiscoveryIntent
 
@@ -777,6 +811,7 @@ class MetaResearchStore:
         provider_account_attestation,
         *,
         discovery=None,
+        scientific_context=None,
     ):
         from polymath.meta_probe_contracts import ProviderAccountAttestation
         from polymath.meta_readiness_contracts import MetaReadinessProposal
@@ -820,6 +855,7 @@ class MetaResearchStore:
                     provider_account_attestation=attestation,
                     valid_until=expiry,
                     discovery=discovery,
+                    scientific_context=scientific_context,
                 )
             except ValueError:
                 raise MetaResearchError("meta_research_invalid_request") from None
@@ -1121,13 +1157,21 @@ class MetaResearchStore:
         self._approval_current(
             session, approval, manifest, proposal, admission.account, operator=operator
         )
-        from polymath.meta_research_contracts import profile_for_task, task_profile_sha256
+        from polymath.meta_research_contracts import select_scientific_profile, task_profile_sha256
+        from polymath.scientific_context_store import load_scientific_intent
 
         discovery = load_discovery_intent(session, run)
+        intent = load_scientific_intent(session, run)
         try:
-            profile = profile_for_task(manifest, run.task_kind, discovery=discovery)
+            profile = select_scientific_profile(
+                manifest, run.task_kind, run.mode, discovery=discovery, scientific_intent=intent
+            )
         except ValueError:
-            raise MetaResearchError("meta_research_activation_required") from None
+            raise MetaResearchError(
+                "meta_research_scientific_protocol_unavailable"
+                if intent is not None
+                else "meta_research_activation_required"
+            ) from None
         owner = session.get(ResearchRunAccess, run.id)
         if owner is None or owner.session_hash != admission.browser_session_hash:
             raise MetaResearchError("meta_research_activation_required")

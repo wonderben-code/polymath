@@ -24,6 +24,7 @@ from polymath.meta_research_contracts import (
     MetaResearchManifest,
     NativeResearchPolicy,
     NativeResearchReview,
+    ScientificContextIntent,
 )
 from polymath.meta_research_errors import META_RESEARCH_ERROR_STATUSES
 from polymath.operator_auth import OperatorPolicy
@@ -83,6 +84,7 @@ class PreviewResearch(BaseModel):
     review: NativeResearchReview
     provider_account_attestation: ProviderAccountAttestation
     discovery: DiscoveryIntent | None = None
+    scientific_context: ScientificContextIntent | None = None
 
 
 class ActivateResearch(BaseModel):
@@ -169,6 +171,11 @@ def create_meta_research_router(
                 body.review,
                 body.provider_account_attestation,
                 **({"discovery": body.discovery} if body.discovery is not None else {}),
+                **(
+                    {"scientific_context": body.scientific_context}
+                    if body.scientific_context is not None
+                    else {}
+                ),
             )
         )
 

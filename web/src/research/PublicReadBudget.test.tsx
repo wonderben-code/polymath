@@ -37,6 +37,7 @@ describe('combined public automatic read budget', () => {
       // Match PublicResourceMiddleware: capabilities are excluded; an SSE
       // connection itself consumes one read, each delivered event does not.
       if (!path.endsWith('/capabilities')) reads.push({ path, at: Date.now() })
+      if (path === '/api/v1/research/protocols') return Response.json({ protocol: 'polymath-research-protocols-v1', activation_sha256: publicAccess().expected_activation_sha256, capabilities: [] })
       if (path === '/api/v1/research/access') return Response.json(publicAccess({ expires_at: new Date(started + 3600000).toISOString() }))
       if (path === `/api/v1/assessments/findings/${ROOT}`) return Response.json(findingVersion({ id: ROOT, run_id: SOURCE_RUN, task_kind: 'research', run: { id: SOURCE_RUN, task_kind: 'research', mode: 'explore', goal: 'Synthetic exact prior finding.', status: 'succeeded', created_at: DATE, updated_at: DATE, result_id: ROOT, artifact_id: null, assessment_id: null, error_code: null, external_outcome_unknown: false }, payload: revisedResearchResult(true), assessment: head() }))
       if (path === `/api/v1/assessments/heads/${ROOT}`) return Response.json(head(complete ? { revision: 1, last_assessment_id: ASSESSMENT } : {}))

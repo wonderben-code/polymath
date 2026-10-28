@@ -21,6 +21,7 @@ from polymath import (  # noqa: F401
     publication_job_models,
     publication_models,
     readiness_models,
+    scientific_context_models,
     sharing_models,
 )
 from polymath.config import Settings

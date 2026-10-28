@@ -25,6 +25,13 @@ from polymath.database import Base
 class AssessmentRequest(Base):
     __tablename__ = "assessment_requests"
     __table_args__ = (
+        UniqueConstraint(
+            "run_id",
+            "source_result_id",
+            "source_sha256",
+            "basis_sha256",
+            name="uq_assessment_overview_request_basis",
+        ),
         CheckConstraint("expected_head_revision >= 0", name="ck_assessment_request_revision"),
         CheckConstraint("source_sha256 ~ '^[0-9a-f]{64}$'", name="ck_assessment_source_hash"),
         CheckConstraint("basis_sha256 ~ '^[0-9a-f]{64}$'", name="ck_assessment_basis_hash"),

@@ -1,6 +1,9 @@
+import { parseOverviewIntent } from '../scientificContext/overviewBinding'
+import { parseArtifactScientificContextBinding } from '../scientificContext/artifactContext'
+import type { ArtifactScientificContextIntent } from '../scientificContext/types'
 import { parseActivity, ResearchApiError } from '../research/client'
 import { parseBibliography } from '../research/bibliography'
-import { nativeSubmissionHeaders, nativeAdmissionFailure, parseNativeRunControl, validNativeSubmission } from '../research/nativeAdmission'
+import { scientificAdmissionError, nativeSubmissionHeaders, nativeAdmissionFailure, parseNativeRunControl, validNativeSubmission } from '../research/nativeAdmission'
 import type { NativeSubmissionContext } from '../research/nativeAdmission'
 import { parseSourceCoverage, validateSourceCoverageContext } from '../research/sourceCoverage'
 import type { ArtifactHistory, ArtifactJob, ArtifactKind, ArtifactPassage, ArtifactResult, CitedText, DocumentDraft, Expression, FiniteCheckResult, FiniteConjecture, FormalisationDraft, Relation, SavedArtifact } from './types'
@@ -43,12 +46,16 @@ function distinct<T>(values: T[]): T[] { return new Set(values).size === values.
 export function parseArtifactJob(value: unknown): ArtifactJob {
   const job = record(value)
   const native = parseNativeRunControl(job.native_research, invalid)
+  let contextIntent: ArtifactScientificContextIntent | undefined; try { contextIntent = parseOverviewIntent(job.scientific_context_intent, 'polymath-artifact-scientific-context-v1') } catch { return invalid() }
+  const contextHash = job.scientific_context_sha256 === undefined ? undefined : hash(job.scientific_context_sha256)
+  if (!!contextIntent !== !!contextHash) return invalid()
   if (job.result_id !== null || typeof job.external_outcome_unknown !== 'boolean') return invalid()
   return {
     id: id(job.id), mode: member(job.mode, ['explore', 'ask', 'surprise']), task_kind: member(job.task_kind, KINDS),
     goal: text(job.goal, 4000, false), status: member(job.status, JOB_STATUSES), created_at: date(job.created_at), updated_at: date(job.updated_at),
     result_id: null, artifact_id: nullableId(job.artifact_id), error_code: code(job.error_code), external_outcome_unknown: job.external_outcome_unknown,
     ...(native ? { native_research: native } : {}),
+    ...(contextIntent ? { scientific_context_intent: contextIntent, scientific_context_sha256: contextHash } : {}),
   }
 }
 
@@ -218,9 +225,10 @@ async function request(path: string, signal?: AbortSignal, write?: { csrf: strin
       headers: { Accept: 'application/json', ...(write ? { 'X-CSRF-Token': write.csrf, 'Content-Type': 'application/json', ...(write.native ? nativeSubmissionHeaders(write.native) : {}) } : {}) },
       ...(write?.body === undefined ? {} : { body: JSON.stringify(write.body) }),
     })
-    if (!response.ok && [401, 403, 409, 503].includes(response.status)) {
+    if (!response.ok && [401, 403, 409, 422, 503].includes(response.status)) {
       let detail: unknown
       try { detail = record(await json(response.clone())).detail } catch { /* Do not display untrusted server details. */ }
+      const scientific = scientificAdmissionError(response.status, detail); if (scientific) throw new ResearchApiError(scientific)
       if (nativeAdmissionFailure(response.status, detail)) throw new ResearchApiError('native_authority_changed')
     }
     if (response.status === 401) throw new ResearchApiError('session_expired')
@@ -248,18 +256,32 @@ export async function getArtifactJob(runId: string, signal?: AbortSignal): Promi
   const job = parseArtifactJob(await request(`/api/v1/artifacts/jobs/${inputId(runId)}`, signal))
   return job.id === runId ? job : invalid()
 }
-export async function createArtifactJob(kind: ArtifactKind, sourceResultId: string, csrf: string, signal?: AbortSignal, formalisationId?: string, native?: NativeSubmissionContext): Promise<ArtifactJob> {
+export async function createArtifactJob(kind: ArtifactKind, sourceResultId: string, csrf: string, signal?: AbortSignal, formalisationId?: string, native?: NativeSubmissionContext, contextIntent?: ArtifactScientificContextIntent): Promise<ArtifactJob> {
   if (!KINDS.includes(kind) || kind === 'formalise' && formalisationId !== undefined) throw new ResearchApiError('invalid_request')
-  const body = { kind, source_result_id: inputId(sourceResultId), ...(formalisationId === undefined ? {} : { formalisation_id: inputId(formalisationId) }), ...(native ? { expected_activation_sha256: native.expectedActivationSha256 } : {}) }
+  let intent: ArtifactScientificContextIntent | undefined; try { intent = parseOverviewIntent(contextIntent, 'polymath-artifact-scientific-context-v1') } catch { throw new ResearchApiError('invalid_request') }
+  const body = { ...(intent ? { scientific_context_intent: intent } : {}), kind, source_result_id: inputId(sourceResultId), ...(formalisationId === undefined ? {} : { formalisation_id: inputId(formalisationId) }), ...(native ? { expected_activation_sha256: native.expectedActivationSha256 } : {}) }
   const job = parseArtifactJob(await request('/api/v1/artifacts/jobs', signal, { csrf, native, body }))
-  return job.task_kind === kind ? job : invalid()
+  return job.task_kind === kind && !!job.scientific_context_intent === !!intent ? job : invalid()
 }
 export async function cancelArtifactJob(runId: string, csrf: string, signal?: AbortSignal): Promise<ArtifactJob> {
   const job = parseArtifactJob(await request(`/api/v1/runs/${inputId(runId)}/cancel`, signal, { csrf }))
   return job.id === runId ? job : invalid()
 }
 export async function getArtifact(artifactId: string, signal?: AbortSignal): Promise<SavedArtifact> {
-  const artifact = parseArtifact(await request(`/api/v1/artifacts/${inputId(artifactId)}`, signal))
+  const artifact = await parseArtifactWithContext(await request(`/api/v1/artifacts/${inputId(artifactId)}`, signal))
+  if (signal?.aborted) throw new ResearchApiError('aborted')
   return artifact.id === artifactId ? artifact : invalid()
 }
 export function exportUrl(artifactId: string): string { return `/api/v1/artifacts/${inputId(artifactId)}/export` }
+
+export async function parseArtifactWithContext(value: unknown): Promise<SavedArtifact> {
+  const artifact = parseArtifact(value)
+  try {
+    const raw = record(value)
+    if (!Object.hasOwn(raw, 'scientific_context')) return artifact
+    const binding = await parseArtifactScientificContextBinding(raw.scientific_context)
+    const reference = binding.context.source_reference
+    if (reference.result_id !== artifact.source_result_id || reference.run_id !== artifact.source_run_id || reference.content_sha256 !== artifact.source_sha256 || (binding.context.prior_formalisation?.artifact_id ?? null) !== artifact.formalisation_id) return invalid()
+    return { ...artifact, scientific_context: binding }
+  } catch { return invalid() }
+}

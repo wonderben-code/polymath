@@ -38,13 +38,16 @@ from polymath.meta_research_contracts import (
     NativeDiscoveryProfileBinding,
     NativeResearchPolicy,
     NativeResearchReview,
+    NativeScientificContextProfiles,
     NativeTaskProfile,
     NativeTaskProfileBinding,
     PassedCanaryBinding,
+    ScientificContextIntent,
     TaskKind,
     build_research_manifest,
     derive_discovery_ladder_profile,
     derive_task_profiles,
+    validate_current_scientific_context_profiles,
 )
 
 PUBLIC_RESEARCH_PROTOCOL = "polymath-meta-public-research-v1"
@@ -237,6 +240,7 @@ class PublicResearchManifest(_ReadinessModel):
         tuple[NativeTaskProfileBinding, ...], Field(min_length=5, max_length=5)
     ]
     discovery_ladder_profile: NativeDiscoveryProfileBinding | None = None
+    scientific_context_profiles: NativeScientificContextProfiles | None = None
     valid_until: datetime
     public_limits: PublicLimits
     public_policy_sha256: Digest
@@ -264,6 +268,8 @@ class PublicResearchManifest(_ReadinessModel):
         value = handler(self)
         if self.discovery_ladder_profile is None:
             value.pop("discovery_ladder_profile", None)
+        if self.scientific_context_profiles is None:
+            value.pop("scientific_context_profiles", None)
         return value
 
     @model_validator(mode="after")
@@ -362,6 +368,10 @@ def validate_current_public_research_manifest(
             DiscoveryIntent(max_stages=original.max_stages, max_depth=original.max_depth),
         ):
             raise ValueError("public_research_profile_changed")
+    if manifest.scientific_context_profiles is not None:
+        validate_current_scientific_context_profiles(
+            manifest.scientific_context_profiles, manifest.proposal
+        )
 
 
 def build_public_research_manifest(
@@ -379,6 +389,7 @@ def build_public_research_manifest(
     valid_until: datetime,
     now: datetime,
     discovery: DiscoveryIntent | None = None,
+    scientific_context: ScientificContextIntent | None = None,
 ) -> PublicResearchManifest:
     common = build_research_manifest(
         readiness_id,
@@ -390,6 +401,7 @@ def build_public_research_manifest(
         provider_account_attestation=provider_account_attestation,
         valid_until=valid_until,
         discovery=discovery,
+        scientific_context=scientific_context,
     ).model_dump(mode="json")
     common.update(
         protocol=PUBLIC_RESEARCH_PROTOCOL,

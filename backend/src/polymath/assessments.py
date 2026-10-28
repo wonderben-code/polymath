@@ -11,6 +11,7 @@ import json
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from pydantic import ValidationError
 from sqlalchemy import Engine, func, select, tuple_
@@ -49,6 +50,10 @@ from polymath.jobs import JobLease, _clear_lease, _event, _now, _owned
 from polymath.memory_models import ResearchMemoryRead
 from polymath.models import ResearchRun
 from polymath.research.models import MemoryReadReference, ResearchResult, SourceDocument
+
+if TYPE_CHECKING:
+    from polymath.scientific_context_contracts import AskReassessmentOverviewIntent
+
 
 MAX_ASSESSMENT_BYTES = 262_144
 
@@ -204,6 +209,11 @@ def _basis_for_source(session: Session, source: EvidenceResult, state: dict, new
         prior_state=state["state"],
         field_selections=result.field_selections,
         sources=references,
+        **(
+            {"prior_overview_binding": result.overview_binding}
+            if result.overview_binding is not None
+            else {}
+        ),
     )
     payload = basis.model_dump(mode="json")
     if len(_canonical(payload).encode("utf-8")) > MAX_ASSESSMENT_BYTES:
@@ -219,6 +229,8 @@ def bind_request(
     watch_id,
     new_source_version_ids,
     expected_head_revision: int,
+    *,
+    assessment_overview_intent: AskReassessmentOverviewIntent | None = None,
 ) -> AssessmentRequest:
     if run.task_kind != "reassess_finding" or _owner(session, run.id) != owner_hash:
         raise AssessmentError("assessment_not_found")
@@ -311,6 +323,20 @@ def bind_request(
             )
         )
     session.flush()
+    from polymath.scientific_context_store import (
+        ContextStoreError,
+        bind_assessment_overview_intent,
+    )
+
+    try:
+        bind_assessment_overview_intent(
+            session,
+            run=run,
+            owner_hash=owner_hash,
+            intent=assessment_overview_intent,
+        )
+    except ContextStoreError as error:
+        raise AssessmentError(getattr(error, "code", str(error))) from None
     return request
 
 
@@ -378,6 +404,25 @@ def _basis(session: Session, run: ResearchRun):
     ):
         raise AssessmentError("assessment_input_integrity_failed")
     basis = AssessmentBasis.model_validate_json(json.dumps(request.basis))
+    original = ResearchResult.model_validate_json(
+        json.dumps(EvidenceStore._stored_result(session, source).payload)
+    )
+    if (
+        basis.mode != original.mode
+        or basis.prior_finding != original.finding
+        or basis.prior_quotes != original.quotes
+        or basis.field_selections != original.field_selections
+        or basis.prior_overview_binding != original.overview_binding
+    ):
+        raise AssessmentError("assessment_input_integrity_failed")
+    from polymath.scientific_context_store import ContextStoreError, load_scientific_intent
+
+    try:
+        intent = load_scientific_intent(session, run)
+    except ContextStoreError:
+        raise AssessmentError("assessment_input_integrity_failed") from None
+    if original.overview_binding is not None and intent is None:
+        raise AssessmentError("ask_reassessment_overview_required")
     if (
         basis.prior_reference.result_id,
         basis.prior_reference.run_id,
@@ -451,6 +496,16 @@ def _stored(session: Session, row: FindingAssessment) -> StoredAssessment:
         or _hash(_canonical(request.basis)) != request.basis_sha256
         or row.payload.get("basis") != request.basis
     ):
+        raise AssessmentError("assessment_integrity_failed")
+    from polymath.scientific_context_store import ContextStoreError, load_scientific_intent
+
+    try:
+        intent = load_scientific_intent(session, session.get(ResearchRun, row.run_id))
+    except ContextStoreError:
+        raise AssessmentError("assessment_integrity_failed") from None
+    if row.payload.get("assessment_overview_intent") != (
+        intent.model_dump(mode="json") if intent is not None else None
+    ) or ("assessment_overview_intent" in row.payload and intent is None):
         raise AssessmentError("assessment_integrity_failed")
     versions = tuple(
         str(value)
@@ -536,11 +591,15 @@ class AssessmentStore:
             with Session(self.engine) as session, session.begin():
                 run = _owned(session, lease)
                 request, basis = _basis(session, run)
+                from polymath.scientific_context_store import load_scientific_intent
+
+                intent = load_scientific_intent(session, run)
                 validate_assessment_result(
                     result,
                     basis,
                     _observed(session, run.id),
                     alias_context=owned_identity_context(session, run.id),
+                    expected_overview=intent is not None,
                 )
                 if set(result.search_purposes) != set(
                     run.checkpoint.get("assessment_search_purposes", [])
@@ -571,12 +630,14 @@ class AssessmentStore:
                 )
                 run = _owned(session, lease)
                 request, basis = _basis(session, run)
+                intent = load_scientific_intent(session, run)
                 observed = _observed(session, run.id)
                 validate_assessment_result(
                     result,
                     basis,
                     observed,
                     alias_context=owned_identity_context(session, run.id),
+                    expected_overview=intent is not None,
                 )
                 if set(result.search_purposes) != set(
                     run.checkpoint.get("assessment_search_purposes", [])
@@ -622,6 +683,8 @@ class AssessmentStore:
                         )
                     ],
                 }
+                if intent is not None:
+                    payload["assessment_overview_intent"] = intent.model_dump(mode="json")
                 # Documents remain in immutable evidence snapshots, not copied into
                 # the bounded public conclusion. Exact selected retrievals are retained.
                 if payload["result"].get("revised_result") is not None:

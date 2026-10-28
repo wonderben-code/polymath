@@ -76,6 +76,10 @@ export interface PublicAnswer {
   limitations: string[]
   unanswered_questions: string[]
 }
+export interface PublicOverviewBinding {
+  protocol: 'polymath-ask-claim-overview-v1'
+  claim_ids: string[]
+}
 export interface PublicProjection {
   protocol: 'polymath-public-finding-v1'
   mode: SharingMode
@@ -84,6 +88,7 @@ export interface PublicProjection {
   papers: PublicPaper[]
   citations: PublicCitation[]
   field_selection?: { fields: string[]; rationale: string }
+  overview_binding?: PublicOverviewBinding
 }
 export interface SharingCapabilities { sharing_available: boolean; reason: 'sharing_unavailable' | null }
 export interface SharePreview { source_result_id: string; projection_sha256: string; projection: PublicProjection; expires_at: string }

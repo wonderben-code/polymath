@@ -1,4 +1,4 @@
-import type { PublicProjection } from './types'
+import type { PublicAnswerClaim, PublicProjection } from './types'
 import { safePublicScholarlyLink } from './client'
 import './sharing.css'
 
@@ -17,6 +17,19 @@ export function ScholarlyLinks({ links }: { links: { kind: string; url: string }
 
 function CitationLinks({ ids, prefix }: { ids: string[]; prefix: string }) {
   return <ul className="public-citation-links" aria-label="Associated source citations">{ids.map((id) => <li key={id}><a href={`#${prefix}-${id}`}>{id.replace('citation-', 'Citation ')}</a></li>)}</ul>
+}
+
+function ClaimContent({ claim, prefix }: { claim: PublicAnswerClaim; prefix: string }) {
+  return <><span className="public-claim-label">{claim.label} · model label</span><p>{claim.text}</p>{claim.derivation && <><h4>Derivation</h4><p>{claim.derivation}</p></>}{claim.caveats.length > 0 && <><h4>Caveats</h4><ul>{claim.caveats.map((text, index) => <li key={index}>{text}</li>)}</ul></>}<CitationLinks ids={claim.citation_ids} prefix={prefix} /></>
+}
+
+function BoundOverview({ projection, prefix }: { projection: PublicProjection; prefix: string }) {
+  const finding = projection.finding, binding = projection.overview_binding
+  const unavailable = <p role="alert">This saved overview could not be matched to its classified claims.</p>
+  if (finding.kind !== 'answer' || !binding || binding.protocol !== 'polymath-ask-claim-overview-v1' || !Array.isArray(binding.claim_ids) || binding.claim_ids.length < 1 || binding.claim_ids.length > 8 || new Set(binding.claim_ids).size !== binding.claim_ids.length || binding.claim_ids.some((id) => !/^claim-[1-8]$/.test(id))) return unavailable
+  const byId = new Map(finding.claims.map((claim) => [claim.id, claim])), selected = binding.claim_ids.map((id) => byId.get(id))
+  if (selected.some((claim) => !claim) || selected.map((claim) => claim!.text).join('\n\n') !== finding.summary) return unavailable
+  return <section aria-label="Claim-bound answer overview"><h3>Answer overview</h3><p>The model selected these exact claims. Their labels, citations, and caveats retain their original scope.</p><ol className="public-overview-list" aria-label="Selected overview claims">{selected.map((claim) => <li key={claim!.id} className="public-claim"><ClaimContent claim={claim!} prefix={prefix} /><a href={`#${prefix}-${claim!.id}`}>Open full {claim!.id.replace('claim-', 'claim ')}</a></li>)}</ol></section>
 }
 
 function PublicCoverage({ citation }: { citation: PublicProjection['citations'][number] }) {
@@ -41,8 +54,8 @@ export function PublicSnapshot({ projection, prefix = 'shared' }: { projection: 
       <h3>Proposed structural mapping</h3><table className="public-mappings"><thead><tr><th scope="col">{finding.field_left}</th><th scope="col">{finding.field_right}</th><th scope="col">Assumption</th></tr></thead><tbody>{finding.mappings.map((mapping, index) => <tr key={index}><td>{mapping.left}</td><td>{mapping.right}</td><td>{mapping.assumption}</td></tr>)}</tbody></table>
       <h3>Open question</h3><p>{finding.open_question}</p><h3>Strongest objection</h3><p>{finding.strongest_objection}</p><h4>Model’s objection assessment</h4><p>{finding.objection_verdict}</p><h3>Novelty limitations</h3><p>{finding.novelty_limitations}</p><CitationLinks ids={finding.citation_ids} prefix={prefix} />
     </> : <>
-      <p className="sharing-warning">The original question is part of this public snapshot.</p><h3>Answer summary</h3><p>{finding.summary}</p><h3>Claims and uncertainty</h3>
-      {finding.claims.map((claim) => <section key={claim.id} className="public-claim" aria-label={`Shared ${claim.label} claim`}><span className="public-claim-label">{claim.label} · model label</span><p>{claim.text}</p>{claim.derivation && <><h4>Derivation</h4><p>{claim.derivation}</p></>}{claim.caveats.length > 0 && <><h4>Caveats</h4><ul>{claim.caveats.map((text, index) => <li key={index}>{text}</li>)}</ul></>}<CitationLinks ids={claim.citation_ids} prefix={prefix} /></section>)}
+      <p className="sharing-warning">The original question is part of this public snapshot.</p>{Object.hasOwn(projection, 'overview_binding') ? <BoundOverview projection={projection} prefix={prefix} /> : <><h3>Answer summary</h3><p>{finding.summary}</p></>}<h3>Claims and uncertainty</h3>
+      {finding.claims.map((claim) => <section key={claim.id} id={`${prefix}-${claim.id}`} tabIndex={-1} className="public-claim" aria-label={`Shared ${claim.label} claim`}><ClaimContent claim={claim} prefix={prefix} /></section>)}
       <h3>Limitations</h3><ul>{finding.limitations.map((text, index) => <li key={index}>{text}</li>)}</ul><h3>Unanswered questions</h3><ul>{finding.unanswered_questions.map((text, index) => <li key={index}>{text}</li>)}</ul>
     </>}
     {projection.field_selection && <section aria-label="Final model-selected fields"><h3>Final field selection</h3><p>{projection.field_selection.fields.join(' · ')}</p><p>{projection.field_selection.rationale}</p></section>}

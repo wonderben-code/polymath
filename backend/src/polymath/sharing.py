@@ -364,6 +364,8 @@ def _public_query(query: str):
 
 
 def _item(row: SharedFinding, projection: dict) -> dict:
+    from polymath.sharing_contracts import classified_answer_navigation_summary
+
     finding = projection["finding"]
     bridge = finding["kind"] == "bridge"
     fields = [finding["field_left"], finding["field_right"]] if bridge else []
@@ -374,7 +376,11 @@ def _item(row: SharedFinding, projection: dict) -> dict:
         "kind": finding["kind"],
         "mode": projection["mode"],
         "title": finding["title"] if bridge else finding["question"],
-        "summary": (finding["explanation"] if bridge else finding["summary"])[:240],
+        "summary": (
+            classified_answer_navigation_summary(claim["label"] for claim in finding["claims"])
+            if projection.get("overview_binding") is not None
+            else (finding["explanation"] if bridge else finding["summary"])[:240]
+        ),
         "fields": fields,
         "projection_sha256": row.projection_sha256,
         "created_at": row.created_at.isoformat(),

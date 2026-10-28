@@ -1,3 +1,5 @@
+import { useId } from 'react'
+import { ClaimBoundOverview } from '../scientificContext/ClaimBoundOverview'
 import type { ReactNode } from 'react'
 import { Bibliography } from './bibliography'
 import { FindingVersionNotice } from '../assessments/FindingVersionNotice'
@@ -152,13 +154,15 @@ function ClaimEvidence({ claim, result, ordinal }: { claim: AnswerClaim; result:
 }
 
 function Answer({ finding, result }: { finding: AnswerFinding; result: ResearchResult }) {
+  const prefix = useId()
+  const claimAnchor = (id: string) => `${prefix}-claim-${id}`
   if (!finding.claims.length) return <OutcomeNotice title="No cited answer saved">No source-backed claims were saved for this question. Review the unanswered questions and recorded activity.</OutcomeNotice>
   return <article className="research-answer" aria-labelledby="answer-title">
     <span className="eyebrow accent">EVIDENCE-LINKED ANSWER</span>
     <h3 id="answer-title">{finding.question}</h3>
     <div className="research-answer-labels"><h4>How to read the claim labels</h4><p><strong>Known</strong> is the model’s source-supported classification. <strong>Postulated</strong> is an inference across sources. <strong>Speculative</strong> is a tentative possibility.</p><p className="research-scope-note">These are model assessments, not guarantees of truth. Matched quotations do not independently verify the interpretation.</p></div>
-    <div className="research-answer-overview"><h4>Model overview</h4><p className="research-answer-summary">{finding.summary}</p><p className="research-scope-note">This overview is the model’s assessment. The classified claims below carry the source quotations.</p></div>
-    <ol className="research-answer-claims" aria-label="Answer claims">{finding.claims.map((claim, index) => <li key={claim.id}>
+    {result.overview_binding ? <ClaimBoundOverview finding={finding} binding={result.overview_binding} claimAnchor={claimAnchor} /> : <div className="research-answer-overview"><h4>Model overview</h4><p className="research-answer-summary">{finding.summary}</p><p className="research-scope-note">This overview is the model’s assessment. The classified claims below carry the source quotations.</p></div>}
+    <ol className="research-answer-claims" aria-label="Answer claims">{finding.claims.map((claim, index) => <li key={claim.id} id={claimAnchor(claim.id)} tabIndex={-1}>
       <div className="research-answer-claim-heading"><span className={`research-claim-label label-${claim.label}`}>{claimLabels[claim.label]}</span><span className="research-claim-number">Claim {index + 1}</span></div>
       <p className="research-answer-claim-text">{claim.text}</p>
       {claim.derivation && <div className="research-derivation"><h4>How this inference was made</h4><p>{claim.derivation}</p></div>}

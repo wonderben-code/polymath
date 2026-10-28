@@ -69,6 +69,26 @@ def mocked(monkeypatch, *, native=True):
     )
     monkeypatch.setattr(client, "research_access", lambda: calls.append(("access",)) or available())
     monkeypatch.setattr(
+        client,
+        "research_protocols",
+        lambda: (
+            calls.append(("protocols",))
+            or {
+                "protocol": "polymath-research-protocols-v1",
+                "activation_sha256": HASH,
+                "capabilities": [],
+            }
+        ),
+    )
+    monkeypatch.setattr(
+        client,
+        "get_assessment_finding",
+        lambda identifier: (
+            calls.append(("source", identifier))
+            or {"payload": {"mode": "explore", "status": "bridge"}}
+        ),
+    )
+    monkeypatch.setattr(
         client, "_send_write", lambda path, body: calls.append(("POST", path, body)) or {"id": RUN}
     )
     return client, calls
@@ -92,7 +112,12 @@ def test_every_paid_kind_pins_one_current_public_hash_and_one_post(monkeypatch, 
     else:
         client.resume_run(RUN, "9223372036854775807", HASH)
         expected_path = f"/api/v1/runs/{RUN}/resume"
-    assert [call[0] for call in calls] == ["session", "access", "POST"]
+    expected = ["session", "access"]
+    if kind in ("formalise", "write_summary", "write_paper", "assessment"):
+        expected.append("protocols")
+    if kind == "assessment":
+        expected.append("source")
+    assert [call[0] for call in calls] == [*expected, "POST"]
     assert calls[-1][1] == expected_path
     assert calls[-1][2]["expected_activation_sha256"] == HASH
     assert "operator" not in json.dumps(calls[-1][2])

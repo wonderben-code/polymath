@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping
 from typing import Annotated, Literal
 
-from pydantic import Field, model_serializer, model_validator
+from pydantic import Field, field_validator, model_serializer, model_validator
 
 from polymath.literature.identity import (
     MAX_IDENTITY_REFERENCES,
@@ -20,6 +20,7 @@ from polymath.research.controller import (
 from polymath.research.models import (
     AnswerFinding,
     ArtifactId,
+    AskOverviewBinding,
     BridgeFinding,
     ContentHash,
     FieldSelection,
@@ -67,12 +68,33 @@ class AssessmentBasis(AssessmentModel):
     mode: ResearchMode
     prior_state: Literal["supported", "unsupported"] = "supported"
     prior_finding: BridgeFinding | AnswerFinding
+    prior_overview_binding: AskOverviewBinding | None = None
     prior_quotes: Annotated[tuple[VerifiedQuote, ...], Field(min_length=1, max_length=64)]
     field_selections: Annotated[tuple[FieldSelection, ...], Field(max_length=3)] = ()
     sources: Annotated[tuple[AssessmentSourceReference, ...], Field(min_length=2, max_length=69)]
 
+    @field_validator("prior_overview_binding", mode="before")
+    @classmethod
+    def forbid_explicit_null_overview(cls, value):
+        if value is None:
+            raise ValueError("ask_overview_binding_invalid")
+        return value
+
+    @model_serializer(mode="wrap")
+    def preserve_absent_overview(self, handler):
+        data = handler(self)
+        if self.prior_overview_binding is None:
+            data.pop("prior_overview_binding", None)
+        return data
+
     @model_validator(mode="after")
     def exact_input(self) -> AssessmentBasis:
+        if self.prior_overview_binding is not None:
+            from polymath.scientific_context_contracts import validate_answer_overview
+
+            if self.mode != "ask":
+                raise ValueError("ask_overview_wrong_result")
+            validate_answer_overview(self.prior_finding, self.prior_overview_binding)
         if len({item.retrieval_id for item in self.sources}) != len(self.sources):
             raise ValueError("assessment retrieval handles must be distinct")
         historical = [item for item in self.sources if item.role == "historical"]
@@ -274,10 +296,20 @@ def validate_assessment_result(
     observed: Mapping[str, AssessmentSourceSnapshot],
     *,
     alias_context: Iterable[SourceReference] = (),
+    expected_overview: bool | None = None,
 ) -> None:
-    """Recheck version/quote coverage; semantic interpretation is still model-assessed."""
+    """Recheck source coverage and historical/original-admission overview semantics.
+
+    ``expected_overview`` is derived by the fresh store/controller from its
+    immutable intent, never from a client. None validates historical metadata.
+    Scientific interpretation remains model-assessed.
+    """
     result = AssessmentResult.model_validate_json(result.model_dump_json())
     basis = AssessmentBasis.model_validate_json(basis.model_dump_json())
+    if expected_overview is not None and type(expected_overview) is not bool:
+        raise ValueError("ask_overview_binding_invalid")
+    if basis.prior_overview_binding is not None and expected_overview is False:
+        raise ValueError("ask_reassessment_overview_required")
     if len(observed) > 200 or not set(result.observed_retrieval_ids).issubset(observed):
         raise ValueError("assessment_read_provenance_mismatch")
     for identifier, snapshot in observed.items():
@@ -324,6 +356,11 @@ def validate_assessment_result(
     if result.revised_result is None:
         return
     revised = result.revised_result
+    from polymath.scientific_context_contracts import validate_result_overview
+
+    validate_result_overview(revised.model_dump(mode="json"), expected=expected_overview)
+    if basis.prior_overview_binding is not None and revised.overview_binding is None:
+        raise ValueError("ask_overview_binding_required")
     if revised.mode != basis.mode or revised.field_selections != basis.field_selections:
         raise ValueError("assessment_revised_mode_mismatch")
     if revised.memory_reads != (basis.prior_reference,):

@@ -27,6 +27,7 @@ from polymath.database import Base
 class ResearchRun(Base):
     __tablename__ = "research_runs"
     __table_args__ = (
+        UniqueConstraint("id", "mode", "task_kind", name="uq_scientific_run_kind"),
         CheckConstraint("mode IN ('explore', 'ask', 'surprise')", name="ck_research_runs_mode"),
         CheckConstraint(
             "task_kind IN ('research', 'formalise', 'write_summary', 'write_paper', "

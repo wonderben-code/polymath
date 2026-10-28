@@ -1,3 +1,4 @@
+import type { AskOverviewBinding, AskOverviewIntent, AskReassessmentOverviewIntent } from '../scientificContext/types'
 import type { DiscoveryIntent, DiscoveryStage, DiscoveryStageMetadata } from '../discovery/types'
 import type { AnswerFinding, BridgeFinding, FieldSelection, MemoryReadReference, ResearchActivityEvent, ResearchResult, VerifiedQuote } from '../research/types'
 import type { SourceBibliography } from '../research/bibliography'
@@ -36,6 +37,7 @@ export interface CreateAssessmentJob {
 }
 
 export interface AssessmentJob extends CreateAssessmentJob {
+  assessment_overview_intent?: AskReassessmentOverviewIntent
   native_research?: NativeRunControl
   id: string
   root_result_id: string
@@ -81,6 +83,8 @@ export interface FindingVersion {
     external_outcome_unknown: boolean
     native_research?: NativeRunControl
     discovery_intent?: DiscoveryIntent
+    ask_overview_intent?: AskOverviewIntent
+    assessment_overview_intent?: AskReassessmentOverviewIntent
   }
   payload: ResearchResult
   assessment: FindingHead
@@ -121,6 +125,7 @@ export interface ObservedAssessmentSource {
 }
 export interface AssessmentSourceReference extends ObservedAssessmentSource { role: 'historical' | 'new' }
 export interface AssessmentBasis {
+  prior_overview_binding?: AskOverviewBinding
   prior_reference: MemoryReadReference
   mode: 'explore' | 'ask' | 'surprise'
   prior_state: 'supported' | 'unsupported'
@@ -139,7 +144,7 @@ export interface AssessmentQuote extends AssessmentCitation {
   start: number
   end: number
 }
-export interface AssessmentPayload { basis: AssessmentBasis; result: AssessmentResult; verified_passages: AssessmentQuote[]; observed_sources: ObservedAssessmentSource[] }
+export interface AssessmentPayload { assessment_overview_intent?: AskReassessmentOverviewIntent; basis: AssessmentBasis; result: AssessmentResult; verified_passages: AssessmentQuote[]; observed_sources: ObservedAssessmentSource[] }
 export interface AssessmentResult {
   status: 'completed' | 'failed' | 'limit_reached'
   disposition: AssessmentDisposition

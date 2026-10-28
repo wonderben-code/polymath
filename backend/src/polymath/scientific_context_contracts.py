@@ -20,6 +20,7 @@ from polymath.research.models import (
     AnswerClaim,
     AnswerFinding,
     ArtifactId,
+    AskOverviewBinding,
     BridgeFinding,
     ClaimId,
     ContentHash,
@@ -32,6 +33,7 @@ from polymath.research.models import (
 
 ARTIFACT_CONTEXT_PROTOCOL = "polymath-artifact-scientific-context-v1"
 ASK_OVERVIEW_PROTOCOL = "polymath-ask-claim-overview-v1"
+ASK_REASSESSMENT_OVERVIEW_PROTOCOL = "polymath-ask-reassessment-overview-v1"
 MAX_CONTEXT_BYTES = 262_144
 MAX_CONTEXT_NODES = 128
 MAX_CONTEXT_EDGES = 512
@@ -70,17 +72,8 @@ class AskOverviewIntent(ScientificModel):
     protocol: Literal["polymath-ask-claim-overview-v1"] = ASK_OVERVIEW_PROTOCOL
 
 
-class AskOverviewBinding(ScientificModel):
-    protocol: Literal["polymath-ask-claim-overview-v1"] = ASK_OVERVIEW_PROTOCOL
-    claim_ids: Annotated[tuple[ClaimId, ...], Field(min_length=1, max_length=8)]
-
-    _json_arrays = field_validator("claim_ids", mode="before")(_tuple)
-
-    @model_validator(mode="after")
-    def distinct_ids(self):
-        if len(set(self.claim_ids)) != len(self.claim_ids):
-            raise ValueError("ask_overview_duplicate_claim")
-        return self
+class AskReassessmentOverviewIntent(ScientificModel):
+    protocol: Literal["polymath-ask-reassessment-overview-v1"] = ASK_REASSESSMENT_OVERVIEW_PROTOCOL
 
 
 def _overview_text(claims: tuple[AnswerClaim, ...] | list[AnswerClaim], ids: tuple[str, ...]):

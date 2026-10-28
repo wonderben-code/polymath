@@ -1,3 +1,5 @@
+import { PinnedScientificContext } from '../scientificContext/PinnedScientificContext'
+import { hasScientificCapability, useNativeResearchSubmission } from '../research/nativeContext'
 import { NativeResumeControl } from '../research/NativeResumeControl'
 import { useEffect, useId, useState } from 'react'
 import { Bibliography } from '../research/bibliography'
@@ -100,12 +102,14 @@ function Preview({ artifact }: { artifact: SavedArtifact }) {
       <Bibliography value={passage.bibliography} />
       <details><summary>Saved source version</summary><dl><dt>Source</dt><dd>{passage.source_id}</dd><dt>{passage.coverage ? 'Excerpt content hash' : 'Content hash'}</dt><dd>{passage.content_sha256}</dd></dl></details>
     </li>)}</ol></section>
+    {artifact.scientific_context ? <PinnedScientificContext binding={artifact.scientific_context} /> : <p className="artifact-scope">This earlier document does not record an extended scientific-context snapshot. Its saved finding and source citations remain available.</p>}
     <footer className="artifact-export"><a className="artifact-download" href={exportUrl(artifact.id)} download>Download saved Markdown<span aria-hidden="true"> ↓</span></a><p>The download contains the exact saved document, citations, and limitations.</p><details><summary>Document version</summary><dl><dt>Document hash</dt><dd>{artifact.markdown_sha256}</dd><dt>Source finding</dt><dd>{artifact.source_result_id}</dd><dt>Source finding hash</dt><dd>{artifact.source_sha256}</dd></dl></details></footer>
   </article>
 }
 
 export function ArtifactWorkspace({ sourceResultId, sourceKind, csrfToken, enabled, canGenerate, sourceCurrent, onSessionExpired, onBusyChange }: ArtifactWorkspaceProps) {
   const headingId = useId()
+  const native = useNativeResearchSubmission()
   const workspace = useArtifactWorkspace({ sourceResultId, csrfToken, enabled, canGenerate: canGenerate && sourceCurrent, onSessionExpired })
   const [formalisationId, setFormalisationId] = useState<string | null>(null)
   const [includeConjecture, setIncludeConjecture] = useState(true)
@@ -129,6 +133,7 @@ export function ArtifactWorkspace({ sourceResultId, sourceKind, csrfToken, enabl
 
   return <section className="artifact-workspace" aria-labelledby={headingId}>
     <header className="artifact-heading"><div><span className="eyebrow accent">DEVELOP THE FINDING</span><h2 id={headingId}>Make it precise. Write it clearly.</h2><p>Turn this saved finding into a mathematical conjecture, a plain-English summary, or a research paper. Every draft stays linked to its original evidence.</p></div><button type="button" className="text-button" disabled={!enabled || workspace.phase === 'loading'} onClick={workspace.refresh}>Reload saved work</button></header>
+    {hasScientificCapability(native, 'artifact_scientific_context_v1') && <p className="artifact-scope">New drafts will pin the finding’s applied reassessments and ancestry alongside its primary evidence.</p>}
     <div className="artifact-actions" role="group" aria-label="Develop this finding">
       <button type="button" disabled={!workspace.canCreate || sourceKind !== 'bridge'} onClick={() => void workspace.create('formalise')}><span>01</span><strong>Formalise</strong><small>Definitions, conjecture, and a proof attempt</small></button>
       <button type="button" disabled={!workspace.canCreate} onClick={() => void workspace.create('write_summary', includeConjecture ? formalisationId ?? undefined : undefined)}><span>02</span><strong>Write summary</strong><small>A clear account of the finding and its limits</small></button>

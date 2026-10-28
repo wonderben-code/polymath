@@ -1,8 +1,9 @@
 # Pinned scientific context and claim-bound Ask overviews
 
-Status: SC1 pure contracts and archived compatibility fixtures are implemented;
-SC2–SC6 runtime integration is next. The remainder specifies those changes.
-This document authorizes no paid call, activation, deployment, or migration. Meta remains the scientific model; the
+Status: SC1–SC6 are implemented and locally verified through schema 0024;
+3,939 tests pass, with the exact browser scope recorded in PROGRESS.md. This is the implemented versioned
+contract. Paid calls, public deployment and real publication remain separately
+gated. Meta remains the scientific model; the
 existing controllers, worker, source store, and global budget ledger remain the
 execution path.
 
@@ -28,8 +29,10 @@ original semantics. No historical summary is retroactively declared claim-bound.
 ## Dependencies verified in the current code
 
 The following is a source trace, supplemented by actual adapter-schema
-introspection. The D2 commit must be captured as a compatibility fixture before
-implementation starts.
+introspection. D2 commit `6e3d75b663ff65e1f9ae3b518efcbaeb71368f56` was
+archived and verified before new expected values were captured. Pure protocol
+and nine persisted scientific-input cases compare against that exact archive.
+Complete historical worker-checkpoint fixtures remain an explicit omission.
 
 | Existing input | Where it is bound | Implication |
 | --- | --- | --- |

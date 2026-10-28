@@ -1,4 +1,4 @@
-import type { CreateShare, PublicAnswer, PublicAnswerClaim, PublicBibliography, PublicBridge, PublicCitation, PublicCoverage, PublicFinding, PublicIdentifiers, PublicLibrary, PublicLibraryItem, PublicMap, PublicMapEdge, PublicMapNode, PublicPaper, PublicProjection, PublicQuote, PublicScholarlyLink, ShareHistory, SharePreview, ShareRecord, SharingCapabilities, SharingMode } from './types'
+import type { CreateShare, PublicAnswer, PublicAnswerClaim, PublicBibliography, PublicBridge, PublicCitation, PublicCoverage, PublicFinding, PublicIdentifiers, PublicLibrary, PublicLibraryItem, PublicMap, PublicMapEdge, PublicMapNode, PublicOverviewBinding, PublicPaper, PublicProjection, PublicQuote, PublicScholarlyLink, ShareHistory, SharePreview, ShareRecord, SharingCapabilities, SharingMode } from './types'
 
 export class SharingError extends Error {
   constructor(public readonly code: string, public readonly uncertain = false) { super(code); this.name = 'SharingError' }
@@ -124,11 +124,20 @@ function answer(value: Record<string, unknown>): PublicAnswer {
   return { kind: 'answer', question: text(item.question, 4000), summary: text(item.summary, 3000), claims, limitations: list(item.limitations, (value) => text(value, 1000), 1, 8), unanswered_questions: list(item.unanswered_questions, (value) => text(value, 1000), 0, 8) }
 }
 export function parsePublicProjection(value: unknown): PublicProjection {
-  const item = object(value, ['protocol', 'mode', 'validation_scope', 'finding', 'papers', 'citations'], ['field_selection'])
+  const item = object(value, ['protocol', 'mode', 'validation_scope', 'finding', 'papers', 'citations'], ['field_selection', 'overview_binding'])
   if (item.protocol !== 'polymath-public-finding-v1' || item.validation_scope !== 'model_assessment_and_saved_quote_integrity') return invalid()
   const researchMode = mode(item.mode), rawFinding = object(item.finding, ['kind'], ['title', 'field_left', 'field_right', 'explanation', 'mappings', 'open_question', 'strongest_objection', 'objection_verdict', 'novelty_limitations', 'citation_ids', 'question', 'summary', 'claims', 'limitations', 'unanswered_questions'])
   const finding = rawFinding.kind === 'bridge' ? bridge(rawFinding) : rawFinding.kind === 'answer' ? answer(rawFinding) : invalid(), papers = list(item.papers, paper, 1, 64), citations = list(item.citations, citation, 1, 64)
   if ((researchMode === 'ask') !== (finding.kind === 'answer')) return invalid()
+  let overview: PublicOverviewBinding | undefined
+  if (Object.hasOwn(item, 'overview_binding')) {
+    const binding = object(item.overview_binding, ['protocol', 'claim_ids'])
+    if (binding.protocol !== 'polymath-ask-claim-overview-v1' || researchMode !== 'ask' || finding.kind !== 'answer') return invalid()
+    const ids = distinct(list(binding.claim_ids, (value) => typeof value === 'string' && /^claim-[1-8]$/.test(value) ? value : invalid(), 1, 8))
+    const claims = new Map(finding.claims.map((claim) => [claim.id, claim]))
+    if (ids.some((id) => !claims.has(id)) || ids.map((id) => claims.get(id)!.text).join('\n\n') !== finding.summary) return invalid()
+    overview = { protocol: 'polymath-ask-claim-overview-v1', claim_ids: ids }
+  }
   distinct(papers.map((paper) => paper.id)); distinct(citations.map((citation) => citation.id))
   if (papers.some((paper, index) => paper.id !== `paper-${index + 1}`) || citations.some((citation, index) => citation.id !== `citation-${index + 1}`) || finding.kind === 'answer' && finding.claims.some((claim, index) => claim.id !== `claim-${index + 1}`)) return invalid()
   const aliasOwners = new Map<string, string>()
@@ -148,7 +157,7 @@ export function parsePublicProjection(value: unknown): PublicProjection {
   let selection: PublicProjection['field_selection']
   if (item.field_selection !== undefined) { const selected = object(item.field_selection, ['fields', 'rationale']), names = list(selected.fields, (value) => text(value, 100), 2, 4); distinct(names.map(normal)); selection = { fields: names, rationale: text(selected.rationale, 1000) } }
   if (researchMode === 'surprise' ? !selection || finding.kind !== 'bridge' || !selection.fields.map(normal).includes(normal(finding.field_left)) || !selection.fields.map(normal).includes(normal(finding.field_right)) : selection !== undefined) return invalid()
-  const projection: PublicProjection = { protocol: 'polymath-public-finding-v1', mode: researchMode, validation_scope: 'model_assessment_and_saved_quote_integrity', finding, papers, citations, ...(selection ? { field_selection: selection } : {}) }
+  const projection: PublicProjection = { protocol: 'polymath-public-finding-v1', mode: researchMode, validation_scope: 'model_assessment_and_saved_quote_integrity', finding, papers, citations, ...(selection ? { field_selection: selection } : {}), ...(overview ? { overview_binding: overview } : {}) }
   if (new TextEncoder().encode(JSON.stringify(projection)).byteLength > 262144) return invalid()
   return projection
 }

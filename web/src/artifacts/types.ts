@@ -1,3 +1,4 @@
+import type { ArtifactScientificContextBinding, ArtifactScientificContextIntent } from '../scientificContext/types'
 import type { ResearchActivityEvent } from '../research/types'
 import type { SourceBibliography } from '../research/bibliography'
 import type { SourceCoverage } from '../research/sourceCoverage'
@@ -9,6 +10,8 @@ export type ClaimLabel = 'known' | 'postulated' | 'speculative'
 export type JobStatus = 'queued' | 'running' | 'waiting_retry' | 'cancel_requested' | 'cancelled' | 'succeeded' | 'failed' | 'interrupted'
 
 export interface ArtifactJob {
+  scientific_context_intent?: ArtifactScientificContextIntent
+  scientific_context_sha256?: string
   native_research?: NativeRunControl
   id: string
   mode: 'explore' | 'ask' | 'surprise'
@@ -117,6 +120,7 @@ export interface ArtifactResult {
 }
 
 export interface SavedArtifact {
+  scientific_context?: ArtifactScientificContextBinding
   id: string
   run_id: string
   kind: ArtifactKind

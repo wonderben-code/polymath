@@ -81,7 +81,7 @@ class StoredArtifact:
         return f"artifact:{self.id}"
 
     def to_response(self) -> dict:
-        return {
+        value = {
             "id": str(self.id),
             "run_id": str(self.run_id),
             "kind": self.kind,
@@ -99,6 +99,9 @@ class StoredArtifact:
             "payload_sha256": self.payload_sha256,
             "basis_sha256": self.basis_sha256,
         }
+        if "scientific_context" in self.basis:
+            value["scientific_context"] = self.basis["scientific_context"]
+        return value
 
 
 def _identifier(value: str) -> uuid.UUID:
@@ -191,6 +194,8 @@ def bind_request(
     kind: str,
     source_result_id: str,
     formalisation_id: str | None = None,
+    *,
+    scientific_context_intent=None,
 ) -> ArtifactRequest:
     """Pin exact input versions inside the caller's enqueue transaction."""
     if (
@@ -226,10 +231,30 @@ def bind_request(
     )
     session.add(request)
     session.flush()
+    if scientific_context_intent is not None:
+        from polymath.scientific_context_store import bind_artifact_context
+
+        bind_artifact_context(
+            session, run=run, owner_hash=owner_hash, intent=scientific_context_intent
+        )
     # Reject an unusable input in the same transaction as enqueue. It must not
     # consume an active-job slot or reach the model before size/integrity checks.
-    _context(session, run)
+    basis, _ = _context(session, run)
+    if scientific_context_intent is not None:
+        preflight_artifact_context(kind, basis)
     return request
+
+
+def preflight_artifact_context(kind, basis, *, max_context_characters=90_000):
+    """Measure the exact new initial messages before the enqueue transaction commits."""
+    from polymath.artifact_controller import artifact_initial_messages
+
+    if (
+        basis.scientific_context is not None
+        and sum(len(message["content"]) for message in artifact_initial_messages(kind, basis))
+        > max_context_characters
+    ):
+        raise ArtifactError("artifact_context_too_large")
 
 
 def _context_unchecked(
@@ -307,6 +332,9 @@ def _context_unchecked(
             raise ArtifactError("artifact_input_integrity_failed")
         formalisation_draft = previous.draft
         formalisation_checks = previous.checks
+    from polymath.scientific_context_store import load_pinned_artifact_context
+
+    context = load_pinned_artifact_context(session, owner_hash=owner_hash, run_id=run.id)
     basis = ArtifactBasis(
         reference=MemoryReadReference(
             result_id=str(source.id),
@@ -318,6 +346,7 @@ def _context_unchecked(
         formalisation_id=str(request.formalisation_id) if request.formalisation_id else None,
         formalisation=formalisation_draft,
         formalisation_checks=formalisation_checks,
+        **({"scientific_context": context} if context is not None else {}),
     )
     if len(_canonical(basis.model_dump(mode="json")).encode("utf-8")) > MAX_ARTIFACT_BYTES:
         raise ArtifactError("artifact_size_limit")
@@ -488,7 +517,12 @@ def render_artifact(result: ArtifactResult, basis: ArtifactBasis) -> str:
                 lines += [f"arXiv: {_text(bibliography.arxiv_id)}{version}.", ""]
         lines += ["> " + _text(line) for line in passage.quote.splitlines()]
         lines += [""]
-    return "\n".join(lines).rstrip() + "\n"
+    rendered = "\n".join(lines).rstrip() + "\n"
+    if basis.scientific_context is not None:
+        from polymath.artifact_context_rendering import render_artifact_scientific_context
+
+        rendered += "\n" + render_artifact_scientific_context(basis, text=_text, link=_link)
+    return rendered
 
 
 def _stored(row: GeneratedArtifact) -> StoredArtifact:

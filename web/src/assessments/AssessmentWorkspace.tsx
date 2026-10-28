@@ -1,13 +1,13 @@
 import { NativeResumeControl } from '../research/NativeResumeControl'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { AssessmentError, assessmentHistory, assessmentMatchesJob, cancelAssessmentJob, createAssessmentJob, getAssessment, getAssessmentJob, listAssessmentJobs, loadAssessmentCapabilities } from './client'
+import { AssessmentError, assessmentHistory, assessmentMatchesJob, cancelAssessmentJob, createAssessmentJob, getFindingVersion, getAssessment, getAssessmentJob, listAssessmentJobs, loadAssessmentCapabilities } from './client'
 import type { AssessmentCapabilities, AssessmentJob, AssessmentRecord } from './types'
 import type { WatchSource } from '../ingestion/client'
 import { AssessmentPreview, dispositionNames } from './AssessmentPreview'
 import { FindingVersionNotice } from './FindingVersionNotice'
 import { useFindingHead } from './useFindingHead'
 import { useAssessmentActivity } from './useAssessmentActivity'
-import { useNativeResearchSubmission } from '../research/nativeContext'
+import { hasScientificCapability, scientificSelectionReady, useNativeResearchSubmission } from '../research/nativeContext'
 import './assessments.css'
 
 interface Props {
@@ -43,6 +43,7 @@ function failureMessage(error: unknown): string {
 
 export function AssessmentWorkspace({ watchId, sourceResultId, sources, csrfToken, enabled, canSubmit = true, onSessionExpired, onAssessmentChanged, onBusyChange, onOpenFinding }: Props) {
   const native = useNativeResearchSubmission()
+  const [sourceProtocol, setSourceProtocol] = useState<{ id: string; ask: boolean; bound: boolean } | null>(null)
   const [capabilities, setCapabilities] = useState<AssessmentCapabilities | null>(null)
   const [jobs, setJobs] = useState<AssessmentJob[]>([])
   const [history, setHistory] = useState<AssessmentRecord[]>([])
@@ -69,7 +70,7 @@ export function AssessmentWorkspace({ watchId, sourceResultId, sources, csrfToke
   const expireCallback = useRef(onSessionExpired), changeCallback = useRef(onAssessmentChanged)
   expireCallback.current = onSessionExpired; changeCallback.current = onAssessmentChanged
   const clear = useCallback(() => {
-    setCapabilities(null); setJobs([]); setHistory([]); setNextJobs(null); setNextHistory(null); setSelectedId(null); selected.current = null
+    setSourceProtocol(null); setCapabilities(null); setJobs([]); setHistory([]); setNextJobs(null); setNextHistory(null); setSelectedId(null); selected.current = null
     setActiveJob(null); setRecord(null); setChosen([]); setConsent(false); setUncertain(false); setAction(null); setError(''); known.current.clear(); notified.current.clear()
   }, [])
   const expire = useCallback(() => {
@@ -77,14 +78,25 @@ export function AssessmentWorkspace({ watchId, sourceResultId, sources, csrfToke
     blocked.current = true
     scope.current++; mutation.current?.abort(); mutation.current = null; reads.current.forEach((controller) => controller.abort()); clear(); setPhase('expired'); expireCallback.current()
   }, [clear])
-  const fail = useCallback((failure: unknown) => {
+  const fail = useCallback((failure: unknown, expectedHash?: string) => {
     setConsent(false)
+    if (failure instanceof AssessmentError && failure.code === 'scientific_variant_unavailable') { native.invalidateScientific?.(expectedHash); setError('The approved assessment features changed. Refresh research access; no alternative assessment was started.'); return }
+    if (failure instanceof AssessmentError && failure.code === 'scientific_context_unavailable') { setError('The saved scientific context cannot currently be verified. Saved findings and assessments remain available.'); return }
     if (failure instanceof AssessmentError && failure.code === 'native_authority_changed') { native.invalidate(); setError('Native research authority changed or expired. Refresh the current activation; this reassessment was not retried.'); return }
     if (failure instanceof AssessmentError && failure.code === 'session_expired') { expire(); return }
     setError(failureMessage(failure))
     if (failure instanceof AssessmentError && failure.uncertain) setUncertain(true)
-  }, [expire, native.invalidate])
+  }, [expire, native.invalidate, native.invalidateScientific])
   const head = useFindingHead({ resultId: sourceResultId, enabled: enabled && !!csrfToken && phase !== 'expired', onSessionExpired: expire, refreshToken: headRefresh })
+  useEffect(() => {
+    setSourceProtocol(null)
+    if (!native.required || !enabled || !csrfToken || phase !== 'ready') return
+    const controller = new AbortController(), generation = scope.current; reads.current.add(controller)
+    getFindingVersion(sourceResultId, controller.signal).then((version) => {
+      if (!controller.signal.aborted && generation === scope.current) setSourceProtocol({ id: version.id, ask: version.payload.mode === 'ask', bound: !!version.payload.overview_binding })
+    }).catch((failure: unknown) => { if (!controller.signal.aborted && generation === scope.current) fail(failure) }).finally(() => reads.current.delete(controller))
+    return () => { controller.abort(); reads.current.delete(controller) }
+  }, [native.required, enabled, csrfToken, phase, sourceResultId, refresh, fail])
   const headRoot = useRef<string | null>(null)
   headRoot.current = head.head?.root_result_id ?? null
 
@@ -150,7 +162,8 @@ export function AssessmentWorkspace({ watchId, sourceResultId, sources, csrfToke
   useEffect(() => setConsent(false), [head.head?.revision, head.head?.current_result_id, head.head?.state])
 
   const headReady = head.phase === 'ready' && !head.pollPaused && !!head.head?.is_current
-  const canChoose = enabled && phase === 'ready' && !!csrfToken && !!capabilities?.execution_available && canSubmit && native.canSubmit && headReady && !busy && !action && !uncertain
+  const protocolReady = !native.required || scientificSelectionReady(native) && sourceProtocol?.id === sourceResultId && (!sourceProtocol.bound || hasScientificCapability(native, 'ask_reassessment_overview_v1'))
+  const canChoose = protocolReady && enabled && phase === 'ready' && !!csrfToken && !!capabilities?.execution_available && canSubmit && native.canSubmit && headReady && !busy && !action && !uncertain
   const canCreate = canChoose && consent && chosen.length >= 1 && chosen.length <= 5 && chosen.every((id) => sources.some((source) => source.id === id))
   function choose(id: string) {
     if (!canChoose) return
@@ -162,10 +175,10 @@ export function AssessmentWorkspace({ watchId, sourceResultId, sources, csrfToke
     if (!canCreate || mutation.current || !csrfToken || !head.head) return
     const controller = new AbortController(), generation = scope.current; mutation.current = controller; setAction('create'); setConsent(false); setError('')
     try {
-      const incoming = await createAssessmentJob({ source_result_id: sourceResultId, watch_id: watchId, new_source_version_ids: [...chosen], expected_head_revision: head.head.revision }, csrfToken, controller.signal, native.submission ?? undefined)
+      const incoming = await createAssessmentJob({ source_result_id: sourceResultId, watch_id: watchId, new_source_version_ids: [...chosen], expected_head_revision: head.head.revision }, csrfToken, controller.signal, native.submission ?? undefined, sourceProtocol?.ask && hasScientificCapability(native, 'ask_reassessment_overview_v1') ? { protocol: 'polymath-ask-reassessment-overview-v1' } : undefined)
       if (controller.signal.aborted || generation !== scope.current) return
       const job = remember(incoming); setJobs((previous) => [job, ...previous.filter((item) => item.id !== job.id)]); setChosen([]); selectJob(job.id)
-    } catch (failure) { if (!controller.signal.aborted && generation === scope.current) fail(failure) }
+    } catch (failure) { if (!controller.signal.aborted && generation === scope.current) fail(failure, native.submission?.expectedActivationSha256) }
     finally { if (mutation.current === controller) { mutation.current = null; setAction(null) } }
   }
   async function cancel() {
@@ -198,6 +211,7 @@ export function AssessmentWorkspace({ watchId, sourceResultId, sources, csrfToke
     {error && <p role="alert" className="assessment-warning">{error}</p>}
     {uncertain && <p role="alert" className="assessment-warning">The last request’s outcome is unknown. It may already have been queued. Reload saved assessments before making another change.</p>}
     {capabilities && !capabilities.execution_available && <p className="assessment-warning" role="status">Meta reassessment is disabled or unavailable. Literature watches do not start model calls automatically. Saved assessments remain readable.</p>}
+    {native.required && !protocolReady && <p className="assessment-warning">{sourceProtocol?.bound ? 'This answer requires approval for evidence-linked overview reassessment. Saved findings remain readable.' : 'Checking the exact finding and approved assessment features before new work…'}</p>}
     {head.head && !head.head.is_current && <p className="assessment-warning">This watch is linked to an earlier finding version. Open the current finding and create a watch linked to that exact version before a new reassessment.</p>}
     <fieldset disabled={!canChoose}><legend>Select exact saved source versions · {chosen.length} of 5</legend>{sources.length ? <ul className="assessment-source-choices">{sources.map((source) => <li key={source.id}><label><input type="checkbox" checked={chosen.includes(source.id)} disabled={!canChoose || chosen.length >= 5 && !chosen.includes(source.id)} onChange={() => choose(source.id)} aria-label={`Reassess with source: ${source.title}`} /><span>{source.title}<small>{source.content_kind === 'abstract' ? 'Abstract only' : 'Full-text snapshot'} · observed {new Date(source.first_seen_at).toLocaleString()}</small></span></label></li>)}</ul> : <p>No saved source versions are available to select. Provider reading and model reassessment are separate steps.</p>}</fieldset>
     <label className="assessment-consent"><input type="checkbox" checked={consent} disabled={!canChoose || !chosen.length} onChange={(event) => setConsent(event.target.checked)} /><span>I want Meta to reassess this exact finding using the selected saved source versions.<small className="assessment-note">This starts a model task and may use API credits. No reassessment starts from a provider check, page refresh, or saved selection.</small></span></label>

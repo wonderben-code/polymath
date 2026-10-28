@@ -1,8 +1,10 @@
+import { parseAskOverviewBinding, validateAnswerOverview, parseOverviewIntent, parseResultOverviewMetadata } from '../scientificContext/overviewBinding'
+import type { AskOverviewBinding, AskReassessmentOverviewIntent } from '../scientificContext/types'
 import { parseDiscoveryStage } from '../discovery/client'
 import { parseDiscoveryIntent } from '../research/discoveryIntent'
 import type { DiscoveryStage, DiscoveryStageMetadata } from '../discovery/types'
 import { parseBibliography } from '../research/bibliography'
-import { nativeSubmissionHeaders, nativeAdmissionFailure, parseNativeRunControl, validNativeSubmission } from '../research/nativeAdmission'
+import { scientificAdmissionError, nativeSubmissionHeaders, nativeAdmissionFailure, parseNativeRunControl, validNativeSubmission } from '../research/nativeAdmission'
 import type { NativeSubmissionContext } from '../research/nativeAdmission'
 import { parseSourceCoverage, validateSourceCoverageContext } from '../research/sourceCoverage'
 import { parseResult } from '../research/client'
@@ -97,6 +99,8 @@ function premiseIdentity(value: { source_id: string; source_sha256: string; cont
 
 export function parseAssessmentBasis(value: unknown): AssessmentBasis {
   const item = object(value), mode = member(item.mode, ['explore', 'ask', 'surprise']), prior = finding(item.prior_finding), selections = fields(item.field_selections)
+  let priorBinding: AskOverviewBinding | undefined
+  if (Object.hasOwn(item, 'prior_overview_binding')) { try { priorBinding = parseAskOverviewBinding(item.prior_overview_binding); if (mode !== 'ask' || prior.outcome !== 'answer') return invalid(); validateAnswerOverview(prior, priorBinding) } catch { return invalid() } }
   const quotes = list(item.prior_quotes, researchQuote, 1, 64)
   const sources: AssessmentSourceReference[] = list(item.sources, (raw) => ({ ...observedSource(raw), role: member(object(raw).role, ['historical', 'new']) }), 2, 69)
   distinct(sources.map((source) => source.retrieval_id))
@@ -105,7 +109,7 @@ export function parseAssessmentBasis(value: unknown): AssessmentBasis {
   const historicalKeys = new Set(historical.map((source) => premiseIdentity({ ...source, source_sha256: source.content_sha256 })))
   if (!historical.length || historical.length > 64 || !added.length || added.length > 5 || added.some((source) => historicalVersions.has(source.version_id)) || [...premises].some((key) => !historicalKeys.has(key)) || [...historicalKeys].some((key) => !premises.has(key))) return invalid()
   distinct(added.map((source) => source.version_id)); findingQuotes(prior, quotes); modeFinding(mode, prior, selections)
-  return { prior_reference: reference(item.prior_reference), mode, prior_state: member(item.prior_state, ['supported', 'unsupported']), prior_finding: prior, prior_quotes: quotes, field_selections: selections, sources }
+  return { ...(priorBinding ? { prior_overview_binding: priorBinding } : {}), prior_reference: reference(item.prior_reference), mode, prior_state: member(item.prior_state, ['supported', 'unsupported']), prior_finding: prior, prior_quotes: quotes, field_selections: selections, sources }
 }
 
 function citation(value: unknown): AssessmentCitation { const item = object(value); return { retrieval_id: id(item.retrieval_id), quote: quoteText(item.quote), supports: text(item.supports, 1500) } }
@@ -114,7 +118,7 @@ function assessmentQuote(value: unknown): AssessmentQuote {
   if (end - start !== Array.from(parsed.quote).length) return invalid()
   return { ...parsed, source_id: text(item.source_id, 200), source_sha256: hash(item.source_sha256), content_kind: member(item.content_kind, ['abstract', 'full_text']), start, end, ...(coverage === undefined ? {} : { coverage }) }
 }
-function positiveResult(value: unknown, basis: AssessmentBasis, selected: ObservedAssessmentSource[]): ResearchResult {
+function positiveResult(value: unknown, basis: AssessmentBasis, selected: ObservedAssessmentSource[], expectedOverview?: boolean): ResearchResult {
   const item = object(value), proposed = finding(item.finding), mode = member(item.mode, ['explore', 'ask', 'surprise']), selections = fields(item.field_selections)
   const quotes = list(item.quotes, researchQuote, 1, 64), memory = list(item.memory_reads, reference, 1, 1)
   if (item.status !== proposed.outcome || item.validation_scope !== 'source_identity_and_quote_integrity' || mode !== basis.mode || !equal(selections, basis.field_selections) || !equal(memory, [basis.prior_reference]) || !Array.isArray(item.sources) || item.sources.length) return invalid()
@@ -126,11 +130,14 @@ function positiveResult(value: unknown, basis: AssessmentBasis, selected: Observ
     const rank = { known: 0, postulated: 1, speculative: 2 }, previous = new Map(basis.prior_finding.claims.map((claim) => [claim.id, claim.label]))
     if (proposed.claims.some((claim) => previous.has(claim.id) && rank[claim.label] < rank[previous.get(claim.id)!])) return invalid()
   }
-  return { status: proposed.outcome, mode, finding: proposed, field_selections: selections, memory_reads: memory, quotes, sources: [], events: activities(item.events, 2000), usage: usage(item.usage), error_code: code(item.error_code), validation_scope: 'source_identity_and_quote_integrity' }
+  let overview: AskOverviewBinding | undefined; try { overview = parseResultOverviewMetadata(value, expectedOverview) } catch { return invalid() }
+  return { ...(overview ? { overview_binding: overview } : {}), status: proposed.outcome, mode, finding: proposed, field_selections: selections, memory_reads: memory, quotes, sources: [], events: activities(item.events, 2000), usage: usage(item.usage), error_code: code(item.error_code), validation_scope: 'source_identity_and_quote_integrity' }
 }
 
 export function parseAssessment(value: unknown): AssessmentRecord {
   const item = object(value), payload = object(item.payload), basis = parseAssessmentBasis(payload.basis), raw = object(payload.result)
+  let overviewIntent: AskReassessmentOverviewIntent | undefined; try { overviewIntent = parseOverviewIntent(payload.assessment_overview_intent, 'polymath-ask-reassessment-overview-v1') } catch { return invalid() }
+  if (overviewIntent && basis.mode !== 'ask' || basis.prior_overview_binding && !overviewIntent) return invalid()
   const observed = list(payload.observed_sources, observedSource, 0, 200); distinct(observed.map((source) => source.retrieval_id))
   const observedById = new Map(observed.map((source) => [source.retrieval_id, source]))
   for (const source of basis.sources) { const actual = observedById.get(source.retrieval_id); if (actual && sourceIdentity(actual) !== sourceIdentity(source)) return invalid() }
@@ -148,11 +155,11 @@ export function parseAssessment(value: unknown): AssessmentRecord {
     if (basis.sources.some((source) => source.role === 'new' && (!declared.includes(source.retrieval_id) || !cited.has(source.retrieval_id)))) return invalid()
     if (!quotes.some((quote) => basis.sources.some((source) => source.role === 'historical' && source.retrieval_id === quote.retrieval_id) && basis.prior_quotes.some((old) => premiseIdentity(old) === premiseIdentity(quote) && old.quote === quote.quote))) return invalid()
   }
-  const result: AssessmentResult = { status, disposition, rationale, limitations: list(raw.limitations, (value) => text(value, 1000), 1, 8), observed_retrieval_ids: declared, selected_retrieval_ids: selected, quotes, revised_result: raw.revised_result === null ? null : positiveResult(raw.revised_result, basis, selected.map((identifier) => observedById.get(identifier)!)), search_purposes: distinct(list(raw.search_purposes, (value) => member(value, ['discovery', 'counterevidence', 'prior_work']), 0, 3)), events: activities(raw.events), usage: usage(raw.usage), error_code: code(raw.error_code), reason: raw.reason === null ? null : text(raw.reason, 3000), validation_scope: 'version_bound_quote_integrity' }
+  const result: AssessmentResult = { status, disposition, rationale, limitations: list(raw.limitations, (value) => text(value, 1000), 1, 8), observed_retrieval_ids: declared, selected_retrieval_ids: selected, quotes, revised_result: raw.revised_result === null ? null : positiveResult(raw.revised_result, basis, selected.map((identifier) => observedById.get(identifier)!), !!overviewIntent), search_purposes: distinct(list(raw.search_purposes, (value) => member(value, ['discovery', 'counterevidence', 'prior_work']), 0, 3)), events: activities(raw.events), usage: usage(raw.usage), error_code: code(raw.error_code), reason: raw.reason === null ? null : text(raw.reason, 3000), validation_scope: 'version_bound_quote_integrity' }
   const source = id(item.source_result_id), sourceRun = id(item.source_run_id), sourceHash = hash(item.source_sha256), expected = integer(item.expected_head_revision), revision = integer(item.head_revision), applied = bool(item.applied), candidate = nullableId(item.candidate_result_id), added = versions(item.new_source_version_ids)
   if (item.disposition !== disposition || basis.prior_reference.result_id !== source || basis.prior_reference.run_id !== sourceRun || basis.prior_reference.content_sha256 !== sourceHash || !equal(added, basis.sources.filter((source) => source.role === 'new').map((source) => source.version_id))) return invalid()
   if (revision < expected || applied && (status !== 'completed' || disposition === 'inconclusive' || revision !== expected + 1) || (disposition === 'revised') !== (candidate !== null)) return invalid()
-  return { id: id(item.id), run_id: id(item.run_id), root_result_id: id(item.root_result_id), source_result_id: source, source_run_id: sourceRun, source_sha256: sourceHash, watch_id: id(item.watch_id), new_source_version_ids: added, expected_head_revision: expected, disposition, applied, head_revision: revision, candidate_result_id: candidate, payload: { basis, result, verified_passages: verified, observed_sources: observed }, payload_sha256: hash(item.payload_sha256), basis_sha256: hash(item.basis_sha256), created_at: date(item.created_at) }
+  return { id: id(item.id), run_id: id(item.run_id), root_result_id: id(item.root_result_id), source_result_id: source, source_run_id: sourceRun, source_sha256: sourceHash, watch_id: id(item.watch_id), new_source_version_ids: added, expected_head_revision: expected, disposition, applied, head_revision: revision, candidate_result_id: candidate, payload: { ...(overviewIntent ? { assessment_overview_intent: overviewIntent } : {}), basis, result, verified_passages: verified, observed_sources: observed }, payload_sha256: hash(item.payload_sha256), basis_sha256: hash(item.basis_sha256), created_at: date(item.created_at) }
 }
 
 export function parseCapabilities(value: unknown): AssessmentCapabilities {
@@ -181,10 +188,12 @@ export function parseFindingHead(value: unknown): FindingHead {
 export function parseAssessmentJob(value: unknown): AssessmentJob {
   const item = object(value)
   const native = parseNativeRunControl(item.native_research, invalid)
+  let overviewIntent: AskReassessmentOverviewIntent | undefined; try { overviewIntent = parseOverviewIntent(item.assessment_overview_intent, 'polymath-ask-reassessment-overview-v1') } catch { return invalid() }
+  if (overviewIntent && item.mode !== 'ask') return invalid()
   if (item.task_kind !== 'reassess_finding' || item.result_id !== null || item.artifact_id !== null) return invalid()
   const status = member(item.status, JOB_STATUSES), assessment = nullableId(item.assessment_id)
   if (assessment !== null && status !== 'succeeded' && status !== 'failed') return invalid()
-  return { id: id(item.id), root_result_id: id(item.root_result_id), source_result_id: id(item.source_result_id), source_sha256: hash(item.source_sha256), watch_id: id(item.watch_id), new_source_version_ids: versions(item.new_source_version_ids), expected_head_revision: integer(item.expected_head_revision),
+  return { ...(overviewIntent ? { assessment_overview_intent: overviewIntent } : {}), id: id(item.id), root_result_id: id(item.root_result_id), source_result_id: id(item.source_result_id), source_sha256: hash(item.source_sha256), watch_id: id(item.watch_id), new_source_version_ids: versions(item.new_source_version_ids), expected_head_revision: integer(item.expected_head_revision),
     mode: member(item.mode, ['explore', 'ask', 'surprise']), task_kind: 'reassess_finding', goal: text(item.goal, 4000, false), status, created_at: date(item.created_at), updated_at: date(item.updated_at), result_id: null, artifact_id: null, assessment_id: assessment, error_code: code(item.error_code), external_outcome_unknown: bool(item.external_outcome_unknown), ...(native ? { native_research: native } : {}) }
 }
 
@@ -214,9 +223,10 @@ async function request<T>(path: string, parse: (value: unknown) => T, signal?: A
     sent = true
     const response = await fetch(path, { method: write ? 'POST' : 'GET', credentials: 'same-origin', cache: 'no-store', redirect: 'error', signal: controller.signal,
       headers: { Accept: 'application/json', ...(write ? { 'X-CSRF-Token': write.csrf, ...(write.body === undefined ? {} : { 'Content-Type': 'application/json' }), ...(write.native ? nativeSubmissionHeaders(write.native) : {}) } : {}) }, ...(write?.body === undefined ? {} : { body: JSON.stringify(write.body) }) })
-    if (!response.ok && [401, 403, 409, 503].includes(response.status)) {
+    if (!response.ok && [401, 403, 409, 422, 503].includes(response.status)) {
       let detail: unknown
       try { detail = object(await json(response.clone())).detail } catch { /* Keep untrusted errors out of the UI. */ }
+      const scientific = scientificAdmissionError(response.status, detail); if (scientific) throw new AssessmentError(scientific)
       if (nativeAdmissionFailure(response.status, detail)) throw new AssessmentError('native_authority_changed')
     }
     if (response.status === 401 || response.status === 403) throw new AssessmentError('session_expired')
@@ -247,10 +257,11 @@ export function listAssessmentJobs(sourceResultId: string, signal?: AbortSignal,
   return request(`${BASE}/jobs?${query}`, (value) => { const item = object(value), jobs = list(item.jobs, parseAssessmentJob), next = nullableId(item.next_cursor); distinct(jobs.map((job) => job.id)); if (jobs.some((job) => job.source_result_id !== sourceResultId || job.id === before) || next !== null && (next !== jobs.at(-1)?.id || next === before)) return invalid(); return { jobs, next_cursor: next } }, signal)
 }
 
-export async function createAssessmentJob(body: CreateAssessmentJob, csrf: string, signal?: AbortSignal, native?: NativeSubmissionContext): Promise<AssessmentJob> {
+export async function createAssessmentJob(body: CreateAssessmentJob, csrf: string, signal?: AbortSignal, native?: NativeSubmissionContext, overview?: AskReassessmentOverviewIntent): Promise<AssessmentJob> {
+  let overviewIntent: AskReassessmentOverviewIntent | undefined; try { overviewIntent = parseOverviewIntent(overview, 'polymath-ask-reassessment-overview-v1') } catch { throw new AssessmentError('invalid_request') }
   let pinned: CreateAssessmentJob
   try { const item = object(body); pinned = { source_result_id: id(item.source_result_id), watch_id: id(item.watch_id), new_source_version_ids: versions(item.new_source_version_ids), expected_head_revision: integer(item.expected_head_revision) } } catch { throw new AssessmentError('invalid_request') }
-  return request(`${BASE}/jobs`, (value) => { const job = parseAssessmentJob(value); return job.source_result_id === pinned.source_result_id && job.watch_id === pinned.watch_id && job.expected_head_revision === pinned.expected_head_revision && JSON.stringify(job.new_source_version_ids) === JSON.stringify(pinned.new_source_version_ids) ? job : invalid() }, signal, { csrf, native, body: { ...pinned, ...(native ? { expected_activation_sha256: native.expectedActivationSha256 } : {}) } })
+  return request(`${BASE}/jobs`, (value) => { const job = parseAssessmentJob(value); return !!job.assessment_overview_intent === !!overviewIntent && job.source_result_id === pinned.source_result_id && job.watch_id === pinned.watch_id && job.expected_head_revision === pinned.expected_head_revision && JSON.stringify(job.new_source_version_ids) === JSON.stringify(pinned.new_source_version_ids) ? job : invalid() }, signal, { csrf, native, body: { ...pinned, ...(overviewIntent ? { assessment_overview_intent: overviewIntent } : {}), ...(native ? { expected_activation_sha256: native.expectedActivationSha256 } : {}) } })
 }
 
 export function cancelAssessmentJob(runId: string, csrf: string, signal?: AbortSignal): Promise<AssessmentCancellation> {
@@ -279,7 +290,7 @@ export function assessmentHistory(rootResultId: string, signal?: AbortSignal, be
 }
 
 export function assessmentMatchesJob(record: AssessmentRecord, job: AssessmentJob): boolean {
-  return record.id === job.assessment_id && record.run_id === job.id && record.root_result_id === job.root_result_id && record.source_result_id === job.source_result_id && record.source_sha256 === job.source_sha256 && record.watch_id === job.watch_id && record.expected_head_revision === job.expected_head_revision && equal(record.new_source_version_ids, job.new_source_version_ids)
+  return !!record.payload.assessment_overview_intent === !!job.assessment_overview_intent && record.id === job.assessment_id && record.run_id === job.id && record.root_result_id === job.root_result_id && record.source_result_id === job.source_result_id && record.source_sha256 === job.source_sha256 && record.watch_id === job.watch_id && record.expected_head_revision === job.expected_head_revision && equal(record.new_source_version_ids, job.new_source_version_ids)
 }
 
 export function parseFindingVersion(value: unknown): FindingVersion {
@@ -294,7 +305,7 @@ export function parseFindingVersion(value: unknown): FindingVersion {
     if (stage.status !== expected || head.discovery_stage && (head.discovery_stage.stage_id !== stage.stage.stage_id || head.discovery_stage.ordinal !== stage.stage.ordinal || head.discovery_stage.depth !== stage.stage.depth)) return invalid()
   } else if (head.discovery_stage || intent || run.status !== 'succeeded' || (kind === 'research' ? run.result_id !== resultId || head.root_result_id !== resultId : run.result_id !== null)) return invalid()
   let parsed: ResearchResult
-  try { parsed = parseResult(item.payload) } catch { return invalid() }
+  try { parsed = parseResult(item.payload, kind === 'research' ? !!parseOverviewIntent(run.ask_overview_intent, 'polymath-ask-claim-overview-v1') : !!parseOverviewIntent(run.assessment_overview_intent, 'polymath-ask-reassessment-overview-v1')) } catch { return invalid() }
   if (stage) {
     if (!equal({ ...parsed, sources: [] }, { ...stage.result, sources: [] }) || stage.result.sources.some((source) => !parsed.sources.some((candidate) => equal(source, candidate)))) return invalid()
     parsed = stage.result
@@ -306,7 +317,7 @@ export function parseFindingVersion(value: unknown): FindingVersion {
   const sources = list(parsed.sources, (raw) => { const source = object(raw), bibliography = parseBibliography(source.bibliography, invalid), coverage = parseSourceCoverage(source.coverage, invalid); const document = { source_id: text(source.source_id, 200), title: text(source.title, 1000), url: safeUrl(source.url), text: text(source.text, 20000), content_kind: member(source.content_kind, ['abstract', 'full_text']), retrieved_at: date(source.retrieved_at), extraction_method: text(source.extraction_method, 100), ...(bibliography === undefined ? {} : { bibliography }), ...(coverage === undefined ? {} : { coverage }) }; validateSourceCoverageContext(document, invalid); return document }, 1, 200)
   distinct(sources.map((source) => source.source_id))
   for (const quote of quotes) { const source = sources.find((source) => source.source_id === quote.source_id); if (!source || source.content_kind !== quote.content_kind || Array.from(source.text).slice(quote.start, quote.end).join('') !== quote.quote) return invalid() }
-  return { id: resultId, run_id: runId, task_kind: kind, run: { id: runId, task_kind: kind, mode, goal: text(run.goal, 4000, false), status: member(run.status, JOB_STATUSES), created_at: date(run.created_at), updated_at: date(run.updated_at), result_id: nullableId(run.result_id), artifact_id: null, assessment_id: run.assessment_id === undefined ? null : nullableId(run.assessment_id), error_code: code(run.error_code), external_outcome_unknown: bool(run.external_outcome_unknown), ...(native ? { native_research: native } : {}), ...(intent ? { discovery_intent: intent } : {}) }, ...(stage ? { discovery_stage: stage } : {}), payload: { ...parsed, finding: proposed, sources, quotes, field_selections: selections }, assessment: head }
+  return { id: resultId, run_id: runId, task_kind: kind, run: { id: runId, task_kind: kind, mode, goal: text(run.goal, 4000, false), status: member(run.status, JOB_STATUSES), created_at: date(run.created_at), updated_at: date(run.updated_at), result_id: nullableId(run.result_id), artifact_id: null, assessment_id: run.assessment_id === undefined ? null : nullableId(run.assessment_id), error_code: code(run.error_code), external_outcome_unknown: bool(run.external_outcome_unknown), ...(native ? { native_research: native } : {}), ...(intent ? { discovery_intent: intent } : {}), ...(run.ask_overview_intent === undefined ? {} : { ask_overview_intent: parseOverviewIntent(run.ask_overview_intent, 'polymath-ask-claim-overview-v1') }), ...(run.assessment_overview_intent === undefined ? {} : { assessment_overview_intent: parseOverviewIntent(run.assessment_overview_intent, 'polymath-ask-reassessment-overview-v1') }) }, ...(stage ? { discovery_stage: stage } : {}), payload: { ...parsed, finding: proposed, sources, quotes, field_selections: selections }, assessment: head }
 }
 
 export function getFindingVersion(resultId: string, signal?: AbortSignal): Promise<FindingVersion> {

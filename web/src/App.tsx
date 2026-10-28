@@ -127,7 +127,7 @@ export function App() {
 
   // The server defaults to unavailable. A real cookie-owned session and healthy
   // storage are required as well; a capability flag alone cannot create a job.
-  const researchConnected = workspace.canSubmit && !artifactBusy && !assessmentBusy && (mode === 'surprise' || !!prompts[mode].trim())
+  const researchConnected = workspace.canSubmit && (mode !== 'ask' || workspace.canAsk) && !artifactBusy && !assessmentBusy && (mode === 'surprise' || !!prompts[mode].trim())
   const unavailable = connection === 'offline'
     ? 'The research service could not be reached. Check the connection and try again.'
     : workspace.ownActiveResearch ? 'An investigation is active in this browser. Finish or cancel it before starting another model task.' : workspace.native.required && workspace.native.phase !== 'disabled' ? 'Current funding authority or this browser’s limits do not permit a new model task. Saved research remains readable.' : 'Live investigations are disabled or unavailable. Saved research remains readable.'

@@ -311,6 +311,93 @@ is verified locally through actual HTTP/PostgreSQL and the Meta adapter with
 mock transport. Public deployment and real native scientific evaluation remain
 unverified, and paid calls are still disabled.
 
+
+## Pinned scientific context and claim-linked answers
+
+New scientific variants require a freshly reviewed optional
+`scientific_context_profiles` extension on the exact private activation or
+public delegation. Preview selects it with
+`scientific_context: {"protocol":"polymath-scientific-context-profiles-v1"}`;
+the server derives all five profiles. It adds no wallet, money allowance,
+worker, provider or automatic execution. The five ordinary profiles and optional
+Surprise ladder retain their original bytes when this extension is absent.
+
+`GET /api/v1/research/protocols` uses an existing owner cookie and returns exactly:
+
+```json
+{
+  "protocol": "polymath-research-protocols-v1",
+  "activation_sha256": null,
+  "capabilities": []
+}
+```
+
+Eligible public grants return their exact SHA and the approved canonical subset
+of `artifact_scientific_context_v1`, `ask_claim_overview_v1`,
+`ask_reassessment_overview_v1`. A legacy grant can return SHA plus an empty list;
+closed/private contexts return null and an empty list. Anonymous callers receive
+401; this read never initializes a session. Private operators use their existing
+privileged manifest. Discovery exposes no model, issuer, account, price, key or
+profile payload and grants no admission. Normal read counters still apply.
+
+The browser and SDK cross-check this SHA with funded access before sending one
+explicit request. They select the improved applicable variant automatically
+when approved; protocol discovery failure never causes a silent downgrade.
+Resume always uses its original stored intent/profile and requires no new
+protocol discovery. Explicit SDK options can require a variant before sending.
+
+| Admission | Optional input | Persisted guarantee |
+|---|---|---|
+| `POST /runs` in Ask mode | `ask_overview_intent: {"protocol":"polymath-ask-claim-overview-v1"}` | Immutable original run intent; successful answer has exact selected-claim overview binding |
+| `POST /artifacts/jobs` | `scientific_context_intent: {"protocol":"polymath-artifact-scientific-context-v1"}` | Server constructs and pins owned scientific context before enqueue; client supplies no context body/hash |
+| `POST /assessments/jobs` for an Ask answer | `assessment_overview_intent: {"protocol":"polymath-ask-reassessment-overview-v1"}` | Pins original source semantics and the reviewed revision format before any call |
+
+Present null intents are invalid. A bound Ask source requires the assessment
+variant for the entire job, including a possible unchanged outcome. The exact
+source can be read at `/api/v1/assessments/findings/{result-id}`; its `payload`
+is the scientific result directly. Never silently substitute a newer head.
+Unsupported current findings may be reassessed to restore support; artifact
+current-support restrictions do not remove that assessment path.
+
+A new answer result includes optional `overview_binding` beside `finding`:
+`{"protocol":"polymath-ask-claim-overview-v1","claim_ids":[...]}`. The model
+chooses existing IDs/order; `finding.summary` equals the exact saved claim texts
+joined with two newlines, at most 3,000 Unicode characters. There is no separately
+generated summary. Existing citation/classification/derivation/caveat checks still
+apply, and storage independently verifies the admitted intent in both directions.
+The binding proves structure and quotation integrity, not scientific truth.
+Legacy results omit it and never gain the guarantee from string similarity.
+
+New artifact detail includes optional outer `scientific_context` containing
+`{context,context_sha256}`. The same envelope enters the saved basis and prompt.
+Job history includes only present `scientific_context_intent` and
+`scientific_context_sha256`. Context preserves exact stage-specific parents,
+original-bound uncalibrated confidence, actually applied reassessments (including
+unchanged), and incorporated formalisation provenance. A revised source does not
+inherit an original stage's confidence. Replay reads the pinned context; exports
+remain exact saved Markdown bytes. The complete basis and exact initial messages
+must fit reviewed byte/character limits before enqueue commits.
+
+Assessment bases optionally retain `prior_overview_binding`; revised results
+carry their own binding. Selected assessments add only present
+`payload.assessment_overview_intent`; unchanged assessments retain the original
+result/binding rather than manufacture a new one. Public shares optionally carry
+outer `projection.overview_binding` with deterministic local `claim-1`…`claim-8`
+IDs only. Private ancestry/run/result/assessment/context identifiers never enter
+that public projection. Existing shared snapshots remain immutable.
+
+The standalone client exposes `research protocols`, `runs create --claim-overview`,
+`artifacts create --scientific-context`, and `assessments create --claim-overview`.
+These explicit flags require the matching current approval; ordinary eligible
+public creation selects the variants automatically. Public/library reads stay
+cookie-free and do not bootstrap a session. Exact exports still verify server
+bytes and write atomically without clobbering existing files.
+
+`meta_research_scientific_protocol_unavailable` is 409 and
+`artifact_context_too_large` is 422. They preserve owned history and do not retry
+or fall back automatically. See [SCIENTIFIC_CONTEXT.md](SCIENTIFIC_CONTEXT.md)
+for the full versioned contract and compatibility evidence.
+
 ## Standalone discovery ladder commands
 
 Explicit ladder creation uses the same bounded research admission:

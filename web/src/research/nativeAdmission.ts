@@ -17,7 +17,14 @@ export function validNativeSubmission(value: NativeSubmissionContext): boolean {
 export function nativeSubmissionHeaders(value: NativeSubmissionContext): Record<string, string> { return value.audience === 'public_sessions' ? {} : { 'X-Operator-CSRF-Token': value.operatorCsrfToken } }
 
 export function nativeAdmissionFailure(status: number, detail: unknown): boolean {
-  if (typeof detail !== 'string' || detail === 'public_research_requester_expired') return false
+  if (typeof detail !== 'string' || ['public_research_requester_expired', 'meta_research_scientific_protocol_unavailable'].includes(detail)) return false
   if (['operator_session_required', 'operator_csrf_check_failed', 'operator_unavailable', 'readiness_role_unavailable', 'readiness_actor_forbidden'].includes(detail)) return true
   return (detail.startsWith('meta_research_') || detail.startsWith('public_research_')) && [401, 403, 409, 503].includes(status) && !['meta_research_storage_unavailable', 'public_research_storage_unavailable', 'public_research_resource_unavailable'].includes(detail)
+}
+
+export type ScientificAdmissionError = 'scientific_variant_unavailable' | 'scientific_context_unavailable' | 'scientific_context_too_large'
+export function scientificAdmissionError(status: number, detail: unknown): ScientificAdmissionError | null {
+  if (status === 409 && ['meta_research_scientific_protocol_unavailable', 'ask_reassessment_overview_required'].includes(detail as string)) return 'scientific_variant_unavailable'
+  if (status === 409 && ['scientific_context_integrity_failed', 'scientific_context_not_available', 'scientific_context_admission_closed'].includes(detail as string)) return 'scientific_context_unavailable'
+  return status === 422 && detail === 'artifact_context_too_large' ? 'scientific_context_too_large' : null
 }

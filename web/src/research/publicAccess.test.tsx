@@ -29,9 +29,9 @@ describe('visitor-safe research access', () => {
     expect(fetch.mock.calls).toEqual([['/api/v1/research/access', expect.objectContaining({ method: 'GET', credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'application/json' } })]])
   })
   it('uses funded access without operator GET and displays exact UTC limits', async () => {
-    const fetch = vi.fn(async () => Response.json(publicAccess())); vi.stubGlobal('fetch', fetch)
+    const fetch = vi.fn(async (path: RequestInfo | URL) => Response.json(String(path).endsWith('/protocols') ? { protocol: 'polymath-research-protocols-v1', activation_sha256: publicAccess().expected_activation_sha256, capabilities: [] } : publicAccess())); vi.stubGlobal('fetch', fetch)
     const { result } = renderHook(() => useNativeResearchContext(settings())); await waitFor(() => expect(result.current.canSubmit).toBe(true))
-    expect(result.current.activation).toBeNull(); expect(result.current.submission).toEqual({ audience: 'public_sessions', expectedActivationSha256: publicAccess().expected_activation_sha256 }); expect(fetch).toHaveBeenCalledTimes(1)
+    expect(result.current.activation).toBeNull(); expect(result.current.submission).toEqual({ audience: 'public_sessions', expectedActivationSha256: publicAccess().expected_activation_sha256 }); expect(fetch).toHaveBeenCalledTimes(2)
     render(<NativeResearchNotice context={result.current} />); expect(screen.getByText(/No operator sign-in is required/)).toBeInTheDocument(); expect(screen.getByText(publicAccess().expires_at!)).toBeInTheDocument(); expect(screen.queryByRole('link', { name: /operator/ })).not.toBeInTheDocument()
   })
   it('retains continuation authority when the daily new-job allowance reaches zero', async () => {
@@ -51,7 +51,7 @@ describe('visitor-safe research access', () => {
   it('honors the access read cooldown without clearing ownership or automatically retrying', async () => {
     vi.useFakeTimers(); vi.spyOn(Date, 'now').mockRestore(); vi.setSystemTime(new Date(DATE))
     let limited = true
-    const fetch = vi.fn(async () => limited ? Response.json({ detail: 'public_request_rate_limited' }, { status: 429, headers: { 'Retry-After': '17' } }) : Response.json(publicAccess()))
+    const fetch = vi.fn(async (path: RequestInfo | URL) => String(path).endsWith('/protocols') ? Response.json({ protocol: 'polymath-research-protocols-v1', activation_sha256: publicAccess().expected_activation_sha256, capabilities: [] }) : limited ? Response.json({ detail: 'public_request_rate_limited' }, { status: 429, headers: { 'Retry-After': '17' } }) : Response.json(publicAccess()))
     vi.stubGlobal('fetch', fetch)
     const props = settings(), { result } = renderHook(() => useNativeResearchContext(props))
     await act(async () => { await vi.advanceTimersByTimeAsync(0) })
@@ -60,7 +60,7 @@ describe('visitor-safe research access', () => {
     await act(async () => { await vi.advanceTimersByTimeAsync(17000) })
     expect(result.current.retryAfterSeconds).toBeNull(); expect(fetch).toHaveBeenCalledTimes(1)
     limited = false; act(() => result.current.refresh()); await act(async () => { await vi.advanceTimersByTimeAsync(0) })
-    expect(result.current.canSubmit).toBe(true); expect(fetch).toHaveBeenCalledTimes(2); expect(props.onBrowserExpired).not.toHaveBeenCalled()
+    expect(result.current.canSubmit).toBe(true); expect(fetch).toHaveBeenCalledTimes(3); expect(props.onBrowserExpired).not.toHaveBeenCalled()
   })
   it('aborts and fences late reads across browser rotation', async () => {
     let resolve!: (value: Response) => void, reads = 0, oldSignal: AbortSignal | null = null

@@ -10,6 +10,7 @@ from sqlalchemy import (
     ForeignKeyConstraint,
     String,
     Text,
+    UniqueConstraint,
     Uuid,
     func,
 )
@@ -58,6 +59,13 @@ class GeneratedArtifact(Base):
 class ArtifactRequest(Base):
     __tablename__ = "artifact_requests"
     __table_args__ = (
+        UniqueConstraint(
+            "run_id",
+            "source_result_id",
+            "source_run_id",
+            "source_sha256",
+            name="uq_artifact_context_request_source",
+        ),
         ForeignKeyConstraint(
             ["source_result_id", "source_run_id"],
             ["evidence_results.id", "evidence_results.run_id"],

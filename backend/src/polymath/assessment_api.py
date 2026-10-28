@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.routing import APIRoute
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from sqlalchemy import Engine, func, select, text, tuple_
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -45,6 +45,7 @@ from polymath.run_api import (
     _PrivateHTTPException,
     _summary,
 )
+from polymath.scientific_context_contracts import AskReassessmentOverviewIntent
 
 if TYPE_CHECKING:
     from polymath.meta_research import MetaResearchStore
@@ -93,6 +94,14 @@ class CreateAssessmentJob(BaseModel):
     new_source_version_ids: list[str] = Field(min_length=1, max_length=5)
     expected_head_revision: int = Field(ge=0, le=2**31 - 1)
     expected_activation_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    assessment_overview_intent: AskReassessmentOverviewIntent | None = None
+
+    @field_validator("assessment_overview_intent", mode="before")
+    @classmethod
+    def explicit_overview_protocol(cls, value):
+        if value is None:
+            raise ValueError("An explicit reassessment protocol is required")
+        return value
 
     @model_validator(mode="after")
     def exact_owned_versions(self) -> CreateAssessmentJob:
@@ -127,6 +136,11 @@ def _assessment_error(error: AssessmentError) -> _AssessmentHTTPException:
         "assessment_basis_changed",
         "assessment_input_changed",
         "assessment_source_not_current",
+        "ask_reassessment_overview_required",
+        "scientific_context_not_available",
+        "scientific_context_integrity_failed",
+        "scientific_context_admission_closed",
+        "scientific_context_admission_changed",
     ):
         return _AssessmentHTTPException(409, code)
     if code in ("active_run_limit", "research_queue_full", "assessment_queue_full"):
@@ -137,6 +151,7 @@ def _assessment_error(error: AssessmentError) -> _AssessmentHTTPException:
         "assessment_source_already_cited",
         "assessment_invalid_sources",
         "assessment_input_too_large",
+        "ask_overview_wrong_run",
     ):
         return _AssessmentHTTPException(422, code)
     return _storage_error()
@@ -320,6 +335,7 @@ def create_assessment_router(
                     uuid.UUID(body.watch_id),
                     tuple(uuid.UUID(value) for value in body.new_source_version_ids),
                     body.expected_head_revision,
+                    assessment_overview_intent=body.assessment_overview_intent,
                 )
                 if admission is not None:
                     from polymath.meta_research import native_run_input_sha256

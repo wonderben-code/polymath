@@ -89,6 +89,9 @@ class RunEvidenceSource(Base):
 class EvidenceResult(Base):
     __tablename__ = "evidence_results"
     __table_args__ = (
+        UniqueConstraint(
+            "id", "run_id", "content_sha256", name="uq_evidence_result_scientific_ref"
+        ),
         UniqueConstraint("run_id", "content_sha256", name="uq_evidence_result"),
         UniqueConstraint("id", "run_id", name="uq_evidence_result_run"),
         CheckConstraint(

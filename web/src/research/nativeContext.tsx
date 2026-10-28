@@ -1,6 +1,7 @@
 import { createContext, useContext } from 'react'
 import type { ReactNode } from 'react'
 import type { EligibleActivation } from '../budget/activationTypes'
+import type { ScientificCapability } from '../scientificContext/types'
 import type { ResearchAccess } from './access'
 import type { NativeSubmissionContext } from './nativeAdmission'
 
@@ -10,6 +11,9 @@ export interface NativeResearchContextValue {
   activation: EligibleActivation | null
   submission: NativeSubmissionContext | null
   access?: ResearchAccess | null
+  invalidateScientific?: (expectedActivationSha256?: string) => void
+  scientificCapabilities?: ScientificCapability[]
+  scientificPhase?: 'disabled' | 'loading' | 'ready' | 'error'
   retryAfterSeconds?: number | null
   canResume?: boolean
   canSubmit: boolean
@@ -26,3 +30,6 @@ export function useNativeResearchSubmission() { return useContext(NativeResearch
 export function NativeResearchProvider({ value, children }: { value: NativeResearchContextValue; children: ReactNode }) {
   return <NativeResearchContext.Provider value={value}>{children}</NativeResearchContext.Provider>
 }
+
+export function scientificSelectionReady(context: NativeResearchContextValue): boolean { return !context.required || context.scientificPhase === 'ready' }
+export function hasScientificCapability(context: NativeResearchContextValue, capability: ScientificCapability): boolean { return context.required && context.scientificPhase === 'ready' && context.scientificCapabilities?.includes(capability) === true }

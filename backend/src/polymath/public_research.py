@@ -16,7 +16,14 @@ from polymath.discovery_contracts import DiscoveryIntent
 from polymath.jobs import _clear_lease, _event
 from polymath.meta_readiness import _account_lock, _clock
 from polymath.meta_readiness_contracts import quote_proposal
-from polymath.meta_research_contracts import TASK_KINDS, research_policy_sha256, task_profile_sha256
+from polymath.meta_research_contracts import (
+    SCIENTIFIC_CAPABILITIES,
+    TASK_KINDS,
+    PublicResearchProtocols,
+    research_policy_sha256,
+    select_scientific_profile,
+    task_profile_sha256,
+)
 from polymath.meta_research_errors import MetaResearchError
 from polymath.meta_research_models import (
     MetaResearchApproval,
@@ -30,7 +37,6 @@ from polymath.public_research_contracts import (
     PublicAccessLimits,
     PublicResearchAccess,
     PublicResearchManifest,
-    public_profile_for_task,
     public_sponsor_policy_sha256,
     validate_current_public_research_manifest,
 )
@@ -268,12 +274,23 @@ class PublicResearchService:
             requester_hash=owner.token_hash,
             allow_prepared=True,
         )
+        from polymath.scientific_context_store import load_scientific_intent
+
+        intent = load_scientific_intent(session, run)
         try:
-            profile = public_profile_for_task(
-                manifest, run.task_kind, discovery=load_discovery_intent(session, run)
+            profile = select_scientific_profile(
+                manifest,
+                run.task_kind,
+                run.mode,
+                discovery=load_discovery_intent(session, run),
+                scientific_intent=intent,
             )
         except ValueError:
-            raise MetaResearchError("meta_research_activation_required") from None
+            raise MetaResearchError(
+                "meta_research_scientific_protocol_unavailable"
+                if intent is not None
+                else "meta_research_activation_required"
+            ) from None
         access = session.get(ResearchRunAccess, run.id)
         if (
             access is None
@@ -421,6 +438,54 @@ class PublicResearchService:
             run_id=run.id,
         )
         return run
+
+    def protocols(self, request):
+        """Approved public scientific variants; discovery creates no authority."""
+        from polymath.meta_research import _activation
+
+        empty = PublicResearchProtocols(activation_sha256=None, capabilities=())
+        access = self.access(request)
+        if not access["available"] or access["audience"] != "public_sessions":
+            return empty.model_dump(mode="json")
+        with Session(self.engine) as session:
+            owner = _authenticated(session, request)
+            row = session.scalar(
+                select(MetaResearchManifestRecord).where(
+                    MetaResearchManifestRecord.manifest_sha256
+                    == access["expected_activation_sha256"]
+                )
+            )
+            if row is None:
+                return empty.model_dump(mode="json")
+            approval = session.scalar(
+                select(MetaResearchApproval).where(MetaResearchApproval.manifest_id == row.id)
+            )
+            if approval is None:
+                return empty.model_dump(mode="json")
+            approval, _, manifest, proposal = _activation(session, approval.id)
+            if not isinstance(manifest, PublicResearchManifest):
+                return empty.model_dump(mode="json")
+            account = session.get(BudgetAccount, manifest.account_id, populate_existing=True)
+            try:
+                self.require_current(
+                    session,
+                    approval,
+                    manifest,
+                    proposal,
+                    account,
+                    operator=self._sponsor(session, approval, lock=False),
+                    requester_hash=owner.token_hash,
+                    reserve=False,
+                    allow_prepared=True,
+                )
+            except MetaResearchError:
+                return empty.model_dump(mode="json")
+            return PublicResearchProtocols(
+                activation_sha256=row.manifest_sha256,
+                capabilities=SCIENTIFIC_CAPABILITIES
+                if manifest.scientific_context_profiles is not None
+                else (),
+            ).model_dump(mode="json")
 
     def access(self, request):
         from polymath.meta_research import _activation

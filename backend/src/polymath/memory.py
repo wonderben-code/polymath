@@ -30,6 +30,7 @@ from polymath.memory_models import ResearchMemoryRead
 from polymath.models import ResearchRun
 from polymath.research.models import (
     AnswerFinding,
+    AskOverviewBinding,
     BridgeFinding,
     MemoryFinding,
     MemoryFindingReference,
@@ -38,6 +39,8 @@ from polymath.research.models import (
     SourceDocument,
     SourceReference,
 )
+from polymath.scientific_context_contracts import validate_answer_overview, validate_result_overview
+from polymath.sharing_contracts import classified_answer_navigation_summary
 
 MAX_MEMORY_FINDINGS = 10
 MAX_MEMORY_SOURCES = 64
@@ -103,7 +106,10 @@ def _finding(row: EvidenceResult) -> BridgeFinding | AnswerFinding:
             raise ValueError
         raw = row.payload["result"]["finding"]
         kind = BridgeFinding if row.status == "bridge" else AnswerFinding
-        return kind.model_validate_json(json.dumps(raw))
+        finding = kind.model_validate_json(json.dumps(raw))
+        if "overview_binding" in row.payload["result"]:
+            _overview_binding(row, finding)
+        return finding
     except (ValueError, KeyError, TypeError, ValidationError):
         raise MemoryError("memory_finding_unavailable") from None
 
@@ -115,6 +121,8 @@ def _reference(
         title, summary = finding.title, finding.explanation
     else:
         title, summary = finding.question, finding.summary
+        if _overview_binding(row, finding) is not None:
+            summary = classified_answer_navigation_summary(claim.label for claim in finding.claims)
     return MemoryFindingReference(
         result_id=str(row.id),
         run_id=str(row.run_id),
@@ -123,6 +131,23 @@ def _reference(
         summary=summary[:1000],
         outcome=finding.outcome,
     )
+
+
+def _overview_binding(
+    row: EvidenceResult, finding: BridgeFinding | AnswerFinding
+) -> AskOverviewBinding | None:
+    try:
+        result = row.payload["result"]
+        if "overview_binding" not in result:
+            return None
+        validate_result_overview(result)
+        if result["status"] != row.status:
+            raise ValueError
+        binding = AskOverviewBinding.model_validate_json(json.dumps(result["overview_binding"]))
+        validate_answer_overview(finding, binding)
+        return binding
+    except (ValueError, KeyError, TypeError, ValidationError):
+        raise MemoryError("memory_finding_unavailable") from None
 
 
 def _quoted_sources(session: Session, row: EvidenceResult):
@@ -227,6 +252,7 @@ class ResearchMemory:
             except EligibilityError:
                 raise MemoryError("memory_finding_not_found") from None
             finding = _finding(row)
+            overview_binding = _overview_binding(row, finding)
             rows = _quoted_sources(session, row)
             if len(rows) > MAX_MEMORY_SOURCES:
                 raise MemoryError("memory_source_limit")
@@ -271,7 +297,10 @@ class ResearchMemory:
             ):
                 raise MemoryError("memory_read_conflict")
             return MemoryFinding(
-                reference=_reference(row, finding), finding=finding, sources=tuple(sources.values())
+                reference=_reference(row, finding),
+                finding=finding,
+                sources=tuple(sources.values()),
+                **({"overview_binding": overview_binding} if overview_binding is not None else {}),
             )
 
     def read_source(self, result_id: str, retrieval_id: str) -> SourceDocument:

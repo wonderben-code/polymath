@@ -21,7 +21,11 @@ from polymath.discovery_contracts import DiscoveryIntent
 from polymath.meta_probe_contracts import ProbeId, ProviderAccountAttestation
 from polymath.meta_readiness_contracts import ReadinessPolicy, _utc
 from polymath.meta_research_api import HEADERS, _response
-from polymath.meta_research_contracts import NativeResearchPolicy, NativeResearchReview
+from polymath.meta_research_contracts import (
+    NativeResearchPolicy,
+    NativeResearchReview,
+    ScientificContextIntent,
+)
 from polymath.meta_research_errors import META_RESEARCH_ERROR_STATUSES, MetaResearchError
 from polymath.operator_auth import OperatorPolicy
 from polymath.public_research_contracts import (
@@ -111,6 +115,7 @@ class PreviewPublicResearch(BaseModel):
     public_limits: PublicLimits
     valid_until: datetime
     discovery: DiscoveryIntent | None = None
+    scientific_context: ScientificContextIntent | None = None
 
     @field_validator("valid_until", mode="before")
     @classmethod
@@ -174,6 +179,10 @@ def create_public_research_router(
     def access(request: Request):
         return _response(parent().public_service.access(request))
 
+    @router.get("/api/v1/research/protocols")
+    def protocols(request: Request):
+        return _response(parent().public_service.protocols(request))
+
     @router.get(PREFIX + "/capabilities")
     def capabilities():
         role = bool(
@@ -208,6 +217,11 @@ def create_public_research_router(
                 body.public_limits,
                 body.valid_until,
                 **({"discovery": body.discovery} if body.discovery is not None else {}),
+                **(
+                    {"scientific_context": body.scientific_context}
+                    if body.scientific_context is not None
+                    else {}
+                ),
             )
         )
 

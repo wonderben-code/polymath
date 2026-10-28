@@ -1,8 +1,10 @@
+import { parseOverviewIntent, parseResultOverviewMetadata } from '../scientificContext/overviewBinding'
+import type { AskOverviewIntent } from '../scientificContext/types'
 import { parseDiscoveryIntent } from './discoveryIntent'
 import type { DiscoveryIntent } from '../discovery/types'
 import { parseBibliography } from './bibliography'
 import { parseSourceCoverage, validateSourceCoverageContext } from './sourceCoverage'
-import { nativeSubmissionHeaders, nativeAdmissionFailure, parseNativeRunControl, validNativeSubmission } from './nativeAdmission'
+import { scientificAdmissionError, nativeSubmissionHeaders, nativeAdmissionFailure, parseNativeRunControl, validNativeSubmission } from './nativeAdmission'
 import type { NativeSubmissionContext } from './nativeAdmission'
 import type {
   AnswerClaim,
@@ -20,7 +22,7 @@ import type {
 } from './types'
 
 export type ResearchApiErrorCode = 'session_expired' | 'session_changed' | 'run_unavailable' |
-  'unavailable' | 'queue_limit' | 'invalid_request' | 'invalid_response' | 'connection_failed' | 'aborted' | 'native_authority_changed' | 'resource_limited'
+  'unavailable' | 'queue_limit' | 'invalid_request' | 'invalid_response' | 'connection_failed' | 'aborted' | 'native_authority_changed' | 'resource_limited' | 'scientific_variant_unavailable' | 'scientific_context_unavailable' | 'scientific_context_too_large'
 
 export class ResearchApiError extends Error {
   constructor(public readonly code: ResearchApiErrorCode, public readonly retryAfterSeconds: number | null = null) {
@@ -91,6 +93,8 @@ export function parseRun(value: unknown): OwnedRun {
   const run = object(value)
   const native = parseNativeRunControl(run.native_research, invalid)
   const discovery = parseDiscoveryIntent(run.discovery_intent, invalid)
+  let overview: AskOverviewIntent | undefined; try { overview = parseOverviewIntent(run.ask_overview_intent, 'polymath-ask-claim-overview-v1') } catch { return invalid() }
+  if (overview && (run.mode !== 'ask' || run.task_kind !== 'research')) return invalid()
   if (discovery && (run.mode !== 'surprise' || run.task_kind !== 'research')) return invalid()
   if (!['explore', 'ask', 'surprise'].includes(text(run.mode, 20))) return invalid()
   if (!/^[a-z_]{1,40}$/.test(text(run.status, 40))) return invalid()
@@ -102,6 +106,7 @@ export function parseRun(value: unknown): OwnedRun {
     ...(run.task_kind === undefined ? {} : { task_kind: requiredText(run.task_kind, 80) }),
     ...(native ? { native_research: native } : {}),
     ...(discovery ? { discovery_intent: discovery } : {}),
+    ...(overview ? { ask_overview_intent: overview } : {}),
   }
 }
 
@@ -203,8 +208,9 @@ function finding(value: unknown): ResearchResult['finding'] {
   } satisfies BridgeFinding
 }
 
-export function parseResult(value: unknown): ResearchResult {
+export function parseResult(value: unknown, expectedOverview?: boolean): ResearchResult {
   const result = object(value)
+  let overview: ResearchResult['overview_binding']; try { overview = parseResultOverviewMetadata(value, expectedOverview) } catch { return invalid() }
   if (!['bridge', 'answer', 'insufficient_evidence', 'limit_reached', 'failed'].includes(text(result.status, 40))) return invalid()
   if (result.validation_scope !== 'source_identity_and_quote_integrity') return invalid()
   const mode = result.mode === undefined ? 'explore' : text(result.mode, 20)
@@ -212,6 +218,7 @@ export function parseResult(value: unknown): ResearchResult {
   const usage = object(result.usage)
   const parsed: ResearchResult = {
     status: result.status as ResearchResult['status'], mode, finding: finding(result.finding),
+    ...(overview ? { overview_binding: overview } : {}),
     field_selections: result.field_selections === undefined ? [] : list(result.field_selections, fieldSelection, 3),
     memory_reads: result.memory_reads === undefined ? [] : list(result.memory_reads, memoryRead, 10),
     sources: list(result.sources, source), quotes: list(result.quotes, quote, 64), events: list(result.events, parseActivity, 2000),
@@ -295,9 +302,10 @@ async function request(path: string, signal?: AbortSignal, write?: { csrf: strin
       headers: { Accept: 'application/json', ...(write ? { 'X-CSRF-Token': write.csrf, 'Content-Type': 'application/json', ...(write.native ? nativeSubmissionHeaders(write.native) : {}) } : {}) },
       ...(write?.body === undefined ? {} : { body: JSON.stringify(write.body) }),
     })
-    if (!response.ok && [401, 403, 409, 503].includes(response.status)) {
+    if (!response.ok && [401, 403, 409, 422, 503].includes(response.status)) {
       let detail: unknown
       try { detail = object(await json(response.clone())).detail } catch { /* Keep untrusted errors out of the UI. */ }
+      const scientific = scientificAdmissionError(response.status, detail); if (scientific) throw new ResearchApiError(scientific)
       if (nativeAdmissionFailure(response.status, detail)) throw new ResearchApiError('native_authority_changed')
     }
     if (response.status === 401) throw new ResearchApiError('session_expired')
@@ -341,9 +349,9 @@ export async function getResearchRun(runId: string, signal?: AbortSignal): Promi
   return run.id === runId ? run : invalid()
 }
 
-export async function getResearchResult(runId: string, signal?: AbortSignal): Promise<ResearchResult | null> {
+export async function getResearchResult(runId: string, signal?: AbortSignal, expectedOverview?: boolean): Promise<ResearchResult | null> {
   const payload = await request(`/api/v1/runs/${id(runId)}/result`, signal, undefined, true)
-  return payload === null ? null : parseResult(payload)
+  return payload === null ? null : parseResult(payload, expectedOverview)
 }
 
 export async function cancelResearchRun(runId: string, csrf: string, signal?: AbortSignal): Promise<OwnedRun> {
@@ -351,13 +359,16 @@ export async function cancelResearchRun(runId: string, csrf: string, signal?: Ab
   return run.id === runId ? run : invalid()
 }
 
-export async function createResearchRun(mode: OwnedRun['mode'], goal: string, csrf: string, signal?: AbortSignal, parentResultIds: readonly string[] = [], native?: NativeSubmissionContext, discovery?: DiscoveryIntent): Promise<OwnedRun> {
+export async function createResearchRun(mode: OwnedRun['mode'], goal: string, csrf: string, signal?: AbortSignal, parentResultIds: readonly string[] = [], native?: NativeSubmissionContext, discovery?: DiscoveryIntent, overview?: AskOverviewIntent): Promise<OwnedRun> {
   if (!['explore', 'ask', 'surprise'].includes(mode) || typeof goal !== 'string' || goal.length > 4000 || (!goal.trim() && mode !== 'surprise')) throw new ResearchApiError('invalid_request')
   if (parentResultIds.length && (mode !== 'explore' || parentResultIds.length < 2 || parentResultIds.length > 4 || parentResultIds.some((value) => typeof value !== 'string' || !UUID.test(value)) || new Set(parentResultIds.map((value) => value.toLowerCase())).size !== parentResultIds.length)) throw new ResearchApiError('invalid_request')
   const intent = parseDiscoveryIntent(discovery, () => { throw new ResearchApiError('invalid_request') })
   if (intent && (mode !== 'surprise' || parentResultIds.length)) throw new ResearchApiError('invalid_request')
-  const created = parseRun(await request('/api/v1/runs', signal, { csrf, native, body: { mode, goal, ...(parentResultIds.length ? { parent_result_ids: parentResultIds } : {}), ...(native ? { expected_activation_sha256: native.expectedActivationSha256 } : {}), ...(intent ? { discovery_intent: intent } : {}) } }))
+  let overviewIntent: AskOverviewIntent | undefined; try { overviewIntent = parseOverviewIntent(overview, 'polymath-ask-claim-overview-v1') } catch { throw new ResearchApiError('invalid_request') }
+  if (overviewIntent && mode !== 'ask') throw new ResearchApiError('invalid_request')
+  const created = parseRun(await request('/api/v1/runs', signal, { csrf, native, body: { mode, goal, ...(parentResultIds.length ? { parent_result_ids: parentResultIds } : {}), ...(native ? { expected_activation_sha256: native.expectedActivationSha256 } : {}), ...(intent ? { discovery_intent: intent } : {}), ...(overviewIntent ? { ask_overview_intent: overviewIntent } : {}) } }))
   if (intent ? !created.discovery_intent || created.discovery_intent.max_stages !== intent.max_stages || created.discovery_intent.max_depth !== intent.max_depth : created.discovery_intent !== undefined) return invalid()
+  if (!!created.ask_overview_intent !== !!overviewIntent) return invalid()
   return created
 }
 

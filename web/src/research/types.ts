@@ -2,6 +2,7 @@ import type { SourceBibliography } from './bibliography'
 import type { SourceCoverage } from './sourceCoverage'
 import type { FindingVersionNoticeProps } from '../assessments/FindingVersionNotice'
 import type { NativeRunControl } from './nativeAdmission'
+import type { AskOverviewBinding, AskOverviewIntent } from '../scientificContext/types'
 import type { DiscoveryIntent } from '../discovery/types'
 
 export interface ResearchRunSummary {
@@ -12,6 +13,7 @@ export interface ResearchRunSummary {
   task_kind?: string
   native_research?: NativeRunControl
   discovery_intent?: DiscoveryIntent
+  ask_overview_intent?: AskOverviewIntent
 }
 
 export interface ResearchActivityEvent {
@@ -103,6 +105,7 @@ export interface MemoryReadReference {
 }
 
 export interface ResearchResult {
+  overview_binding?: AskOverviewBinding
   status: 'bridge' | 'answer' | 'insufficient_evidence' | 'limit_reached' | 'failed'
   // Older persisted Explore findings predate these fields.
   mode?: ResearchRunSummary['mode']
