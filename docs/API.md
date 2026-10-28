@@ -227,6 +227,10 @@ idempotency key: inspect owned history rather than blindly resending. Sharing
 has its own exact request key; reuse the same key/body to resolve a known pending
 share, and never reinterpret a failed response as a new public grant.
 
+Budget readiness preparation/inspection/disable is documented in
+[META_READINESS.md](META_READINESS.md). It requires a separately allowed operator
+with both CSRF domains; proposals are not native proof or spending grants.
+
 Operator, scheduled collection, reassessment and exact Zenodo approval/delivery
 routes use separate contracts in [DEVELOPMENT.md](DEVELOPMENT.md),
 [REASSESSMENT.md](REASSESSMENT.md) and [PUBLIC_SHARING.md](PUBLIC_SHARING.md).

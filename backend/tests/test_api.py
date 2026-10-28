@@ -35,12 +35,44 @@ def test_credentials_alone_never_enable_research_submission() -> None:
     with TestClient(application) as client:
         capabilities = client.get("/api/v1/capabilities").json()
         assert client.get("/api/v1/assessments/capabilities").json()["execution_available"] is False
+        budget = client.get("/api/v1/budget/capabilities").json()
+        assert budget["preparation_available"] is False
+        assert budget["execution_available"] is False
         assert (
             client.get("/api/v1/knowledge/watches/capabilities").json()["execution_available"]
             is False
         )
     assert capabilities["meta_configured"] is True
     assert capabilities["research_available"] is False
+
+
+def test_budget_preparation_and_model_key_never_construct_or_enable_a_model(monkeypatch):
+    from polymath.research.meta import MetaModel
+
+    def forbidden(*_args, **_kwargs):
+        pytest.fail("Preparing readiness must not construct a native model client")
+
+    monkeypatch.setattr(MetaModel, "__init__", forbidden)
+    application = create_app(
+        Settings(
+            model_api_key="synthetic-unverified-key",
+            meta_model="synthetic-unverified-model",
+            operator_bootstrap_token="Synthetic_Operator_0123456789abcdef-ABCDEF",
+            budget_readiness_enabled=True,
+            budget_admin_actor_ids=("publisher",),
+            _env_file=None,
+        )
+    )
+    with TestClient(application) as client:
+        budget = client.get("/api/v1/budget/capabilities").json()
+        assert budget["preparation_available"] is True
+        assert budget["native_status"] == "not_run"
+        assert budget["execution_available"] is False
+        assert client.get("/api/v1/capabilities").json()["research_available"] is False
+        assert (
+            client.get("/api/v1/publication-jobs/capabilities").json()["execution_available"]
+            is False
+        )
 
 
 def test_free_collection_setting_enables_no_model_or_publication_authority() -> None:
@@ -178,7 +210,7 @@ def test_built_frontend_serves_assets_and_never_masks_unknown_api(tmp_path: Path
         assert client.get("/api/v1/health").json()["status"] == "ok"
 
 
-@pytest.mark.parametrize("path", ["/library", "/shared", "/shared/" + "a" * 43])
+@pytest.mark.parametrize("path", ["/library", "/shared", "/shared/" + "a" * 43, "/operator/budget"])
 def test_public_html_has_privacy_headers_without_creating_owner_session(tmp_path, path) -> None:
     (tmp_path / "index.html").write_text("<html>Public finding reader</html>")
     application = create_app(Settings(STATIC_DIR=tmp_path, _env_file=None))

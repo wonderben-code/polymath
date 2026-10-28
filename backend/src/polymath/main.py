@@ -16,10 +16,12 @@ from sqlalchemy.exc import SQLAlchemyError
 from polymath import __version__
 from polymath.artifact_api import create_artifact_router
 from polymath.assessment_api import create_assessment_router
+from polymath.budget_admin_api import create_budget_admin_router
 from polymath.config import Settings, get_settings
 from polymath.database import build_engine
 from polymath.ingestion_api import create_ingestion_router
 from polymath.knowledge import create_knowledge_router
+from polymath.meta_readiness_contracts import ReadinessPolicy
 from polymath.operator_auth import OperatorPolicy, create_operator_router
 from polymath.publication import PublicationStore
 from polymath.publication_api import create_publication_router
@@ -49,6 +51,7 @@ def create_app(
     publication_availability: Callable[[], bool] | None = None,
     ingestion_availability: Callable[[], bool] | None = None,
     sharing_availability: Callable[[], bool] | None = None,
+    readiness_policy: ReadinessPolicy | None = None,
 ) -> FastAPI:
     settings = settings or get_settings()
     configured_operator, configured_publication = configured_publication_policies(settings)
@@ -56,6 +59,12 @@ def create_app(
         operator_policy = configured_operator
     if publication_policy is None:
         publication_policy = configured_publication
+    if readiness_policy is None:
+        readiness_policy = ReadinessPolicy(
+            preparation_enabled=settings.budget_readiness_enabled,
+            allowed_actor_ids=settings.budget_admin_actor_ids,
+            max_hard_cap_microdollars=settings.budget_max_hard_cap_microdollars,
+        )
     if publication_availability is None:
 
         def publication_availability() -> bool:
@@ -85,6 +94,13 @@ def create_app(
         create_run_router(application.state.engine, availability=research_availability)
     )
     application.include_router(create_knowledge_router(application.state.engine))
+    application.include_router(
+        create_budget_admin_router(
+            application.state.engine,
+            readiness_policy=readiness_policy,
+            operator_policy=operator_policy,
+        )
+    )
     application.include_router(
         create_sharing_router(application.state.engine, availability=sharing_availability)
     )
@@ -131,7 +147,8 @@ def create_app(
             request.url.path.startswith("/api/v1/public/")
             or request.url.path.startswith("/api/v1/shares")
             or request.url.path.startswith("/shared/")
-            or request.url.path in ("/library", "/library/", "/shared")
+            or request.url.path.startswith("/api/v1/budget")
+            or request.url.path in ("/library", "/library/", "/shared", "/operator/budget")
         ):
             response.headers["Cache-Control"] = "no-store"
             response.headers["X-Content-Type-Options"] = "nosniff"

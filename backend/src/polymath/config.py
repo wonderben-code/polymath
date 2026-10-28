@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     publication_execution_enabled: bool = False
     literature_ingestion_enabled: bool = False
     public_sharing_enabled: bool = False
+    budget_readiness_enabled: bool = False
+    budget_admin_actor_ids: tuple[str, ...] = ()
+    budget_max_hard_cap_microdollars: int = Field(default=150_000_000, ge=1, le=150_000_000)
     zenodo_sandbox_token: SecretStr | None = None
     zenodo_production_token: SecretStr | None = None
     publication_publisher_id: str | None = Field(
@@ -89,6 +92,28 @@ class Settings(BaseSettings):
             if not value or any(ord(character) < 32 for character in value):
                 raise ValueError("Publisher identity must be valid public text")
         return value
+
+    @field_validator("budget_admin_actor_ids")
+    @classmethod
+    def require_budget_actor_ids(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        if (
+            len(value) > 10
+            or len(set(value)) != len(value)
+            or any(
+                re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}", item) is None for item in value
+            )
+        ):
+            raise ValueError("Budget administration requires distinct explicit actor identifiers")
+        return value
+
+    @model_validator(mode="after")
+    def require_budget_readiness_authority(self) -> "Settings":
+        if self.budget_readiness_enabled and (
+            not self.operator_bootstrap_token
+            or self.operator_actor_id not in self.budget_admin_actor_ids
+        ):
+            raise ValueError("Budget readiness requires an explicitly authorized operator")
+        return self
 
     @model_validator(mode="after")
     def require_explicit_approval_configuration(self) -> "Settings":

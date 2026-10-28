@@ -258,7 +258,7 @@ export function App() {
             <div className="principle"><span className="principle-number">03</span><h3>Make it inspectable</h3><p>Trace findings to source passages, with assumptions and uncertainty in view.</p></div>
           </section>
         </main>
-        <footer className="site-footer"><span>Polymath · Open questions, shared knowledge.</span><span>Designed for Meta intelligence <span className="footer-asterisk">✳︎</span></span></footer>
+        <footer className="site-footer"><span>Polymath · Open questions, shared knowledge.</span><a href="/operator/budget">Operator budget desk</a><span>Designed for Meta intelligence <span className="footer-asterisk">✳︎</span></span></footer>
       </div>
     </>
   )

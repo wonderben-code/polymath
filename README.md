@@ -4,7 +4,7 @@
 
 > Science's hardest open problems increasingly sit *between* disciplines. A result in condensed-matter physics may already answer a question in biology, and neither community knows. The literature is too large for any human to span, but not for an intelligent agent.
 
-Built by Ekram Alam for the **Meta Global AI Developer Hackathon 2026** (Indie Developer track), powered by Meta's Muse Spark.
+Built by Ekram Alam for the **Meta Global AI Developer Hackathon 2026** (Indie Developer track). Meta Muse Spark is the target research intelligence; another verified capable Meta frontier model is allowed. Native access and billing remain unverified, and paid execution is disabled.
 
 Created 27 October 2026. Every push to `main` is Bitcoin-timestamped through OpenTimestamps (`.github/workflows/bitcoin-timestamp.yml`, proofs in `timestamps/`).
 
@@ -30,6 +30,7 @@ Created 27 October 2026. Every push to `main` is Bitcoin-timestamped through Ope
 | [docs/FULL_TEXT.md](docs/FULL_TEXT.md) | Model-selected arXiv HTML indexes, exact saved excerpts, citation scope and recovery |
 | [docs/PUBLIC_SHARING.md](docs/PUBLIC_SHARING.md) | Explicit public snapshots, short cited excerpts, expiry, revocation and public-library API |
 | [docs/API.md](docs/API.md) | Versioned HTTP contract, ownership/CSRF, event replay and standalone external client |
+| [docs/META_READINESS.md](docs/META_READINESS.md) | Operator-attested model/billing proposals, conservative cost quotes, budget inspection and safe disable |
 | [docs/HACKATHON.md](docs/HACKATHON.md) | Dates, judging, setup checklist, IP notes |
 | [CLAUDE.md](CLAUDE.md) | Instructions for any coding agent picking this up |
 
@@ -42,7 +43,8 @@ The implementation baseline is recorded in `docs/ARCHITECTURE.md`. The target is
 - [x] A3: application foundation, PostgreSQL migrations, health checks, and automated checks
 - [x] A4: bounded adaptive research-controller prototype and Meta adapter, verified with fixtures
 - [ ] A1–A2, A5: verified Meta capabilities and first real-source investigation
-- [ ] B–C: durable research, evidence, spending controls, and Explore
+- [x] B3.1: disabled Meta readiness proposals, authenticated budget inspection and safe disable
+- [ ] B–C live gates: native model/billing verification, execution activation and scientific Explore evaluation
 - [x] D3 local contract/client: documented v1 API and standalone HTTP client, verified with real loopback worker journeys
 - [ ] D live gates: public URL, hosted access/operations and deployed external-client verification
 - [x] E1–E3: Ask and Surprise Me implementation, verified through synthetic worker/browser journeys

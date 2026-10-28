@@ -82,3 +82,38 @@ def test_publication_approval_needs_all_explicit_server_settings() -> None:
     assert settings.publication_approval_enabled
     assert settings.publication_destinations == ("sandbox",)
     assert not settings.meta_configured
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"budget_readiness_enabled": True},
+        {"budget_readiness_enabled": True, "budget_admin_actor_ids": ("publisher",)},
+        {
+            "budget_readiness_enabled": True,
+            "operator_bootstrap_token": "Synthetic_Operator_0123456789abcdef-ABCDEF",
+            "budget_admin_actor_ids": ("another-actor",),
+        },
+        {"budget_admin_actor_ids": ("publisher", "publisher")},
+        {"budget_admin_actor_ids": ("invalid actor",)},
+        {"budget_max_hard_cap_microdollars": 150_000_001},
+        {"budget_max_hard_cap_microdollars": 0},
+    ],
+)
+def test_budget_readiness_requires_explicit_bounded_role_configuration(changes):
+    with pytest.raises(ValidationError):
+        Settings(**changes, _env_file=None)
+
+
+def test_budget_readiness_configuration_grants_no_publication_or_model_authority():
+    settings = Settings(
+        operator_bootstrap_token="Synthetic_Operator_0123456789abcdef-ABCDEF",
+        budget_admin_actor_ids=("publisher",),
+        budget_readiness_enabled=True,
+        _env_file=None,
+    )
+    assert settings.budget_readiness_enabled
+    assert settings.budget_max_hard_cap_microdollars == 150_000_000
+    assert not settings.publication_approval_enabled
+    assert not settings.publication_execution_enabled
+    assert not settings.meta_configured
