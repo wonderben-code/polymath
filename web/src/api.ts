@@ -4,6 +4,7 @@ export interface SystemStatus {
   migrations: boolean
   metaConfigured: boolean | null
   researchAvailable: boolean
+  nativeResearchRequired: boolean
   reason: string
 }
 
@@ -32,6 +33,7 @@ export async function loadSystemStatus(signal: AbortSignal): Promise<SystemStatu
     health.service !== 'polymath' ||
     !isRecord(readiness.checks) ||
     typeof capabilities.research_available !== 'boolean' ||
+    capabilities.native_research_required !== undefined && typeof capabilities.native_research_required !== 'boolean' ||
     typeof capabilities.meta_configured !== 'boolean'
   ) {
     throw new Error('Invalid service response')
@@ -42,6 +44,7 @@ export async function loadSystemStatus(signal: AbortSignal): Promise<SystemStatu
     migrations: readiness.checks.migrations === 'ok',
     metaConfigured: capabilities.meta_configured,
     researchAvailable: capabilities.research_available,
+    nativeResearchRequired: capabilities.native_research_required === true,
     reason: typeof capabilities.reason === 'string' ? capabilities.reason : 'unavailable',
   }
 }

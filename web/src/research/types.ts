@@ -1,6 +1,7 @@
 import type { SourceBibliography } from './bibliography'
 import type { SourceCoverage } from './sourceCoverage'
 import type { FindingVersionNoticeProps } from '../assessments/FindingVersionNotice'
+import type { NativeRunControl } from './nativeAdmission'
 
 export interface ResearchRunSummary {
   id: string
@@ -8,6 +9,7 @@ export interface ResearchRunSummary {
   goal: string
   status: string
   task_kind?: string
+  native_research?: NativeRunControl
 }
 
 export interface ResearchActivityEvent {

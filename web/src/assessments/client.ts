@@ -1,4 +1,6 @@
 import { parseBibliography } from '../research/bibliography'
+import { nativeAdmissionFailure, parseNativeRunControl, validNativeSubmission } from '../research/nativeAdmission'
+import type { NativeSubmissionContext } from '../research/nativeAdmission'
 import { parseSourceCoverage, validateSourceCoverageContext } from '../research/sourceCoverage'
 import { parseResult } from '../research/client'
 import type { AnswerFinding, BridgeFinding, ClaimQuote, FieldSelection, MemoryReadReference, ResearchActivityEvent, ResearchResult, VerifiedQuote } from '../research/types'
@@ -167,11 +169,12 @@ export function parseFindingHead(value: unknown): FindingHead {
 
 export function parseAssessmentJob(value: unknown): AssessmentJob {
   const item = object(value)
+  const native = parseNativeRunControl(item.native_research, invalid)
   if (item.task_kind !== 'reassess_finding' || item.result_id !== null || item.artifact_id !== null) return invalid()
   const status = member(item.status, JOB_STATUSES), assessment = nullableId(item.assessment_id)
   if (assessment !== null && status !== 'succeeded' && status !== 'failed') return invalid()
   return { id: id(item.id), root_result_id: id(item.root_result_id), source_result_id: id(item.source_result_id), source_sha256: hash(item.source_sha256), watch_id: id(item.watch_id), new_source_version_ids: versions(item.new_source_version_ids), expected_head_revision: integer(item.expected_head_revision),
-    mode: member(item.mode, ['explore', 'ask', 'surprise']), task_kind: 'reassess_finding', goal: text(item.goal, 4000, false), status, created_at: date(item.created_at), updated_at: date(item.updated_at), result_id: null, artifact_id: null, assessment_id: assessment, error_code: code(item.error_code), external_outcome_unknown: bool(item.external_outcome_unknown) }
+    mode: member(item.mode, ['explore', 'ask', 'surprise']), task_kind: 'reassess_finding', goal: text(item.goal, 4000, false), status, created_at: date(item.created_at), updated_at: date(item.updated_at), result_id: null, artifact_id: null, assessment_id: assessment, error_code: code(item.error_code), external_outcome_unknown: bool(item.external_outcome_unknown), ...(native ? { native_research: native } : {}) }
 }
 
 async function json(response: Response): Promise<unknown> {
@@ -188,8 +191,9 @@ async function json(response: Response): Promise<unknown> {
   } catch { return invalid() } finally { reader.releaseLock() }
 }
 
-async function request<T>(path: string, parse: (value: unknown) => T, signal?: AbortSignal, write?: { csrf: string; body?: unknown }): Promise<T> {
+async function request<T>(path: string, parse: (value: unknown) => T, signal?: AbortSignal, write?: { csrf: string; body?: unknown; native?: NativeSubmissionContext }): Promise<T> {
   if (write && !HASH.test(write.csrf)) throw new AssessmentError('session_expired')
+  if (write?.native && !validNativeSubmission(write.native)) throw new AssessmentError('native_authority_changed')
   if (signal?.aborted) throw new AssessmentError('aborted')
   const controller = new AbortController(), abort = () => controller.abort()
   signal?.addEventListener('abort', abort, { once: true })
@@ -198,7 +202,12 @@ async function request<T>(path: string, parse: (value: unknown) => T, signal?: A
   try {
     sent = true
     const response = await fetch(path, { method: write ? 'POST' : 'GET', credentials: 'same-origin', cache: 'no-store', redirect: 'error', signal: controller.signal,
-      headers: { Accept: 'application/json', ...(write ? { 'X-CSRF-Token': write.csrf, ...(write.body === undefined ? {} : { 'Content-Type': 'application/json' }) } : {}) }, ...(write?.body === undefined ? {} : { body: JSON.stringify(write.body) }) })
+      headers: { Accept: 'application/json', ...(write ? { 'X-CSRF-Token': write.csrf, ...(write.body === undefined ? {} : { 'Content-Type': 'application/json' }), ...(write.native ? { 'X-Operator-CSRF-Token': write.native.operatorCsrfToken } : {}) } : {}) }, ...(write?.body === undefined ? {} : { body: JSON.stringify(write.body) }) })
+    if (!response.ok && [401, 403, 409, 503].includes(response.status)) {
+      let detail: unknown
+      try { detail = object(await json(response.clone())).detail } catch { /* Keep untrusted errors out of the UI. */ }
+      if (nativeAdmissionFailure(response.status, detail)) throw new AssessmentError('native_authority_changed')
+    }
     if (response.status === 401 || response.status === 403) throw new AssessmentError('session_expired')
     if (!response.ok) {
       let detail: string | undefined
@@ -226,10 +235,10 @@ export function listAssessmentJobs(sourceResultId: string, signal?: AbortSignal,
   return request(`${BASE}/jobs?${query}`, (value) => { const item = object(value), jobs = list(item.jobs, parseAssessmentJob), next = nullableId(item.next_cursor); distinct(jobs.map((job) => job.id)); if (jobs.some((job) => job.source_result_id !== sourceResultId || job.id === before) || next !== null && (next !== jobs.at(-1)?.id || next === before)) return invalid(); return { jobs, next_cursor: next } }, signal)
 }
 
-export async function createAssessmentJob(body: CreateAssessmentJob, csrf: string, signal?: AbortSignal): Promise<AssessmentJob> {
+export async function createAssessmentJob(body: CreateAssessmentJob, csrf: string, signal?: AbortSignal, native?: NativeSubmissionContext): Promise<AssessmentJob> {
   let pinned: CreateAssessmentJob
   try { const item = object(body); pinned = { source_result_id: id(item.source_result_id), watch_id: id(item.watch_id), new_source_version_ids: versions(item.new_source_version_ids), expected_head_revision: integer(item.expected_head_revision) } } catch { throw new AssessmentError('invalid_request') }
-  return request(`${BASE}/jobs`, (value) => { const job = parseAssessmentJob(value); return job.source_result_id === pinned.source_result_id && job.watch_id === pinned.watch_id && job.expected_head_revision === pinned.expected_head_revision && JSON.stringify(job.new_source_version_ids) === JSON.stringify(pinned.new_source_version_ids) ? job : invalid() }, signal, { csrf, body: pinned })
+  return request(`${BASE}/jobs`, (value) => { const job = parseAssessmentJob(value); return job.source_result_id === pinned.source_result_id && job.watch_id === pinned.watch_id && job.expected_head_revision === pinned.expected_head_revision && JSON.stringify(job.new_source_version_ids) === JSON.stringify(pinned.new_source_version_ids) ? job : invalid() }, signal, { csrf, native, body: { ...pinned, ...(native ? { expected_activation_sha256: native.expectedActivationSha256 } : {}) } })
 }
 
 export function cancelAssessmentJob(runId: string, csrf: string, signal?: AbortSignal): Promise<AssessmentCancellation> {

@@ -17,7 +17,7 @@ import time
 import uuid
 from collections.abc import Callable
 from datetime import datetime, timedelta
-from typing import Annotated, Literal
+from typing import TYPE_CHECKING, Annotated, Literal
 from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response
@@ -32,7 +32,11 @@ from sqlalchemy.orm import Session
 from polymath.access_models import BrowserSession, ResearchRunAccess
 from polymath.jobs import JobNotFound, JobRepository, _event
 from polymath.lineage import LineageError, bind_parents, validate_parent_ids
+from polymath.meta_research_errors import META_RESEARCH_ERROR_STATUSES, MetaResearchError
 from polymath.models import ResearchEvent, ResearchRun
+
+if TYPE_CHECKING:
+    from polymath.meta_research import MetaResearchStore
 
 COOKIE_NAME = "polymath_session"
 SESSION_SECONDS = 7 * 24 * 60 * 60
@@ -58,6 +62,13 @@ class _PrivateRoute(APIRoute):
             except RequestValidationError:
                 # Do not echo private research input in validation error bodies.
                 raise _PrivateHTTPException(422, "invalid_research_request") from None
+            except MetaResearchError as error:
+                code = (
+                    error.code
+                    if error.code in META_RESEARCH_ERROR_STATUSES
+                    else ("meta_research_storage_unavailable")
+                )
+                raise _PrivateHTTPException(META_RESEARCH_ERROR_STATUSES[code], code) from None
 
         return handle
 
@@ -68,6 +79,7 @@ class CreateRun(BaseModel):
     mode: Literal["explore", "ask", "surprise"]
     goal: str = Field(max_length=4000)
     parent_result_ids: list[str] = Field(default_factory=list, max_length=4)
+    expected_activation_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
 
     @model_validator(mode="after")
     def validate_goal(self) -> CreateRun:
@@ -156,7 +168,7 @@ def _owned(session: Session, owner: BrowserSession, run_id: uuid.UUID) -> Resear
     return run
 
 
-def _summary(run: ResearchRun) -> dict:
+def _summary(run: ResearchRun, *, session: Session | None = None) -> dict:
     result_id = None
     artifact_id = None
     error_code = None
@@ -172,7 +184,7 @@ def _summary(run: ResearchRun) -> dict:
         code = run.outcome.get("error_code")
         if isinstance(code, str) and re.fullmatch(r"[a-z_]{1,100}", code):
             error_code = code
-    return {
+    result = {
         "id": str(run.id),
         "mode": run.mode,
         "task_kind": run.task_kind,
@@ -185,6 +197,27 @@ def _summary(run: ResearchRun) -> dict:
         "error_code": error_code,
         "external_outcome_unknown": run.external_request_in_flight,
     }
+    if session is not None:
+        from polymath.meta_research import native_run_controls, native_run_outcome_unknown
+
+        controls = native_run_controls(session, run)
+        if controls is not None:
+            result["native_research"] = controls
+            result["external_outcome_unknown"] = native_run_outcome_unknown(session, run)
+    return result
+
+
+class ResumeNativeRun(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, hide_input_in_errors=True)
+
+    expected_lease_token: str = Field(pattern=r"^(?:0|[1-9][0-9]{0,18})$")
+    expected_activation_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @model_validator(mode="after")
+    def bounded_lease(self):
+        if int(self.expected_lease_token) > 2**63 - 1:
+            raise ValueError("Invalid lease token")
+        return self
 
 
 def create_run_router(
@@ -193,6 +226,7 @@ def create_run_router(
     *,
     poll_seconds: float = 0.5,
     heartbeat_seconds: float = 15.0,
+    native_store: MetaResearchStore | None = None,
 ) -> APIRouter:
     """Mount under the existing app; only explicit policy can accept new jobs.
 
@@ -253,6 +287,13 @@ def create_run_router(
                 owner = _authenticated(session, request)
                 if not available():
                     raise _PrivateHTTPException(status_code=503, detail="research_unavailable")
+                admission = None
+                if native_store is not None:
+                    admission = native_store.begin_admission(
+                        session, request, body.expected_activation_sha256
+                    )
+                elif body.expected_activation_sha256 is not None:
+                    raise _PrivateHTTPException(503, "meta_research_unavailable")
                 # One transaction covers quota checks, job creation, ownership, and event.
                 session.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": QUEUE_LOCK_KEY})
                 session.refresh(owner)
@@ -278,13 +319,22 @@ def create_run_router(
                 # Recheck after waiting for the quota lock: availability may have changed.
                 if not available():
                     raise _PrivateHTTPException(status_code=503, detail="research_unavailable")
+                if admission is not None:
+                    native_store.lock_account_in_session(session, admission)
                 run = ResearchRun(mode=body.mode, goal=body.goal)
                 session.add(run)
                 session.flush()
                 session.add(ResearchRunAccess(run_id=run.id, session_hash=owner.token_hash))
                 bind_parents(session, run, owner.token_hash, body.parent_result_ids)
+                if admission is not None:
+                    from polymath.meta_research import native_run_input_sha256
+
+                    session.flush()
+                    native_store.bind_run_in_session(
+                        session, admission, run, native_run_input_sha256(session, run)
+                    )
                 _event(session, run, "created", "queued", "Investigation queued")
-                return _summary(run)
+                return _summary(run, session=session)
         except LineageError:
             raise _PrivateHTTPException(404, "research_basis_not_found") from None
         except SQLAlchemyError:
@@ -317,7 +367,7 @@ def create_run_router(
                     )
                 ).all()
                 return {
-                    "runs": [_summary(run) for run in rows[:limit]],
+                    "runs": [_summary(run, session=session) for run in rows[:limit]],
                     "next_cursor": str(rows[limit - 1].id) if len(rows) > limit else None,
                 }
         except SQLAlchemyError:
@@ -327,7 +377,9 @@ def create_run_router(
     def get_run(run_id: uuid.UUID, request: Request) -> dict:
         try:
             with Session(engine) as session:
-                return _summary(_owned(session, _authenticated(session, request), run_id))
+                return _summary(
+                    _owned(session, _authenticated(session, request), run_id), session=session
+                )
         except SQLAlchemyError:
             raise _storage_error() from None
 
@@ -339,9 +391,39 @@ def create_run_router(
                 _owned(session, _authenticated(session, request), run_id)
             jobs.request_cancel(run_id)
             with Session(engine) as session:
-                return _summary(_owned(session, _authenticated(session, request), run_id))
+                return _summary(
+                    _owned(session, _authenticated(session, request), run_id), session=session
+                )
         except JobNotFound:
             raise _not_found() from None
+        except SQLAlchemyError:
+            raise _storage_error() from None
+
+    def resume_owner(run_id: uuid.UUID, request: Request) -> None:
+        # Ownership/task isolation precedes resume-body validation. Probe jobs
+        # remain absent from every generic route, including rejected bodies.
+        try:
+            with Session(engine) as session:
+                _owned(session, _authenticated(session, request), run_id)
+        except SQLAlchemyError:
+            raise _storage_error() from None
+
+    @router.post("/runs/{run_id}/resume", dependencies=[Depends(resume_owner)])
+    def resume_run(run_id: uuid.UUID, body: ResumeNativeRun, request: Request) -> dict:
+        _authorize_write(request)
+        if native_store is None:
+            raise _PrivateHTTPException(503, "meta_research_unavailable")
+        try:
+            with Session(engine) as session, session.begin():
+                # The native helper owns Operator → queue → Account → Run.
+                run = native_store.resume_in_session(
+                    session,
+                    request,
+                    run_id,
+                    int(body.expected_lease_token),
+                    body.expected_activation_sha256,
+                )
+                return _summary(run, session=session)
         except SQLAlchemyError:
             raise _storage_error() from None
 

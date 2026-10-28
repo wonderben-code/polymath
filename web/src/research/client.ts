@@ -1,5 +1,7 @@
 import { parseBibliography } from './bibliography'
 import { parseSourceCoverage, validateSourceCoverageContext } from './sourceCoverage'
+import { nativeAdmissionFailure, parseNativeRunControl, validNativeSubmission } from './nativeAdmission'
+import type { NativeSubmissionContext } from './nativeAdmission'
 import type {
   AnswerClaim,
   AnswerFinding,
@@ -16,7 +18,7 @@ import type {
 } from './types'
 
 export type ResearchApiErrorCode = 'session_expired' | 'session_changed' | 'run_unavailable' |
-  'unavailable' | 'queue_limit' | 'invalid_request' | 'invalid_response' | 'connection_failed' | 'aborted'
+  'unavailable' | 'queue_limit' | 'invalid_request' | 'invalid_response' | 'connection_failed' | 'aborted' | 'native_authority_changed'
 
 export class ResearchApiError extends Error {
   constructor(public readonly code: ResearchApiErrorCode) {
@@ -85,6 +87,7 @@ function kind(value: unknown): SourceDocument['content_kind'] {
 
 export function parseRun(value: unknown): OwnedRun {
   const run = object(value)
+  const native = parseNativeRunControl(run.native_research, invalid)
   if (!['explore', 'ask', 'surprise'].includes(text(run.mode, 20))) return invalid()
   if (!/^[a-z_]{1,40}$/.test(text(run.status, 40))) return invalid()
   return {
@@ -93,6 +96,7 @@ export function parseRun(value: unknown): OwnedRun {
     error_code: run.error_code === null ? null : text(run.error_code, 100),
     external_outcome_unknown: boolean(run.external_outcome_unknown),
     ...(run.task_kind === undefined ? {} : { task_kind: requiredText(run.task_kind, 80) }),
+    ...(native ? { native_research: native } : {}),
   }
 }
 
@@ -271,7 +275,7 @@ async function json(response: Response): Promise<unknown> {
   } catch { return invalid() }
 }
 
-async function request(path: string, signal?: AbortSignal, write?: { csrf: string; body?: unknown }, missingResult = false): Promise<unknown> {
+async function request(path: string, signal?: AbortSignal, write?: { csrf: string; body?: unknown; native?: NativeSubmissionContext }, missingResult = false): Promise<unknown> {
   const controller = new AbortController()
   const abort = () => controller.abort()
   signal?.addEventListener('abort', abort, { once: true })
@@ -279,12 +283,18 @@ async function request(path: string, signal?: AbortSignal, write?: { csrf: strin
   const timeout = window.setTimeout(abort, 10000)
   try {
     if (write && !/^[a-f\d]{64}$/.test(write.csrf)) throw new ResearchApiError('session_changed')
+    if (write?.native && !validNativeSubmission(write.native)) throw new ResearchApiError('native_authority_changed')
     const response = await fetch(path, {
       signal: controller.signal, credentials: 'same-origin', cache: 'no-store', redirect: 'error',
       method: write ? 'POST' : 'GET',
-      headers: { Accept: 'application/json', ...(write ? { 'X-CSRF-Token': write.csrf, 'Content-Type': 'application/json' } : {}) },
+      headers: { Accept: 'application/json', ...(write ? { 'X-CSRF-Token': write.csrf, 'Content-Type': 'application/json', ...(write.native ? { 'X-Operator-CSRF-Token': write.native.operatorCsrfToken } : {}) } : {}) },
       ...(write?.body === undefined ? {} : { body: JSON.stringify(write.body) }),
     })
+    if (!response.ok && [401, 403, 409, 503].includes(response.status)) {
+      let detail: unknown
+      try { detail = object(await json(response.clone())).detail } catch { /* Keep untrusted errors out of the UI. */ }
+      if (nativeAdmissionFailure(response.status, detail)) throw new ResearchApiError('native_authority_changed')
+    }
     if (response.status === 401) throw new ResearchApiError('session_expired')
     if (response.status === 403) throw new ResearchApiError('session_changed')
     if (response.status === 429) throw new ResearchApiError('queue_limit')
@@ -336,8 +346,14 @@ export async function cancelResearchRun(runId: string, csrf: string, signal?: Ab
   return run.id === runId ? run : invalid()
 }
 
-export async function createResearchRun(mode: OwnedRun['mode'], goal: string, csrf: string, signal?: AbortSignal, parentResultIds: readonly string[] = []): Promise<OwnedRun> {
+export async function createResearchRun(mode: OwnedRun['mode'], goal: string, csrf: string, signal?: AbortSignal, parentResultIds: readonly string[] = [], native?: NativeSubmissionContext): Promise<OwnedRun> {
   if (!['explore', 'ask', 'surprise'].includes(mode) || typeof goal !== 'string' || goal.length > 4000 || (!goal.trim() && mode !== 'surprise')) throw new ResearchApiError('invalid_request')
   if (parentResultIds.length && (mode !== 'explore' || parentResultIds.length < 2 || parentResultIds.length > 4 || parentResultIds.some((value) => typeof value !== 'string' || !UUID.test(value)) || new Set(parentResultIds.map((value) => value.toLowerCase())).size !== parentResultIds.length)) throw new ResearchApiError('invalid_request')
-  return parseRun(await request('/api/v1/runs', signal, { csrf, body: { mode, goal, ...(parentResultIds.length ? { parent_result_ids: parentResultIds } : {}) } }))
+  return parseRun(await request('/api/v1/runs', signal, { csrf, native, body: { mode, goal, ...(parentResultIds.length ? { parent_result_ids: parentResultIds } : {}), ...(native ? { expected_activation_sha256: native.expectedActivationSha256 } : {}) } }))
+}
+
+export async function resumeNativeResearchRun(runId: string, leaseToken: string, csrf: string, native: NativeSubmissionContext, signal?: AbortSignal): Promise<OwnedRun> {
+  if (typeof leaseToken !== 'string' || !/^(?:0|[1-9]\d{0,18})$/.test(leaseToken) || BigInt(leaseToken) > 9223372036854775807n) throw new ResearchApiError('invalid_request')
+  const result = parseRun(await request(`/api/v1/runs/${id(runId)}/resume`, signal, { csrf, native, body: { expected_lease_token: leaseToken, expected_activation_sha256: native.expectedActivationSha256 } }))
+  return result.id === runId ? result : invalid()
 }

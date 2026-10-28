@@ -187,3 +187,42 @@ def test_meta_model_configuration_matches_the_native_identifier_contract(model_i
 def test_new_native_ledger_configuration_is_strict_even_when_paid_execution_is_off(account_id):
     with pytest.raises(ValidationError):
         Settings(native_budget_account_id=account_id, _env_file=None)
+
+
+def test_research_activation_is_separate_from_probe_and_other_remote_gates():
+    settings = Settings(
+        paid_meta_research_enabled=True,
+        budget_readiness_enabled=True,
+        operator_bootstrap_token="Synthetic_Operator_0123456789abcdef-ABCDEF",
+        budget_admin_actor_ids=("publisher",),
+        native_budget_account_id="one-global-ledger",
+        model_api_key="synthetic-key",
+        meta_model="synthetic-meta-model",
+        _env_file=None,
+    )
+    assert not settings.paid_meta_probe_enabled
+    assert not settings.publication_execution_enabled and not settings.public_sharing_enabled
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {},
+        {"budget_readiness_enabled": True},
+        {"budget_readiness_enabled": True, "native_budget_account_id": "one-global-ledger"},
+        {
+            "budget_readiness_enabled": True,
+            "native_budget_account_id": "one-global-ledger",
+            "model_api_key": "synthetic-key",
+        },
+    ],
+)
+def test_native_research_requires_full_explicit_server_configuration(changes):
+    with pytest.raises(ValidationError):
+        Settings(
+            paid_meta_research_enabled=True,
+            operator_bootstrap_token="Synthetic_Operator_0123456789abcdef-ABCDEF",
+            budget_admin_actor_ids=("publisher",),
+            _env_file=None,
+            **changes,
+        )

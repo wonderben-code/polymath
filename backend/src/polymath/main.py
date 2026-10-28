@@ -24,6 +24,9 @@ from polymath.knowledge import create_knowledge_router
 from polymath.meta_probe_api import create_meta_probe_router
 from polymath.meta_probe_contracts import MetaProbePolicy
 from polymath.meta_readiness_contracts import ReadinessPolicy
+from polymath.meta_research import MetaResearchStore
+from polymath.meta_research_api import create_meta_research_router
+from polymath.meta_research_contracts import NativeResearchPolicy
 from polymath.operator_auth import OperatorPolicy, create_operator_router
 from polymath.publication import PublicationStore
 from polymath.publication_api import create_publication_router
@@ -55,8 +58,10 @@ def create_app(
     sharing_availability: Callable[[], bool] | None = None,
     readiness_policy: ReadinessPolicy | None = None,
     probe_policy: MetaProbePolicy | None = None,
+    research_policy: NativeResearchPolicy | None = None,
 ) -> FastAPI:
     settings = settings or get_settings()
+    native_required = research_policy is not None or research_availability is None
     configured_operator, configured_publication = configured_publication_policies(settings)
     if operator_policy is None:
         operator_policy = configured_operator
@@ -75,6 +80,24 @@ def create_app(
             model_id=settings.meta_model,
             api_key=settings.model_api_key,
         )
+    if research_policy is None:
+        research_policy = NativeResearchPolicy(
+            paid_research_enabled=settings.paid_meta_research_enabled,
+            native_account_id=settings.native_budget_account_id,
+            model_id=settings.meta_model,
+            api_key=settings.model_api_key,
+        )
+    if research_availability is None:
+
+        def research_availability() -> bool:
+            return bool(
+                research_policy.paid_research_enabled
+                and research_policy.configured
+                and readiness_policy.preparation_enabled
+                and operator_policy.configured
+                and operator_policy.actor_id in readiness_policy.allowed_actor_ids
+            )
+
     if publication_availability is None:
 
         def publication_availability() -> bool:
@@ -100,8 +123,23 @@ def create_app(
     application.state.operator_policy = operator_policy
     application.state.publication_policy = publication_policy
     application.state.engine = build_engine(settings)
+    native_store = (
+        MetaResearchStore(
+            application.state.engine,
+            research_policy=research_policy,
+            readiness_policy=readiness_policy,
+            operator_policy=operator_policy,
+        )
+        if native_required
+        else None
+    )
+    application.state.native_research_store = native_store
     application.include_router(
-        create_run_router(application.state.engine, availability=research_availability)
+        create_run_router(
+            application.state.engine,
+            availability=research_availability,
+            native_store=native_store,
+        )
     )
     application.include_router(create_knowledge_router(application.state.engine))
     application.include_router(
@@ -120,16 +158,32 @@ def create_app(
         )
     )
     application.include_router(
+        create_meta_research_router(
+            application.state.engine,
+            research_policy=research_policy,
+            readiness_policy=readiness_policy,
+            operator_policy=operator_policy,
+        )
+    )
+    application.include_router(
         create_sharing_router(application.state.engine, availability=sharing_availability)
     )
     application.include_router(
         create_ingestion_router(application.state.engine, availability=ingestion_availability)
     )
     application.include_router(
-        create_artifact_router(application.state.engine, availability=research_availability)
+        create_artifact_router(
+            application.state.engine,
+            availability=research_availability,
+            native_store=native_store,
+        )
     )
     application.include_router(
-        create_assessment_router(application.state.engine, availability=research_availability)
+        create_assessment_router(
+            application.state.engine,
+            availability=research_availability,
+            native_store=native_store,
+        )
     )
     application.include_router(
         create_operator_router(application.state.engine, policy=operator_policy)
@@ -207,8 +261,11 @@ def create_app(
             available = False
         return {
             "research_available": available,
-            "reason": "available" if available else "research_not_implemented",
+            "reason": "available"
+            if available
+            else ("native_research_disabled" if native_required else "research_not_implemented"),
             "meta_configured": settings.meta_configured,
+            "native_research_required": native_required,
         }
 
     frontend = settings.frontend_dist

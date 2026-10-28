@@ -49,6 +49,10 @@ describe('one-call verification contract', () => {
     expect(() => parseMetaProbeManifest({ ...value, valid_until: value.provider_account_attestation.observed_at })).toThrow()
     expect(() => parseMetaProbeManifest({ ...value, valid_until: '2026-10-28T00:00:00.000004Z' })).toThrow()
   })
+  it('preserves exact timestamp strings and trailing fractional zeros in the returned immutable manifest', () => {
+    const value = manifest({ valid_until: '2026-10-28T00:05:00.123000Z', provider_account_attestation: attestation({ observed_at: '2026-10-28T00:00:00.123000+00:00', valid_until: '2026-10-29T00:00:00.000000Z' }) })
+    expect(parseMetaProbePreview(verificationPreview(value)).manifest).toEqual(value)
+  })
   it('preserves the exact-model action summary and counted components, without raw generated text', () => {
     const parsed = parseMetaProbeReceipt(receipt())
     expect(parsed.assessment.input_tokens).toBe('2'); expect(parsed.assessment.output_tokens).toBe('3')

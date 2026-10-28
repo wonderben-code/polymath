@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Callable
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.exceptions import RequestValidationError
@@ -30,6 +30,7 @@ from polymath.assessments import (
 from polymath.evidence import EvidenceError, EvidenceStore
 from polymath.evidence_models import EvidenceResult
 from polymath.jobs import _event
+from polymath.meta_research_errors import META_RESEARCH_ERROR_STATUSES, MetaResearchError
 from polymath.models import ResearchRun
 from polymath.run_api import (
     ACTIVE_STATES,
@@ -39,6 +40,9 @@ from polymath.run_api import (
     _PrivateHTTPException,
     _summary,
 )
+
+if TYPE_CHECKING:
+    from polymath.meta_research import MetaResearchStore
 
 
 class _AssessmentHTTPException(_PrivateHTTPException):
@@ -56,6 +60,13 @@ class _AssessmentRoute(APIRoute):
                 return await original(request)
             except RequestValidationError:
                 raise _AssessmentHTTPException(422, "invalid_assessment_request") from None
+            except MetaResearchError as error:
+                code = (
+                    error.code
+                    if error.code in META_RESEARCH_ERROR_STATUSES
+                    else ("meta_research_storage_unavailable")
+                )
+                raise _AssessmentHTTPException(META_RESEARCH_ERROR_STATUSES[code], code) from None
             except HTTPException as error:
                 error.headers = {
                     **(error.headers or {}),
@@ -74,6 +85,7 @@ class CreateAssessmentJob(BaseModel):
     watch_id: str = Field(min_length=36, max_length=36)
     new_source_version_ids: list[str] = Field(min_length=1, max_length=5)
     expected_head_revision: int = Field(ge=0, le=2**31 - 1)
+    expected_activation_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
 
     @model_validator(mode="after")
     def exact_owned_versions(self) -> CreateAssessmentJob:
@@ -154,7 +166,7 @@ def _job_summary(session: Session, run: ResearchRun) -> dict:
         .order_by(AssessmentInputSource.ordinal)
     ).all()
     return {
-        **_summary(run),
+        **_summary(run, session=session),
         "assessment_id": assessment_id,
         "root_result_id": str(request.root_result_id),
         "source_result_id": str(request.source_result_id),
@@ -166,7 +178,10 @@ def _job_summary(session: Session, run: ResearchRun) -> dict:
 
 
 def create_assessment_router(
-    engine: Engine, availability: Callable[[], bool] | None = None
+    engine: Engine,
+    availability: Callable[[], bool] | None = None,
+    *,
+    native_store: MetaResearchStore | None = None,
 ) -> APIRouter:
     if engine.dialect.name != "postgresql":
         raise ValueError("Finding reassessment requires PostgreSQL")
@@ -221,6 +236,13 @@ def create_assessment_router(
                 owner = _authenticated(session, request)
                 if not available():
                     raise _AssessmentHTTPException(503, "research_unavailable")
+                admission = None
+                if native_store is not None:
+                    admission = native_store.begin_admission(
+                        session, request, body.expected_activation_sha256
+                    )
+                elif body.expected_activation_sha256 is not None:
+                    raise _AssessmentHTTPException(503, "meta_research_unavailable")
                 session.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": QUEUE_LOCK_KEY})
                 session.refresh(owner)
                 _authenticated(session, request)
@@ -244,6 +266,8 @@ def create_assessment_router(
                     raise _AssessmentHTTPException(429, "research_queue_full")
                 if not available():
                     raise _AssessmentHTTPException(503, "research_unavailable")
+                if admission is not None:
+                    native_store.lock_account_in_session(session, admission)
                 source = assessment_source(
                     session, owner.token_hash, uuid.UUID(body.source_result_id)
                 )
@@ -266,6 +290,13 @@ def create_assessment_router(
                     tuple(uuid.UUID(value) for value in body.new_source_version_ids),
                     body.expected_head_revision,
                 )
+                if admission is not None:
+                    from polymath.meta_research import native_run_input_sha256
+
+                    session.flush()
+                    native_store.bind_run_in_session(
+                        session, admission, run, native_run_input_sha256(session, run)
+                    )
                 _event(
                     session,
                     run,
@@ -375,7 +406,7 @@ def create_assessment_router(
                     )
                     if run.task_kind != "reassess_finding" or applied is None:
                         raise _missing()
-                run_id, public_run = run.id, _summary(run)
+                run_id, public_run = run.id, _summary(run, session=session)
             saved = EvidenceStore(engine).get_result(run_id, result_id)
             return {
                 "id": str(result_id),

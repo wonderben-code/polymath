@@ -1,3 +1,4 @@
+import { NativeResumeControl } from './research/NativeResumeControl'
 import { useCallback, useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { loadSystemStatus } from './api'
@@ -9,6 +10,8 @@ import { ArtifactWorkspace } from './artifacts/ArtifactWorkspace'
 import { useFindingHead } from './assessments/useFindingHead'
 import { FindingVersionWorkspace } from './assessments/FindingVersionWorkspace'
 import { ShareWorkspace } from './sharing/ShareWorkspace'
+import { NativeResearchProvider } from './research/nativeContext'
+import { NativeResearchNotice } from './research/NativeResearchNotice'
 
 type Mode = 'explore' | 'ask' | 'surprise'
 
@@ -81,6 +84,7 @@ export function App() {
   const workspace = useResearchWorkspace(
     connection === 'connected' && !!system?.database && system.migrations,
     !!system?.researchAvailable,
+    !!system?.nativeResearchRequired,
   )
   const findingResultId = workspace.activeRun?.status === 'succeeded' && (workspace.result?.finding?.outcome === 'bridge' || workspace.result?.finding?.outcome === 'answer') ? workspace.activeRun.result_id : null
   const findingHead = useFindingHead({ resultId: findingResultId, enabled: workspace.phase === 'ready' && selectedFindingId === null, onSessionExpired: workspace.invalidateSession, refreshToken: assessmentRefresh })
@@ -133,7 +137,7 @@ export function App() {
   }
 
   return (
-    <>
+    <NativeResearchProvider value={workspace.native}>
       <a className="skip-link" href="#workspace">Skip to research workspace</a>
       <div className="page-shell">
         <header className="site-header">
@@ -150,6 +154,7 @@ export function App() {
             <span className="eyebrow">THE RESEARCH DESK</span>
             <span className="edition">01 / An open beginning</span>
           </div>
+          <NativeResearchNotice context={workspace.native} />
 
           <div className="workspace-grid">
             <section className="research-panel" aria-labelledby="research-title">
@@ -245,6 +250,7 @@ export function App() {
           {workspace.detailError && <div className="research-detail-error" role="alert"><p>{workspace.detailError}</p>{workspace.selectedId && <button type="button" className="text-button" onClick={() => workspace.selectRun(workspace.selectedId!)}>Reload investigation</button>}</div>}
           {!selectedFindingId && workspace.activeRun && <ResearchRunView run={workspace.activeRun} events={workspace.events} result={workspace.result} connection={workspace.connection} onCancel={workspace.canCancel ? () => void workspace.cancel() : undefined} cancelling={workspace.cancelling} onOpenRun={openRun} findingVersion={findingResultId ? { head: findingHead.head, phase: findingHead.phase, pollPaused: findingHead.pollPaused, onRefresh: findingHead.refresh, onOpenFinding: openFinding } : undefined} />}
 
+          {!selectedFindingId && workspace.activeRun && <NativeResumeControl run={workspace.activeRun} csrfToken={workspace.csrfToken} onResumed={workspace.refresh} onSessionExpired={workspace.invalidateSession} />}
           {!selectedFindingId && workspace.phase === 'ready' && workspace.activeRun?.status === 'succeeded' && workspace.activeRun.result_id && workspace.result?.finding && (workspace.result.finding.outcome === 'bridge' || workspace.result.finding.outcome === 'answer') && <ArtifactWorkspace key={workspace.activeRun.result_id} sourceResultId={workspace.activeRun.result_id} sourceKind={workspace.result.finding.outcome} csrfToken={workspace.csrfToken} enabled={workspace.phase === 'ready'} canGenerate={workspace.canSubmit && findingHead.canGenerate && !assessmentBusy} sourceCurrent={findingHead.canGenerate} onSessionExpired={workspace.invalidateSession} onBusyChange={setArtifactBusy} />}
           {!selectedFindingId && findingResultId && <ShareWorkspace key={`share:${findingResultId}`} sourceResultId={findingResultId} enabled={workspace.phase === 'ready'} csrfToken={workspace.csrfToken} sourceCurrent={findingHead.canGenerate} refreshToken={assessmentRefresh} onSessionExpired={workspace.invalidateSession} />}
           {selectedFindingId && <FindingVersionWorkspace key={selectedFindingId} resultId={selectedFindingId} enabled={workspace.phase === 'ready'} csrfToken={workspace.csrfToken} canGenerate={workspace.canSubmit && !assessmentBusy} refreshToken={assessmentRefresh} onSessionExpired={workspace.invalidateSession} onOpenFinding={openFinding} onOpenRun={openRun} onBusyChange={setArtifactBusy} onClose={() => setSelectedFindingId(null)} />}
@@ -260,6 +266,6 @@ export function App() {
         </main>
         <footer className="site-footer"><span>Polymath · Open questions, shared knowledge.</span><a href="/operator/budget">Operator budget desk</a><span>Designed for Meta intelligence <span className="footer-asterisk">✳︎</span></span></footer>
       </div>
-    </>
+    </NativeResearchProvider>
   )
 }

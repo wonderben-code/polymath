@@ -5,6 +5,7 @@ import {
 } from './client'
 import type { OwnedRun, ResearchApiErrorCode } from './client'
 import type { ResearchActivityEvent, ResearchResult, ResearchRunViewProps } from './types'
+import { useNativeResearchContext } from './useNativeResearchContext'
 
 const TERMINAL = new Set(['succeeded', 'failed', 'cancelled', 'interrupted'])
 const RETRY_DELAYS = [500, 1500, 4000]
@@ -18,6 +19,7 @@ function message(code: ResearchApiErrorCode): string {
     case 'queue_limit': return 'The research queue or your active-investigation limit has been reached.'
     case 'invalid_request': return 'Check the research request and try again.'
     case 'invalid_response': return 'The research service returned an unreadable record. Reload saved research to try again.'
+    case 'native_authority_changed': return 'Native research authority changed or expired. Refresh the current activation before starting another task; this request was not retried.'
     default: return 'Saved research could not be loaded. Check the connection and try again.'
   }
 }
@@ -43,7 +45,7 @@ function latest(previous: OwnedRun | undefined, incoming: OwnedRun): OwnedRun {
   return incoming
 }
 
-export function useResearchWorkspace(enabled: boolean, researchAvailable: boolean) {
+export function useResearchWorkspace(enabled: boolean, researchAvailable: boolean, nativeRequired = false) {
   const [phase, setPhase] = useState<Phase>('idle')
   const [csrf, setCsrf] = useState<string | null>(null)
   const [runs, setRuns] = useState<OwnedRun[]>([])
@@ -57,6 +59,7 @@ export function useResearchWorkspace(enabled: boolean, researchAvailable: boolea
   const [result, setResult] = useState<ResearchResult | null>(null)
   const [connection, setConnection] = useState<ResearchRunViewProps['connection']>('closed')
   const [submitting, setSubmitting] = useState(false)
+  const [unconfirmedSubmission, setUnconfirmedSubmission] = useState(false)
   const [cancellingId, setCancellingId] = useState<string | null>(null)
   const [refreshVersion, setRefreshVersion] = useState(0)
   const [detailVersion, setDetailVersion] = useState(0)
@@ -89,6 +92,7 @@ export function useResearchWorkspace(enabled: boolean, researchAvailable: boolea
     pagination.current?.abort()
     pagination.current = null
     setSubmitting(false)
+    setUnconfirmedSubmission(false)
     setCancellingId(null)
     knownRuns.current.clear()
     setLoadingMore(false)
@@ -107,6 +111,8 @@ export function useResearchWorkspace(enabled: boolean, researchAvailable: boolea
     clearPrivateState()
     setRefreshVersion((version) => version + 1)
   }, [clearPrivateState])
+
+  const native = useNativeResearchContext({ enabled: phase === 'ready' && enabled, csrfToken: csrf, required: nativeRequired, available: researchAvailable, onBrowserExpired: () => invalidate('session_expired') })
 
   useEffect(() => {
     const controller = new AbortController()
@@ -343,14 +349,14 @@ export function useResearchWorkspace(enabled: boolean, researchAvailable: boolea
   }, [phase, csrf, activeRun, invalidate, remember])
 
   const submit = useCallback(async (mode: OwnedRun['mode'], goal: string, parentResultIds: readonly string[] = []) => {
-    if (!enabled || !researchAvailable || phase !== 'ready' || !csrf || mutation.current) return
+    if (!enabled || !researchAvailable || !native.canSubmit || unconfirmedSubmission || phase !== 'ready' || !csrf || mutation.current) return
     const controller = new AbortController()
     const current = generation.current
     mutation.current = controller
     setSubmitting(true)
     setError('')
     try {
-      const response = await createResearchRun(mode, goal, csrf, controller.signal, parentResultIds)
+      const response = await createResearchRun(mode, goal, csrf, controller.signal, parentResultIds, native.submission ?? undefined)
       if (controller.signal.aborted || current !== generation.current) return
       const run = remember(response)
       setRuns((items) => updated(items, run))
@@ -361,11 +367,12 @@ export function useResearchWorkspace(enabled: boolean, researchAvailable: boolea
       if (controller.signal.aborted || current !== generation.current) return
       const failureCode = code(failure)
       if (failureCode === 'session_expired' || failureCode === 'session_changed') invalidate(failureCode)
-      else setError(failureCode === 'connection_failed' ? 'Could not confirm whether the investigation was queued. Reload saved research before trying again.' : message(failureCode))
+      else if (failureCode === 'native_authority_changed') { native.invalidate(); setError(message(failureCode)) }
+      else { if (['connection_failed', 'invalid_response', 'unavailable'].includes(failureCode)) setUnconfirmedSubmission(true); setError(failureCode === 'connection_failed' ? 'Could not confirm whether the investigation was queued. Reload saved research before trying again.' : message(failureCode)) }
     } finally {
       if (mutation.current === controller) { mutation.current = null; setSubmitting(false) }
     }
-  }, [enabled, researchAvailable, phase, csrf, invalidate, remember])
+  }, [enabled, researchAvailable, phase, csrf, unconfirmedSubmission, invalidate, remember, native.canSubmit, native.submission, native.invalidate])
 
   const investigateBridges = useCallback((parentResultIds: readonly string[]) => submit(
     'explore',
@@ -379,8 +386,8 @@ export function useResearchWorkspace(enabled: boolean, researchAvailable: boolea
     phase, runs, nextCursor, loadingMore, error, detailError, selectedId, activeRun, events, result,
     connection, submitting, cancelling: cancellingId === activeRun?.id,
     canCancel: !submitting && (!cancellingId || cancellingId === activeRun?.id),
-    canSubmit: enabled && researchAvailable && phase === 'ready' && !!csrf && !submitting && !cancellingId,
+    canSubmit: enabled && researchAvailable && native.canSubmit && !unconfirmedSubmission && phase === 'ready' && !!csrf && !submitting && !cancellingId,
     csrfToken: csrf, invalidateSession,
-    refresh, selectRun, loadMore, cancel, submit, investigateBridges,
+    refresh, selectRun, loadMore, cancel, submit, investigateBridges, native,
   }
 }

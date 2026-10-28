@@ -238,3 +238,5 @@ Operator, scheduled collection, reassessment and exact Zenodo approval/delivery
 routes use separate contracts in [DEVELOPMENT.md](DEVELOPMENT.md),
 [REASSESSMENT.md](REASSESSMENT.md) and [PUBLIC_SHARING.md](PUBLIC_SHARING.md).
 Ordinary API access cannot authorize a publisher or bypass a worker's budget.
+
+Native Meta research activation and the operator-browser admission/resume contract are in [META_RESEARCH.md](META_RESEARCH.md). Production capabilities include `native_research_required`; a configured path does not grant spending. This first audience requires the owning operator context and both CSRFs, with `expected_activation_sha256` on research/artifact/reassessment submissions. The existing standalone client remains verified against the trusted synthetic path; its deployed/public native journey is still pending with D2.

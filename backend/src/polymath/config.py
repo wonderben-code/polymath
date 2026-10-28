@@ -37,6 +37,7 @@ class Settings(BaseSettings):
     budget_admin_actor_ids: tuple[str, ...] = ()
     budget_max_hard_cap_microdollars: int = Field(default=150_000_000, ge=1, le=150_000_000)
     paid_meta_probe_enabled: bool = False
+    paid_meta_research_enabled: bool = False
     native_budget_account_id: str | None = Field(
         default=None, min_length=1, max_length=120, pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,119}$"
     )
@@ -121,7 +122,7 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def require_explicit_native_probe_configuration(self) -> "Settings":
-        if self.paid_meta_probe_enabled and not (
+        if (self.paid_meta_probe_enabled or self.paid_meta_research_enabled) and not (
             self.budget_readiness_enabled
             and self.operator_bootstrap_token
             and self.operator_actor_id in self.budget_admin_actor_ids
@@ -129,7 +130,7 @@ class Settings(BaseSettings):
             and self.meta_configured
             and self.meta_api_base_url == "https://api.meta.ai/v1"
         ):
-            raise ValueError("Paid Meta verification requires explicit native and budget authority")
+            raise ValueError("Paid Meta work requires explicit native and budget authority")
         return self
 
     @model_validator(mode="after")

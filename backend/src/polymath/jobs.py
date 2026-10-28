@@ -14,6 +14,7 @@ from typing import Literal
 from sqlalchemy import Engine, func, select
 from sqlalchemy.orm import Session
 
+from polymath.meta_research_models import NativeResearchRunBinding
 from polymath.models import ResearchEvent, ResearchExternalRequest, ResearchRun
 
 TASK_KINDS = frozenset(
@@ -258,9 +259,12 @@ class JobRepository:
         *,
         lease_seconds: int = 60,
         task_kinds: tuple[str, ...] | None = None,
+        native_only: bool = False,
     ) -> JobLease | None:
         _bounded_text(worker_id, 128, "Worker ID")
         _integer(lease_seconds, 1, 3600, "Lease duration")
+        if type(native_only) is not bool:
+            raise ValueError("native_only must be a bool")
         if task_kinds is not None and (
             not isinstance(task_kinds, tuple)
             or not task_kinds
@@ -272,6 +276,12 @@ class JobRepository:
             )
         with Session(self.engine) as session, session.begin():
             eligible = select(ResearchRun).where(ResearchRun.status == "queued")
+            native_bound = (
+                select(NativeResearchRunBinding.run_id)
+                .where(NativeResearchRunBinding.run_id == ResearchRun.id)
+                .exists()
+            )
+            eligible = eligible.where(native_bound if native_only else ~native_bound)
             if task_kinds is not None:
                 eligible = eligible.where(ResearchRun.task_kind.in_(task_kinds))
             else:
@@ -363,7 +373,7 @@ class JobRepository:
         _bounded_text(request_id, 128, "External request ID")
         with Session(self.engine) as session, session.begin():
             run = _owned(session, lease)
-            if run.task_kind == "verify_meta":
+            if run.task_kind == "verify_meta" or session.get(NativeResearchRunBinding, run.id):
                 raise StateConflict("Native verification requires its scoped dispatcher")
             if run.external_request_in_flight:
                 raise ExternalRequestPending("An external request requires an observed outcome")
@@ -598,7 +608,7 @@ class JobRepository:
         _integer(expected_token, 0, 2**63 - 1, "Lease token")
         with Session(self.engine) as session, session.begin():
             run = _locked(session, run_id)
-            if run.task_kind == "verify_meta":
+            if run.task_kind == "verify_meta" or session.get(NativeResearchRunBinding, run.id):
                 raise StateConflict("Native verification requires free recorded finalization")
             if run.status != "interrupted" or run.lease_token != expected_token:
                 raise StateConflict("Only the current interrupted run can be explicitly resumed")

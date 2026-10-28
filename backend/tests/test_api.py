@@ -20,8 +20,9 @@ def test_health_does_not_require_database_or_model() -> None:
         }
         assert client.get("/api/v1/capabilities").json() == {
             "research_available": False,
-            "reason": "research_not_implemented",
+            "reason": "native_research_disabled",
             "meta_configured": False,
+            "native_research_required": True,
         }
         assert client.get("/api/v1/research").status_code == 404
 

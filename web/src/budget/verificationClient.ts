@@ -30,10 +30,10 @@ function distinct<T>(items: T[]): T[] { return new Set(items).size === items.len
 function utc(value: unknown): string {
   const parsed = text(value, 40), match = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d{1,6}))?(?:Z|\+00:00)$/.exec(parsed)
   if (!match || !Number.isFinite(Date.parse(parsed)) || new Date(parsed).toISOString().slice(0, 19) !== match[1]) return invalid()
-  const fraction = (match[2] ?? '').padEnd(6, '0').replace(/0+$/, '')
-  return `${match[1]}${fraction ? `.${fraction}` : ''}Z`
+  return parsed
 }
-function timestamp(value: string): bigint { const match = /\.(\d+)Z$/.exec(value); return BigInt(Date.parse(value)) * 1000n + BigInt((match?.[1] ?? '').padEnd(6, '0').slice(3) || '0') }
+function semanticUtc(value: string): string { const parsed = utc(value), match = /^(.*T\d{2}:\d{2}:\d{2})(?:\.(\d+))?(?:Z|\+00:00)$/.exec(parsed)!, fraction = (match[2] ?? '').replace(/0+$/, ''); return `${match[1]}${fraction ? `.${fraction}` : ''}Z` }
+function timestamp(value: string): bigint { const match = /\.(\d+)(?:Z|\+00:00)$/.exec(value); return BigInt(Date.parse(value)) * 1000n + BigInt((match?.[1] ?? '').padEnd(6, '0').slice(3) || '0') }
 function decimalCounter(value: unknown): string { if (typeof value !== 'string' || !/^(?:0|[1-9]\d{0,18})$/.test(value) || BigInt(value) > 9223372036854775807n) return invalid(); return value }
 function noResearch(value: Record<string, unknown>): false { return value.research_execution_available === false ? false : invalid() }
 function evidence(value: unknown): ReadinessEvidenceReference {
@@ -44,7 +44,7 @@ function evidence(value: unknown): ReadinessEvidenceReference {
   return { url, content_sha256: hash(item.content_sha256) }
 }
 function evidenceBinding(value: ProviderAccountAttestation): string {
-  return canonicalProposal({ ...value, observed_at: utc(value.observed_at), valid_until: utc(value.valid_until), evidence: value.evidence.map((entry) => ({ ...entry, url: new URL(entry.url).href })) })
+  return canonicalProposal({ ...value, observed_at: semanticUtc(value.observed_at), valid_until: semanticUtc(value.valid_until), evidence: value.evidence.map((entry) => ({ ...entry, url: new URL(entry.url).href })) })
 }
 
 export function parseProviderAccountAttestation(value: unknown): ProviderAccountAttestation {

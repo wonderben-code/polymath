@@ -1,5 +1,7 @@
 import { parseActivity, ResearchApiError } from '../research/client'
 import { parseBibliography } from '../research/bibliography'
+import { nativeAdmissionFailure, parseNativeRunControl, validNativeSubmission } from '../research/nativeAdmission'
+import type { NativeSubmissionContext } from '../research/nativeAdmission'
 import { parseSourceCoverage, validateSourceCoverageContext } from '../research/sourceCoverage'
 import type { ArtifactHistory, ArtifactJob, ArtifactKind, ArtifactPassage, ArtifactResult, CitedText, DocumentDraft, Expression, FiniteCheckResult, FiniteConjecture, FormalisationDraft, Relation, SavedArtifact } from './types'
 
@@ -40,11 +42,13 @@ function distinct<T>(values: T[]): T[] { return new Set(values).size === values.
 
 export function parseArtifactJob(value: unknown): ArtifactJob {
   const job = record(value)
+  const native = parseNativeRunControl(job.native_research, invalid)
   if (job.result_id !== null || typeof job.external_outcome_unknown !== 'boolean') return invalid()
   return {
     id: id(job.id), mode: member(job.mode, ['explore', 'ask', 'surprise']), task_kind: member(job.task_kind, KINDS),
     goal: text(job.goal, 4000, false), status: member(job.status, JOB_STATUSES), created_at: date(job.created_at), updated_at: date(job.updated_at),
     result_id: null, artifact_id: nullableId(job.artifact_id), error_code: code(job.error_code), external_outcome_unknown: job.external_outcome_unknown,
+    ...(native ? { native_research: native } : {}),
   }
 }
 
@@ -201,18 +205,24 @@ async function json(response: Response): Promise<unknown> {
     return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)) as unknown
   } catch { return invalid() }
 }
-async function request(path: string, signal?: AbortSignal, write?: { csrf: string; body?: unknown }): Promise<unknown> {
+async function request(path: string, signal?: AbortSignal, write?: { csrf: string; body?: unknown; native?: NativeSubmissionContext }): Promise<unknown> {
   const controller = new AbortController(), abort = () => controller.abort()
   signal?.addEventListener('abort', abort, { once: true })
   if (signal?.aborted) controller.abort()
   const timeout = window.setTimeout(abort, 10000)
   try {
     if (write && !HASH.test(write.csrf)) throw new ResearchApiError('session_changed')
+    if (write?.native && !validNativeSubmission(write.native)) throw new ResearchApiError('native_authority_changed')
     const response = await fetch(path, {
       signal: controller.signal, credentials: 'same-origin', cache: 'no-store', redirect: 'error', method: write ? 'POST' : 'GET',
-      headers: { Accept: 'application/json', ...(write ? { 'X-CSRF-Token': write.csrf, 'Content-Type': 'application/json' } : {}) },
+      headers: { Accept: 'application/json', ...(write ? { 'X-CSRF-Token': write.csrf, 'Content-Type': 'application/json', ...(write.native ? { 'X-Operator-CSRF-Token': write.native.operatorCsrfToken } : {}) } : {}) },
       ...(write?.body === undefined ? {} : { body: JSON.stringify(write.body) }),
     })
+    if (!response.ok && [401, 403, 409, 503].includes(response.status)) {
+      let detail: unknown
+      try { detail = record(await json(response.clone())).detail } catch { /* Do not display untrusted server details. */ }
+      if (nativeAdmissionFailure(response.status, detail)) throw new ResearchApiError('native_authority_changed')
+    }
     if (response.status === 401) throw new ResearchApiError('session_expired')
     if (response.status === 403) throw new ResearchApiError('session_changed')
     if (response.status === 404) throw new ResearchApiError('run_unavailable')
@@ -238,10 +248,10 @@ export async function getArtifactJob(runId: string, signal?: AbortSignal): Promi
   const job = parseArtifactJob(await request(`/api/v1/artifacts/jobs/${inputId(runId)}`, signal))
   return job.id === runId ? job : invalid()
 }
-export async function createArtifactJob(kind: ArtifactKind, sourceResultId: string, csrf: string, signal?: AbortSignal, formalisationId?: string): Promise<ArtifactJob> {
+export async function createArtifactJob(kind: ArtifactKind, sourceResultId: string, csrf: string, signal?: AbortSignal, formalisationId?: string, native?: NativeSubmissionContext): Promise<ArtifactJob> {
   if (!KINDS.includes(kind) || kind === 'formalise' && formalisationId !== undefined) throw new ResearchApiError('invalid_request')
-  const body = { kind, source_result_id: inputId(sourceResultId), ...(formalisationId === undefined ? {} : { formalisation_id: inputId(formalisationId) }) }
-  const job = parseArtifactJob(await request('/api/v1/artifacts/jobs', signal, { csrf, body }))
+  const body = { kind, source_result_id: inputId(sourceResultId), ...(formalisationId === undefined ? {} : { formalisation_id: inputId(formalisationId) }), ...(native ? { expected_activation_sha256: native.expectedActivationSha256 } : {}) }
+  const job = parseArtifactJob(await request('/api/v1/artifacts/jobs', signal, { csrf, native, body }))
   return job.task_kind === kind ? job : invalid()
 }
 export async function cancelArtifactJob(runId: string, csrf: string, signal?: AbortSignal): Promise<ArtifactJob> {

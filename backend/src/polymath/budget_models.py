@@ -30,7 +30,7 @@ class BudgetAccount(Base):
         CheckConstraint("max_in_flight > 0", name="ck_budget_accounts_concurrency"),
         CheckConstraint("native_control_epoch >= 0", name="ck_budget_accounts_native_epoch"),
         CheckConstraint(
-            "native_scope IS NULL OR native_scope = 'probe_only'",
+            "native_scope IS NULL OR native_scope IN ('probe_only', 'research')",
             name="ck_budget_accounts_native_scope",
         ),
         CheckConstraint(

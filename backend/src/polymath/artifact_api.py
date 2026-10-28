@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Callable
-from typing import Annotated, Literal
+from typing import TYPE_CHECKING, Annotated, Literal
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import Response
@@ -34,6 +34,10 @@ from polymath.run_api import (
     _summary,
 )
 
+if TYPE_CHECKING:
+    from polymath.meta_research import MetaResearchStore
+
+
 ARTIFACT_KINDS = ("formalise", "write_summary", "write_paper")
 ARTIFACT_GOALS = {
     "formalise": "Formalise saved finding",
@@ -48,6 +52,7 @@ class CreateArtifactJob(BaseModel):
     kind: Literal["formalise", "write_summary", "write_paper"]
     source_result_id: str = Field(min_length=36, max_length=36)
     formalisation_id: str | None = Field(default=None, min_length=36, max_length=36)
+    expected_activation_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
 
     @model_validator(mode="after")
     def canonical_identifiers(self) -> CreateArtifactJob:
@@ -90,7 +95,10 @@ def _artifact_run(session: Session, request: Request, artifact_id: uuid.UUID) ->
 
 
 def create_artifact_router(
-    engine: Engine, availability: Callable[[], bool] | None = None
+    engine: Engine,
+    availability: Callable[[], bool] | None = None,
+    *,
+    native_store: MetaResearchStore | None = None,
 ) -> APIRouter:
     if engine.dialect.name != "postgresql":
         raise ValueError("Artifact routes require PostgreSQL")
@@ -116,6 +124,13 @@ def create_artifact_router(
                 owner = _authenticated(session, request)
                 if not available():
                     raise _PrivateHTTPException(503, "research_unavailable")
+                admission = None
+                if native_store is not None:
+                    admission = native_store.begin_admission(
+                        session, request, body.expected_activation_sha256
+                    )
+                elif body.expected_activation_sha256 is not None:
+                    raise _PrivateHTTPException(503, "meta_research_unavailable")
                 session.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": QUEUE_LOCK_KEY})
                 session.refresh(owner)
                 _authenticated(session, request)
@@ -139,6 +154,8 @@ def create_artifact_router(
                     raise _PrivateHTTPException(429, "research_queue_full")
                 if not available():
                     raise _PrivateHTTPException(503, "research_unavailable")
+                if admission is not None:
+                    native_store.lock_account_in_session(session, admission)
                 source = source_for_request(
                     session, owner.token_hash, body.source_result_id, body.kind
                 )
@@ -158,8 +175,15 @@ def create_artifact_router(
                     body.source_result_id,
                     body.formalisation_id,
                 )
+                if admission is not None:
+                    from polymath.meta_research import native_run_input_sha256
+
+                    session.flush()
+                    native_store.bind_run_in_session(
+                        session, admission, run, native_run_input_sha256(session, run)
+                    )
                 _event(session, run, "created", "queued", f"{ARTIFACT_GOALS[body.kind]} queued")
-                return _summary(run)
+                return _summary(run, session=session)
         except ArtifactError:
             raise _PrivateHTTPException(404, "artifact_source_not_found") from None
         except SQLAlchemyError:
@@ -207,7 +231,7 @@ def create_artifact_router(
                     )
                 ).all()
                 return {
-                    "jobs": [_summary(run) for run in rows[:limit]],
+                    "jobs": [_summary(run, session=session) for run in rows[:limit]],
                     "next_cursor": str(rows[limit - 1].id) if len(rows) > limit else None,
                 }
         except SQLAlchemyError:
@@ -217,7 +241,7 @@ def create_artifact_router(
     def get_job(run_id: uuid.UUID, request: Request) -> dict:
         try:
             with Session(engine) as session:
-                return _summary(_artifact_job(session, request, run_id))
+                return _summary(_artifact_job(session, request, run_id), session=session)
         except SQLAlchemyError:
             raise _storage_error() from None
 

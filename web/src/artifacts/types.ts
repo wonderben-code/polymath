@@ -1,6 +1,7 @@
 import type { ResearchActivityEvent } from '../research/types'
 import type { SourceBibliography } from '../research/bibliography'
 import type { SourceCoverage } from '../research/sourceCoverage'
+import type { NativeRunControl } from '../research/nativeAdmission'
 
 export type ArtifactKind = 'formalise' | 'write_summary' | 'write_paper'
 export type ArtifactStatus = 'ready' | 'insufficient_evidence' | 'failed' | 'limit_reached'
@@ -8,6 +9,7 @@ export type ClaimLabel = 'known' | 'postulated' | 'speculative'
 export type JobStatus = 'queued' | 'running' | 'waiting_retry' | 'cancel_requested' | 'cancelled' | 'succeeded' | 'failed' | 'interrupted'
 
 export interface ArtifactJob {
+  native_research?: NativeRunControl
   id: string
   mode: 'explore' | 'ask' | 'surprise'
   task_kind: ArtifactKind

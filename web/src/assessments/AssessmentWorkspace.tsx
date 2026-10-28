@@ -1,3 +1,4 @@
+import { NativeResumeControl } from '../research/NativeResumeControl'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AssessmentError, assessmentHistory, assessmentMatchesJob, cancelAssessmentJob, createAssessmentJob, getAssessment, getAssessmentJob, listAssessmentJobs, loadAssessmentCapabilities } from './client'
 import type { AssessmentCapabilities, AssessmentJob, AssessmentRecord } from './types'
@@ -6,6 +7,7 @@ import { AssessmentPreview, dispositionNames } from './AssessmentPreview'
 import { FindingVersionNotice } from './FindingVersionNotice'
 import { useFindingHead } from './useFindingHead'
 import { useAssessmentActivity } from './useAssessmentActivity'
+import { useNativeResearchSubmission } from '../research/nativeContext'
 import './assessments.css'
 
 interface Props {
@@ -39,6 +41,7 @@ function failureMessage(error: unknown): string {
 }
 
 export function AssessmentWorkspace({ watchId, sourceResultId, sources, csrfToken, enabled, canSubmit = true, onSessionExpired, onAssessmentChanged, onBusyChange, onOpenFinding }: Props) {
+  const native = useNativeResearchSubmission()
   const [capabilities, setCapabilities] = useState<AssessmentCapabilities | null>(null)
   const [jobs, setJobs] = useState<AssessmentJob[]>([])
   const [history, setHistory] = useState<AssessmentRecord[]>([])
@@ -75,10 +78,11 @@ export function AssessmentWorkspace({ watchId, sourceResultId, sources, csrfToke
   }, [clear])
   const fail = useCallback((failure: unknown) => {
     setConsent(false)
+    if (failure instanceof AssessmentError && failure.code === 'native_authority_changed') { native.invalidate(); setError('Native research authority changed or expired. Refresh the current activation; this reassessment was not retried.'); return }
     if (failure instanceof AssessmentError && failure.code === 'session_expired') { expire(); return }
     setError(failureMessage(failure))
     if (failure instanceof AssessmentError && failure.uncertain) setUncertain(true)
-  }, [expire])
+  }, [expire, native.invalidate])
   const head = useFindingHead({ resultId: sourceResultId, enabled: enabled && !!csrfToken && phase !== 'expired', onSessionExpired: expire, refreshToken: headRefresh })
   const headRoot = useRef<string | null>(null)
   headRoot.current = head.head?.root_result_id ?? null
@@ -145,7 +149,7 @@ export function AssessmentWorkspace({ watchId, sourceResultId, sources, csrfToke
   useEffect(() => setConsent(false), [head.head?.revision, head.head?.current_result_id, head.head?.state])
 
   const headReady = head.phase === 'ready' && !head.pollPaused && !!head.head?.is_current
-  const canChoose = enabled && phase === 'ready' && !!csrfToken && !!capabilities?.execution_available && canSubmit && headReady && !busy && !action && !uncertain
+  const canChoose = enabled && phase === 'ready' && !!csrfToken && !!capabilities?.execution_available && canSubmit && native.canSubmit && headReady && !busy && !action && !uncertain
   const canCreate = canChoose && consent && chosen.length >= 1 && chosen.length <= 5 && chosen.every((id) => sources.some((source) => source.id === id))
   function choose(id: string) {
     if (!canChoose) return
@@ -157,7 +161,7 @@ export function AssessmentWorkspace({ watchId, sourceResultId, sources, csrfToke
     if (!canCreate || mutation.current || !csrfToken || !head.head) return
     const controller = new AbortController(), generation = scope.current; mutation.current = controller; setAction('create'); setConsent(false); setError('')
     try {
-      const incoming = await createAssessmentJob({ source_result_id: sourceResultId, watch_id: watchId, new_source_version_ids: [...chosen], expected_head_revision: head.head.revision }, csrfToken, controller.signal)
+      const incoming = await createAssessmentJob({ source_result_id: sourceResultId, watch_id: watchId, new_source_version_ids: [...chosen], expected_head_revision: head.head.revision }, csrfToken, controller.signal, native.submission ?? undefined)
       if (controller.signal.aborted || generation !== scope.current) return
       const job = remember(incoming); setJobs((previous) => [job, ...previous.filter((item) => item.id !== job.id)]); setChosen([]); selectJob(job.id)
     } catch (failure) { if (!controller.signal.aborted && generation === scope.current) fail(failure) }
@@ -199,6 +203,7 @@ export function AssessmentWorkspace({ watchId, sourceResultId, sources, csrfToke
     <button type="button" className="assessment-primary" onClick={() => { void create() }} disabled={!canCreate}>{action === 'create' ? 'Queuing Meta reassessment…' : 'Reassess selected evidence'}</button>
     {jobs.length > 0 && <nav className="assessment-history" aria-label="Reassessment jobs"><ul>{jobs.map((job) => <li key={job.id}><button type="button" aria-pressed={selectedId === job.id} disabled={!!action} onClick={() => selectJob(job.id)}><strong>{job.status.replaceAll('_', ' ')}</strong><small>{new Date(job.created_at).toLocaleString()}</small></button></li>)}</ul>{nextJobs && <button type="button" disabled={!!action} onClick={() => { void older('jobs') }}>Load earlier assessment jobs</button>}</nav>}
     {activeJob && <section className="assessment-status" aria-label="Selected reassessment status"><div className="assessment-row"><strong role="status">Meta reassessment · {activeJob.status.replaceAll('_', ' ')}</strong>{BLOCKING.has(activeJob.status) && <button type="button" disabled={!!action || uncertain} onClick={() => { void cancel() }}>{action === 'cancel' ? 'Requesting cancellation…' : 'Cancel reassessment'}</button>}</div><p>{activeJob.status === 'interrupted' ? 'This assessment stopped unexpectedly. Its saved activity is retained; it will not repeat an unknown model request automatically.' : activeJob.status === 'cancel_requested' ? 'Further work is being stopped. A model request already sent may still use credits.' : activeJob.status === 'cancelled' ? 'The assessment was cancelled. No change to the finding is inferred from cancellation.' : activeJob.status === 'failed' ? 'The assessment could not complete. Its job status does not revise or disprove the earlier finding.' : activeJob.status === 'succeeded' ? 'The saved disposition and whether it applied are recorded below.' : 'The queued task continues if this page closes. Its input versions remain pinned.'}</p></section>}
+    {activeJob && <NativeResumeControl run={activeJob} csrfToken={csrfToken} onResumed={reload} onSessionExpired={expire} />}
     {activity.events.length > 0 && <details><summary>Recorded reassessment activity · {activity.connection}</summary><ol className="assessment-events" aria-label="Recorded reassessment activity">{activity.events.filter((event) => !operational.has(event.kind)).map((event) => <li key={event.sequence}>{event.summary}</li>)}</ol></details>}
     {record && <AssessmentPreview record={record} head={head.head} onOpenFinding={onOpenFinding} />}
     {history.length > 0 && <nav className="assessment-history" aria-label="Finding assessment history"><h6>Saved assessment history</h6><ul>{history.map((item) => <li key={item.id}><button type="button" aria-pressed={record?.id === item.id} disabled={!!action} onClick={() => selectJob(item.run_id)}><strong>{dispositionNames[item.disposition]}</strong><small>{item.applied ? `Applied at revision ${item.head_revision}` : 'Unapplied assessment'} · {new Date(item.created_at).toLocaleDateString()}</small></button></li>)}</ul>{nextHistory && <button type="button" disabled={!!action} onClick={() => { void older('assessments') }}>Load earlier saved assessments</button>}</nav>}

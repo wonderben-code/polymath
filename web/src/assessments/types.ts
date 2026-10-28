@@ -1,6 +1,7 @@
 import type { AnswerFinding, BridgeFinding, FieldSelection, MemoryReadReference, ResearchActivityEvent, ResearchResult, VerifiedQuote } from '../research/types'
 import type { SourceBibliography } from '../research/bibliography'
 import type { SourceCoverage } from '../research/sourceCoverage'
+import type { NativeRunControl } from '../research/nativeAdmission'
 
 export type AssessmentDisposition = 'unchanged' | 'revised' | 'unsupported' | 'inconclusive'
 export type AssessmentJobStatus = 'queued' | 'running' | 'waiting_retry' | 'cancel_requested' | 'cancelled' | 'succeeded' | 'failed' | 'interrupted'
@@ -33,6 +34,7 @@ export interface CreateAssessmentJob {
 }
 
 export interface AssessmentJob extends CreateAssessmentJob {
+  native_research?: NativeRunControl
   id: string
   root_result_id: string
   source_sha256: string

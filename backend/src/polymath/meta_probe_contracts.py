@@ -422,10 +422,23 @@ def assess_probe_usage(
 ) -> MetaProbeAssessment:
     """Account reported facts without parsing any generated action or importing its adapter."""
     validate_probe_manifest(manifest, proposal)
+    return _assess_reported_meta_usage(
+        proposal, manifest.request_sha256, manifest.request.payload.model, observation
+    )
+
+
+def _assess_reported_meta_usage(
+    proposal: MetaReadinessProposal,
+    expected_request_sha256: str,
+    expected_model_id: str,
+    observation: MetaObservation,
+) -> MetaProbeAssessment:
+    """Shared strict reported accounting; no scientific/probe action parsing."""
+    proposal = MetaReadinessProposal.model_validate_json(proposal.model_dump_json())
     observation = MetaObservation.model_validate_json(observation.model_dump_json())
     if (
-        observation.request_sha256 != manifest.request_sha256
-        or observation.requested_model_id != manifest.request.payload.model
+        observation.request_sha256 != expected_request_sha256
+        or observation.requested_model_id != expected_model_id
     ):
         raise ValueError("probe observation request binding mismatch")
     values = {
@@ -438,7 +451,7 @@ def assess_probe_usage(
         "usage_within_bounds": None,
         "freeze_required": False,
     }
-    if observation.observed_model_id != manifest.request.payload.model:
+    if observation.observed_model_id != expected_model_id:
         return MetaProbeAssessment(
             status="unknown",
             reason_code="observed_model_missing"

@@ -117,6 +117,34 @@ class WorkerPolicy:
 
 
 @dataclass(frozen=True)
+class WorkerRuntimeProfile:
+    """Original immutable per-run policy; credentials never belong here."""
+
+    policy: WorkerPolicy
+    limits: ResearchLimits
+    artifact_limits: ArtifactLimits
+    assessment_limits: AssessmentLimits | None = None
+    protocol_binding: dict | None = None
+
+    def __post_init__(self):
+        if (
+            not isinstance(self.policy, WorkerPolicy)
+            or not isinstance(self.limits, ResearchLimits)
+            or not isinstance(self.artifact_limits, ArtifactLimits)
+        ):
+            raise ValueError("Invalid original worker policy or controller limits")
+        if self.assessment_limits is not None:
+            from polymath.assessment_controller import AssessmentLimits
+
+            if not isinstance(self.assessment_limits, AssessmentLimits):
+                raise ValueError("Invalid original assessment limits")
+        if self.protocol_binding is not None:
+            if type(self.protocol_binding) is not dict or not self.protocol_binding:
+                raise ValueError("Invalid native run binding")
+            _digest(self.protocol_binding)
+
+
+@dataclass(frozen=True)
 class WorkerOutcome:
     status: str
     run_id: str | None = None
@@ -763,20 +791,36 @@ class ResearchWorker:
         *,
         model_factory: Callable[[RunSnapshot], ResearchModel],
         tools_factory: Callable[[RunSnapshot], LiteratureTools],
-        policy: WorkerPolicy,
+        policy: WorkerPolicy | None,
         limits: ResearchLimits | None = None,
         artifact_limits: ArtifactLimits | None = None,
         assessment_limits: AssessmentLimits | None = None,
         execution_enabled: bool = False,
+        runtime_profile_resolver: Callable[[JobLease, RunSnapshot], WorkerRuntimeProfile]
+        | None = None,
+        recorded_model_factory: Callable[
+            [_RunContext, RunSnapshot, WorkerRuntimeProfile], ResearchModel
+        ]
+        | None = None,
+        native_only: bool = False,
     ):
         if type(execution_enabled) is not bool:
             raise ValueError("execution_enabled must be a bool")
+        if type(native_only) is not bool:
+            raise ValueError("native_only must be a bool")
+        if policy is None and not (native_only and runtime_profile_resolver is not None):
+            raise ValueError("A worker requires an explicit policy or a native run policy resolver")
+        if native_only and (runtime_profile_resolver is None or recorded_model_factory is None):
+            raise ValueError("Native work requires its original profile and recorded model")
         self.engine, self.policy = engine, policy
         self.model_factory, self.tools_factory = model_factory, tools_factory
         self.limits = limits or ResearchLimits()
         self.artifact_limits = artifact_limits or ArtifactLimits()
         self.assessment_limits = assessment_limits
         self.execution_enabled = execution_enabled
+        self.runtime_profile_resolver = runtime_profile_resolver
+        self.recorded_model_factory = recorded_model_factory
+        self.native_only = native_only
         self.jobs, self.budget = JobRepository(engine), BudgetService(engine)
 
     async def run_until_stopped(
@@ -825,23 +869,47 @@ class ResearchWorker:
                 "write_paper",
                 "reassess_finding",
             ),
-            lease_seconds=self.policy.lease_seconds,
+            lease_seconds=self.policy.lease_seconds if self.policy is not None else 60,
+            native_only=self.native_only,
         )
         if lease is None:
             return WorkerOutcome("idle")
-        context = _RunContext(self.engine, lease, self.policy.lease_seconds)
+        try:
+            if self.runtime_profile_resolver is not None:
+                claimed = await asyncio.to_thread(self.jobs.get, lease.run_id)
+                profile = await asyncio.to_thread(self.runtime_profile_resolver, lease, claimed)
+                if not isinstance(profile, WorkerRuntimeProfile):
+                    raise ValueError("Invalid per-run worker profile")
+                if self.native_only and profile.protocol_binding is None:
+                    raise ValueError("Native work requires an immutable run binding")
+            else:
+                profile = WorkerRuntimeProfile(
+                    self.policy, self.limits, self.artifact_limits, self.assessment_limits
+                )
+        except asyncio.CancelledError:
+            await asyncio.shield(self._stop(lease))
+            raise
+        except (ExecutionStopped, Exception):
+            await self._stop(lease)
+            return WorkerOutcome(
+                (await asyncio.to_thread(self.jobs.get, lease.run_id)).status, str(lease.run_id)
+            )
+        policy = profile.policy
+        limits = profile.limits
+        artifact_limits = profile.artifact_limits
+        context = _RunContext(self.engine, lease, policy.lease_seconds)
         parent = asyncio.current_task()
         lost = asyncio.Event()
         closing = asyncio.Event()
 
         async def heartbeat() -> None:
             while True:
-                await asyncio.sleep(self.policy.heartbeat_seconds)
+                await asyncio.sleep(policy.heartbeat_seconds)
                 try:
                     await asyncio.to_thread(
                         self.jobs.heartbeat,
                         lease,
-                        lease_seconds=self.policy.lease_seconds,
+                        lease_seconds=policy.lease_seconds,
                     )
                 except Exception:
                     if closing.is_set():
@@ -885,29 +953,30 @@ class ResearchWorker:
                 assessment_basis = await asyncio.to_thread(
                     AssessmentStore(self.engine).load_basis, lease
                 )
-                assessment_limits = self.assessment_limits or AssessmentLimits()
-            fingerprint = _digest(
-                {
-                    "protocol": "polymath-worker-full-text-v8",
-                    "mode": snapshot.mode,
-                    "task_kind": snapshot.task_kind,
-                    "parents": [parent.model_dump(mode="json") for parent in parents],
-                    "artifact_basis": (
-                        _digest(basis.model_dump(mode="json")) if basis is not None else None
-                    ),
-                    "assessment_basis": (
-                        _digest(assessment_basis.model_dump(mode="json"))
-                        if assessment_basis is not None
-                        else None
-                    ),
-                    "policy": asdict(self.policy),
-                    "limits": asdict(self.limits),
-                    "artifact_limits": asdict(self.artifact_limits),
-                    "assessment_limits": (
-                        asdict(assessment_limits) if assessment_limits is not None else None
-                    ),
-                }
-            )
+                assessment_limits = profile.assessment_limits or AssessmentLimits()
+            fingerprint_input = {
+                "protocol": "polymath-worker-full-text-v8",
+                "mode": snapshot.mode,
+                "task_kind": snapshot.task_kind,
+                "parents": [parent.model_dump(mode="json") for parent in parents],
+                "artifact_basis": (
+                    _digest(basis.model_dump(mode="json")) if basis is not None else None
+                ),
+                "assessment_basis": (
+                    _digest(assessment_basis.model_dump(mode="json"))
+                    if assessment_basis is not None
+                    else None
+                ),
+                "policy": asdict(policy),
+                "limits": asdict(limits),
+                "artifact_limits": asdict(artifact_limits),
+                "assessment_limits": (
+                    asdict(assessment_limits) if assessment_limits is not None else None
+                ),
+            }
+            if profile.protocol_binding is not None:
+                fingerprint_input["native_run_binding"] = profile.protocol_binding
+            fingerprint = _digest(fingerprint_input)
             existing = snapshot.checkpoint.get("worker_protocol")
             if existing is not None and existing != fingerprint:
                 raise ExecutionStopped("worker_protocol_changed")
@@ -920,21 +989,29 @@ class ResearchWorker:
                 )
             await asyncio.to_thread(
                 self.budget.configure_run,
-                self.policy.account_id,
+                policy.account_id,
                 lease.run_id,
-                cap_microdollars=self.policy.run_cap_microdollars,
-                max_calls=min(
-                    self.limits.max_model_calls,
-                    assessment_limits.max_model_calls
-                    if assessment_limits
-                    else self.limits.max_model_calls,
+                cap_microdollars=policy.run_cap_microdollars,
+                max_calls=(
+                    artifact_limits.max_model_calls
+                    if profile.protocol_binding is not None and basis is not None
+                    else min(
+                        limits.max_model_calls,
+                        assessment_limits.max_model_calls
+                        if assessment_limits
+                        else limits.max_model_calls,
+                    )
                 ),
             )
-            model = _RecordedModel(
-                context,
-                DispatchCoordinator(self.engine),
-                self.model_factory(snapshot),
-                self.policy,
+            model = (
+                self.recorded_model_factory(context, snapshot, profile)
+                if (self.recorded_model_factory is not None)
+                else _RecordedModel(
+                    context,
+                    DispatchCoordinator(self.engine),
+                    self.model_factory(snapshot),
+                    policy,
+                )
             )
             if assessment_basis is not None:
                 store = AssessmentStore(self.engine)
@@ -967,7 +1044,7 @@ class ResearchWorker:
             if basis is not None:
                 controller = ArtifactController(
                     model,
-                    self.artifact_limits,
+                    artifact_limits,
                     on_event=public_event,
                     check_tool=_RecordedChecks(context),
                 )
@@ -996,7 +1073,7 @@ class ResearchWorker:
             controller = ResearchController(
                 model,
                 _RecordedTools(context, self.tools_factory(snapshot)),
-                self.limits,
+                limits,
                 on_event=public_event,
                 memory=_RecordedMemory(context, ResearchMemory(self.engine, lease)),
             )

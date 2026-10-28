@@ -15,6 +15,7 @@ from pydantic import SecretStr
 
 if TYPE_CHECKING:
     from polymath.meta_probe_contracts import MetaObservation, MetaProbeRequest
+    from polymath.meta_research_contracts import MetaResearchRequest
 
 META_COMPLETIONS_URL = "https://api.meta.ai/v1/chat/completions"
 
@@ -80,7 +81,6 @@ class MetaModel:
         The historical complete() path below is intentionally unchanged.
         """
         from polymath.meta_probe_contracts import (
-            MetaObservation,
             MetaProbeRequest,
             probe_request_sha256,
         )
@@ -95,6 +95,33 @@ class MetaModel:
             raise ModelError("model_probe_request_invalid") from None
         if request.payload.model != self._model:
             raise ModelError("model_probe_request_binding_mismatch")
+        return await self._observe_request(request, request_sha256=probe_request_sha256(request))
+
+    async def observe_research(self, request: MetaResearchRequest) -> MetaObservation:
+        """Observe one immutable scientific-controller request using the same wire boundary."""
+        from polymath.meta_research_contracts import (
+            MetaResearchRequest,
+            meta_research_request_sha256,
+        )
+
+        if not self._live_enabled:
+            raise ModelError("live_model_disabled")
+        if not isinstance(request, MetaResearchRequest):
+            raise ModelError("model_research_request_invalid")
+        try:
+            request = MetaResearchRequest.model_validate_json(request.model_dump_json())
+        except ValueError:
+            raise ModelError("model_research_request_invalid") from None
+        if request.payload.model != self._model:
+            raise ModelError("model_research_request_binding_mismatch")
+        return await self._observe_request(
+            request, request_sha256=meta_research_request_sha256(request)
+        )
+
+    async def _observe_request(self, request, *, request_sha256: str) -> MetaObservation:
+        """Shared bounded native HTTP observation; callers first validate their exact DTO."""
+        from polymath.meta_probe_contracts import MetaObservation
+
         started = datetime.now(UTC)
         status = None
         data = bytearray()
@@ -257,7 +284,7 @@ class MetaModel:
             except (ValueError, TypeError, UnicodeError, RecursionError):
                 code = code or "model_response_invalid_json"
         return MetaObservation(
-            request_sha256=probe_request_sha256(request),
+            request_sha256=request_sha256,
             requested_model_id=self._model,
             observed_model_id=observed,
             http_status=status,

@@ -18,6 +18,7 @@ from sqlalchemy import Engine, case, func, or_, select
 from sqlalchemy.orm import Session
 
 from polymath.budget_models import BudgetAccount, BudgetReservation, BudgetRunLimit
+from polymath.meta_research_models import NativeResearchRunBinding
 from polymath.models import ResearchRun
 
 MAX_MONEY = 9_000_000_000_000_000
@@ -53,6 +54,17 @@ class NativeProbePermit:
     Never deserialize this from an HTTP/CLI request. The dispatcher validates
     human consent and live configuration in the same transaction using it.
     """
+
+    account_id: str
+    run_id: uuid.UUID
+    manifest_sha256: str
+    armed_epoch: int
+    request_hash: str
+
+
+@dataclass(frozen=True)
+class NativeResearchPermit:
+    """Internal permission from a fully validated native research transaction."""
 
     account_id: str
     run_id: uuid.UUID
@@ -133,7 +145,9 @@ class BudgetService:
 
     @staticmethod
     def _authorized(
-        account: BudgetAccount, *, native_permit: NativeProbePermit | None = None
+        account: BudgetAccount,
+        *,
+        native_permit: NativeProbePermit | NativeResearchPermit | None = None,
     ) -> None:
         if account.kill_switch:
             raise BudgetError("operator_kill_switch")
@@ -149,12 +163,36 @@ class BudgetService:
         session: Session,
         account: BudgetAccount,
         run_id: uuid.UUID,
-        native_permit: NativeProbePermit | None = None,
+        native_permit: NativeProbePermit | NativeResearchPermit | None = None,
     ) -> None:
         task_kind = session.scalar(select(ResearchRun.task_kind).where(ResearchRun.id == run_id))
+        research_binding = session.get(NativeResearchRunBinding, run_id)
         if native_permit is None:
-            if account.native_scope is not None or task_kind == "verify_meta":
+            if (
+                account.native_scope is not None
+                or task_kind == "verify_meta"
+                or research_binding is not None
+            ):
                 raise BudgetError("native_dispatch_scope_required")
+            return
+        if type(native_permit) is NativeResearchPermit:
+            if (
+                native_permit.account_id != account.id
+                or native_permit.run_id != run_id
+                or account.native_scope != "research"
+                or task_kind
+                not in {"research", "formalise", "write_summary", "write_paper", "reassess_finding"}
+                or research_binding is None
+                or research_binding.account_id != account.id
+                or research_binding.task_kind != task_kind
+                or research_binding.manifest_sha256 != native_permit.manifest_sha256
+                or research_binding.armed_epoch != native_permit.armed_epoch
+                or account.native_manifest_sha256 != native_permit.manifest_sha256
+                or account.native_control_epoch != native_permit.armed_epoch
+                or re.fullmatch(r"[0-9a-f]{64}", native_permit.manifest_sha256) is None
+                or re.fullmatch(r"[0-9a-f]{64}", native_permit.request_hash) is None
+            ):
+                raise BudgetError("native_dispatch_scope_mismatch")
             return
         if (
             type(native_permit) is not NativeProbePermit
@@ -162,6 +200,7 @@ class BudgetService:
             or native_permit.run_id != run_id
             or account.native_scope != "probe_only"
             or task_kind != "verify_meta"
+            or research_binding is not None
             or account.native_manifest_sha256 != native_permit.manifest_sha256
             or account.native_control_epoch != native_permit.armed_epoch
             or re.fullmatch(r"[0-9a-f]{64}", native_permit.manifest_sha256) is None
@@ -349,7 +388,7 @@ class BudgetService:
         *,
         call_key: str,
         estimated_microdollars: int,
-        native_permit: NativeProbePermit | None = None,
+        native_permit: NativeProbePermit | NativeResearchPermit | None = None,
     ) -> Reservation:
         """Reserve inside an existing transaction; caller owns commit/rollback."""
         account_id = _key(account_id, "account_id")
@@ -373,7 +412,7 @@ class BudgetService:
         limit = session.get(BudgetRunLimit, (account_id, run_id))
         if limit is None:
             raise BudgetError("run_budget_not_configured")
-        if native_permit is not None and (
+        if type(native_permit) is NativeProbePermit and (
             limit.max_calls != 1 or limit.cap_microdollars != estimated_microdollars
         ):
             raise BudgetError("native_dispatch_limit_mismatch")
@@ -424,7 +463,7 @@ class BudgetService:
         session: Session,
         reservation_id: uuid.UUID,
         *,
-        native_permit: NativeProbePermit | None = None,
+        native_permit: NativeProbePermit | NativeResearchPermit | None = None,
     ) -> bool:
         """Claim inside an existing transaction; caller owns commit/rollback."""
         row = self._locate(session, reservation_id)
