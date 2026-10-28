@@ -1,7 +1,8 @@
 # Pinned scientific context and claim-bound Ask overviews
 
-Status: design for the increment after D2. This document authorizes no paid call,
-activation, deployment, or migration. Meta remains the scientific model; the
+Status: SC1 pure contracts and archived compatibility fixtures are implemented;
+SC2–SC6 runtime integration is next. The remainder specifies those changes.
+This document authorizes no paid call, activation, deployment, or migration. Meta remains the scientific model; the
 existing controllers, worker, source store, and global budget ledger remain the
 execution path.
 
