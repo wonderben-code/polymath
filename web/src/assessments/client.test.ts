@@ -7,6 +7,38 @@ import type { AnswerFinding } from '../research/types'
 afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers() })
 
 describe('version-bound reassessment contracts', () => {
+  it('preserves and binds full-text coverage across pinned refs, actual reads and exact verified passages', () => {
+    const value = payload({ result: result({ disposition: 'revised' }) }), snapshot = '99999999-9999-4999-8999-999999999999'
+    const coverage = { snapshot_id: snapshot, snapshot_sha256: 'c'.repeat(64), arxiv_id: BIBLIOGRAPHY.arxiv_id, arxiv_version: 2, start: 100, end: 300, total: 10000 }
+    const sourceId = `arxiv-html:${snapshot}:100:300`
+    Object.assign(value.basis.sources[0], { source_id: sourceId, content_kind: 'full_text', url: 'https://arxiv.org/html/2610.00001v2', bibliography: BIBLIOGRAPHY, coverage })
+    Object.assign(value.observed_sources[0], value.basis.sources[0])
+    Object.assign(value.basis.prior_quotes[0], { source_id: sourceId, content_kind: 'full_text' })
+    if (value.basis.prior_finding.outcome !== 'bridge' || value.result.revised_result?.finding?.outcome !== 'bridge') throw new Error('Synthetic bridge fixture changed')
+    value.basis.prior_finding.evidence[0].source_id = sourceId
+    Object.assign(value.result.quotes[0], { source_id: sourceId, content_kind: 'full_text', coverage })
+    value.result.revised_result.finding.evidence[0].source_id = sourceId
+    Object.assign(value.result.revised_result.quotes[0], { source_id: sourceId, content_kind: 'full_text' })
+    const parsed = parseAssessment(record({ disposition: 'revised', payload: value }))
+    expect(parsed.payload.basis.sources[0].coverage).toEqual(coverage)
+    expect(parsed.payload.observed_sources[0].coverage).toEqual(coverage)
+    expect(parsed.payload.verified_passages[0].coverage).toEqual(coverage)
+    expect(parseAssessment(record()).payload.basis.sources[0]).not.toHaveProperty('coverage')
+    value.result.quotes[0].coverage = { ...coverage, snapshot_sha256: 'd'.repeat(64) }
+    expect(() => parseAssessment(record({ disposition: 'revised', payload: value }))).toThrow('invalid_response')
+    value.result.quotes[0].coverage = undefined
+    expect(() => parseAssessment(record({ disposition: 'revised', payload: value }))).toThrow('invalid_response')
+  })
+  it('keeps coverage when the applied finding reader hydrates an exact source window', () => {
+    const value = findingVersion(), source = value.payload.sources[0], snapshot = '99999999-9999-4999-8999-999999999999'
+    const coverage = { snapshot_id: snapshot, snapshot_sha256: 'c'.repeat(64), arxiv_id: BIBLIOGRAPHY.arxiv_id, arxiv_version: 2, start: 100, end: 100 + Array.from(source.text).length, total: 10000 }
+    const sourceId = `arxiv-html:${snapshot}:${coverage.start}:${coverage.end}`
+    Object.assign(source, { source_id: sourceId, content_kind: 'full_text', url: 'https://arxiv.org/html/2610.00001v2', bibliography: BIBLIOGRAPHY, coverage })
+    if (value.payload.finding?.outcome !== 'bridge') throw new Error('Synthetic bridge fixture changed')
+    value.payload.finding.evidence[0].source_id = sourceId
+    Object.assign(value.payload.quotes[0], { source_id: sourceId, content_kind: 'full_text' })
+    expect(parseFindingVersion(value).payload.sources[0].coverage).toEqual(coverage)
+  })
   it('requires explicit research availability and rejects automatic reassessment', () => {
     expect(parseCapabilities(capabilities(false)).execution_available).toBe(false)
     for (const changes of [{ automatic_reassessment: true }, { execution_available: true, reason: 'research_unavailable' }, { execution_available: false, reason: null }]) expect(() => parseCapabilities({ ...capabilities(), ...changes })).toThrow('invalid_response')

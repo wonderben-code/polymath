@@ -75,7 +75,11 @@ Settings load from the process and optionally `.env` in the working directory. `
 
 The worker defaults disabled, has no production Meta factory, and its module entry point refuses paid execution. It now executes all three research modes with separate conclusion contracts. Ask returns cited/classified claims; Surprise Me first lets the model choose fields. Tests inject synthetic models/tools/prices; no paid requests occur. Do not substitute fixed fixture reservations for verified model token/context/pricing limits.
 
-Replay protocol is now `polymath-worker-assessments-v7`. Its checkpoint fingerprint includes the mode, contract version, and ordered parent IDs/run IDs/content hashes, task kind, artifact limits and exact artifact input basis. Earlier findings are model context, never primary evidence: memory-source actions retrieve exact original source versions and establish a durable read link in the new run. Memory search replay uses an immutable observation and an opaque session-scope fingerprint; finding/source bodies are reloaded by immutable identifiers. Interrupted jobs from earlier research protocols stop safely instead of silently making new paid requests; completed historical findings remain readable. Worker cleanup stops heartbeats before terminal transitions so a heartbeat cannot cancel its own shutdown/interruption record.
+Replay protocol is now `polymath-worker-full-text-v8`. Its checkpoint fingerprint includes the mode, contract version, and ordered parent IDs/run IDs/content hashes, task kind, artifact limits and exact artifact input basis. Earlier findings are model context, never primary evidence: memory-source actions retrieve exact original source versions and establish a durable read link in the new run. Memory search replay uses an immutable observation and an opaque session-scope fingerprint; finding/source bodies are reloaded by immutable identifiers. Interrupted jobs from earlier research protocols stop safely instead of silently making new paid requests; completed historical findings remain readable. Worker cleanup stops heartbeats before terminal transitions so a heartbeat cannot cancel its own shutdown/interruption record.
+
+## Full-text reading
+
+The research and reassessment controllers expose explicit `open_full_text` and `read_full_text_window` actions. Migration `0017_arxiv_full_text` stores exact versioned arXiv HTML snapshots and owned indexes. Only saved windows of at most 8,000 Unicode codepoints are source reads. Index metadata grants no quotation access; replay pins the original extraction. Coverage follows memory, reassessment, generated passages, map/source views and exports. See [FULL_TEXT.md](FULL_TEXT.md) for transport bounds, range semantics and recovery. Native arXiv HTML compatibility remains unverified.
 
 ## Session-owned research API
 
@@ -116,7 +120,7 @@ The worker imports the original quoted source snapshots under its current lease.
 
 Formalise can invoke only the finite integer expression DSL in `math_checks.py`: at most3 variables,4096 assignments,64 AST nodes, depth8,256-bit arithmetic and1million evaluated nodes. It cannot evaluate arbitrary code or access a shell, filesystem or network. Successful finite checks are not general proofs. Exact counterexamples and decimal-string results are preserved without browser integer rounding, and prior conjecture check outcomes remain available to later writing.
 
-Generation has a separate six-model-call/six-action default with bounded schema repair and at most4096 output tokens; all calls still require the same atomic budget grant. Real model pricing and worst-case reservations remain unverified, so production generation stays disabled. Replay protocol v7 blocks incompatible interrupted protocols. A lost saved-version response can resume to the existing immutable version without a second paid dispatch.
+Generation has a separate six-model-call/six-action default with bounded schema repair and at most4096 output tokens; all calls still require the same atomic budget grant. Real model pricing and worst-case reservations remain unverified, so production generation stays disabled. Replay protocol v8 blocks incompatible interrupted protocols. A lost saved-version response can resume to the existing immutable version without a second paid dispatch.
 
 ## Publisher review and approval
 

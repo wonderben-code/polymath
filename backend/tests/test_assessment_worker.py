@@ -3,6 +3,7 @@
 import asyncio
 import json
 import uuid
+from contextlib import suppress
 from threading import Event
 
 import pytest
@@ -21,7 +22,7 @@ from polymath.budget import BudgetService
 from polymath.evidence import EvidenceStore
 from polymath.jobs import JobRepository
 from polymath.research.meta import ModelError, ModelReply
-from polymath.worker import ResearchWorker
+from polymath.worker import ExecutionStopped, ResearchWorker, _RecordedAssessmentTools
 
 database = database_fixture
 pytestmark = pytest.mark.integration
@@ -182,10 +183,9 @@ async def test_committed_source_response_loss_interrupts_then_replays_without_ch
     *_, run_id = queued(database)
     model = AssessmentFixtureModel()
     worker = setup_worker(database, model)
-    worker.assessment_limits = AssessmentLimits(
-        tool_timeout_seconds=0.1 if failure == "timeout" else 20
-    )
-    original, release = AssessmentStore.read_source, Event()
+    worker.assessment_limits = AssessmentLimits(tool_timeout_seconds=20)
+    original, release, read_finished = AssessmentStore.read_source, Event(), Event()
+    loop, committed = asyncio.get_running_loop(), asyncio.Event()
     first = True
 
     def interrupted_read(store, lease, retrieval_id):
@@ -194,16 +194,46 @@ async def test_committed_source_response_loss_interrupts_then_replays_without_ch
         if first:
             first = False
             if failure == "timeout":
-                release.wait(timeout=5)
+                loop.call_soon_threadsafe(committed.set)
+                try:
+                    release.wait(timeout=30)
+                finally:
+                    read_finished.set()
             else:
                 raise RuntimeError("synthetic read response lost after commit")
         return result
 
     monkeypatch.setattr(AssessmentStore, "read_source", interrupted_read)
+    if failure == "timeout":
+        read_tool = _RecordedAssessmentTools.read_source_by_retrieval
+        armed = True
+
+        async def timeout_after_commit(tools, retrieval_id):
+            nonlocal armed
+            if not armed:
+                return await read_tool(tools, retrieval_id)
+            armed = False
+            reading = asyncio.create_task(read_tool(tools, retrieval_id))
+            try:
+                # Keep normal DB/ownership work and replay on their real tool
+                # deadline. Inject cancellation only after the target commit.
+                await committed.wait()
+                return await asyncio.wait_for(reading, timeout=0.01)
+            finally:
+                if not reading.done():
+                    reading.cancel()
+                    with suppress(ExecutionStopped, asyncio.CancelledError):
+                        await reading
+
+        monkeypatch.setattr(
+            _RecordedAssessmentTools, "read_source_by_retrieval", timeout_after_commit
+        )
     try:
         assert (await worker.run_once("first-assessor")).status == "interrupted"
     finally:
         release.set()
+        if failure == "timeout" and committed.is_set():
+            assert await asyncio.to_thread(read_finished.wait, timeout=5)
     assert BudgetService(database).usage("fixture").reservations == 1
     assert len(EvidenceStore(database).list_sources(run_id)) == 1
     snapshot = JobRepository(database).get(run_id)

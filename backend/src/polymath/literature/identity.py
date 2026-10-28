@@ -17,7 +17,8 @@ from urllib.parse import urlsplit, urlunsplit
 if TYPE_CHECKING:
     from polymath.research.models import SourceReference
 
-MAX_IDENTITY_REFERENCES = 200
+MAX_SELECTED_REFERENCES = 200
+MAX_IDENTITY_REFERENCES = 256
 
 
 def canonical_doi(value: str) -> str:
@@ -146,13 +147,13 @@ def same_paper(left: SourceReference, right: SourceReference) -> bool:
     return bool(paper_aliases(left) & paper_aliases(right))
 
 
-def distinct_paper_count(
+def _selected_paper_groups(
     references: Iterable[SourceReference], *, context: Iterable[SourceReference] = ()
-) -> int:
-    """Count selected papers after unioning aliases from all bounded observed context."""
+) -> tuple[tuple[SourceReference, ...], tuple[int, ...]]:
+    """Union bounded identity context without granting it source-read authority."""
     owners: dict[str, int] = {}
     parents: list[int] = []
-    selected_count = 0
+    selected_references = []
 
     def root(index: int) -> int:
         while parents[index] != index:
@@ -160,18 +161,69 @@ def distinct_paper_count(
             index = parents[index]
         return index
 
-    for selected, values in ((True, references), (False, context)):
+    for selected, values, maximum in (
+        (True, references, MAX_SELECTED_REFERENCES),
+        (False, context, MAX_IDENTITY_REFERENCES),
+    ):
         for position, reference in enumerate(values):
-            if position >= MAX_IDENTITY_REFERENCES:
+            if position >= maximum:
                 raise ValueError("paper identity reference limit exceeded")
             index = len(parents)
             parents.append(index)
             if selected:
-                selected_count += 1
+                selected_references.append(reference)
             for alias in paper_aliases(reference):
                 prior = owners.get(alias)
                 if prior is None:
                     owners[alias] = index
                 else:
                     parents[root(index)] = root(prior)
-    return len({root(index) for index in range(selected_count)})
+    return tuple(selected_references), tuple(
+        root(index) for index in range(len(selected_references))
+    )
+
+
+def distinct_paper_count(
+    references: Iterable[SourceReference], *, context: Iterable[SourceReference] = ()
+) -> int:
+    """Count selected papers after unioning aliases from all bounded context."""
+    _, groups = _selected_paper_groups(references, context=context)
+    return len(set(groups))
+
+
+def validate_selected_paper_versions(
+    selected: Iterable[SourceReference], *, context: Iterable[SourceReference] = ()
+) -> None:
+    """Allow multiple primary windows only from one exact snapshot per paper.
+
+    Identity connectors can join selected sources into one paper group; they
+    never become selected evidence. Separate windows still count as one paper.
+    """
+    references, groups = _selected_paper_groups(selected, context=context)
+    grouped: dict[int, list[SourceReference]] = {}
+    for reference, group in zip(references, groups, strict=True):
+        grouped.setdefault(group, []).append(reference)
+    for values in grouped.values():
+        if len(values) < 2:
+            continue
+        snapshot_keys = set()
+        source_ids = set()
+        for reference in values:
+            coverage = getattr(reference, "coverage", None)
+            if coverage is None or getattr(reference, "content_kind", "full_text") != "full_text":
+                raise ValueError("selected_paper_version_conflict")
+            expected_url = f"https://arxiv.org/html/{coverage.arxiv_id}v{coverage.arxiv_version}"
+            if reference.url != expected_url or reference.source_id in source_ids:
+                raise ValueError("selected_paper_version_conflict")
+            source_ids.add(reference.source_id)
+            snapshot_keys.add(
+                (
+                    coverage.snapshot_id,
+                    coverage.snapshot_sha256,
+                    coverage.arxiv_id,
+                    coverage.arxiv_version,
+                    reference.url,
+                )
+            )
+        if len(snapshot_keys) != 1:
+            raise ValueError("selected_paper_version_conflict")

@@ -42,6 +42,14 @@ function formalised() {
 afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers() })
 
 describe('artifact contracts', () => {
+  it('preserves bounded full-text passage coverage and enforces its exact reference context', () => {
+    const fixture = saved(), snapshot = '99999999-9999-4999-8999-999999999999'
+    const coverage = { snapshot_id: snapshot, snapshot_sha256: 'c'.repeat(64), arxiv_id: BIBLIOGRAPHY.arxiv_id, arxiv_version: 2, start: 100, end: 300, total: 10000 }
+    const passage = { ...fixture.passages[0], source_id: `arxiv-html:${snapshot}:100:300`, content_kind: 'full_text', url: 'https://arxiv.org/html/2610.00001v2', bibliography: BIBLIOGRAPHY, coverage }
+    expect(parseArtifact({ ...fixture, passages: [passage] }).passages[0].coverage).toEqual(coverage)
+    expect(parseArtifact(fixture).passages[0]).not.toHaveProperty('coverage')
+    for (const change of [{ content_kind: 'abstract' }, { bibliography: undefined }, { source_id: `arxiv-html:${snapshot}:101:300` }, { url: 'https://arxiv.org/html/2610.00001v3' }, { coverage: { ...coverage, snapshot_sha256: 'bad' } }, { source_id: `arxiv-html:${snapshot}:100:110`, coverage: { ...coverage, end: 110 } }]) expect(() => parseArtifact({ ...fixture, passages: [{ ...passage, ...change }] })).toThrow('invalid_response')
+  })
   it('preserves bibliography for exact original passages while retaining absent historical fields', () => {
     const fixture = saved()
     expect(parseArtifact({ ...fixture, passages: fixture.passages.map((passage) => ({ ...passage, bibliography: BIBLIOGRAPHY })) }).passages[0].bibliography).toEqual(BIBLIOGRAPHY)

@@ -108,6 +108,10 @@ Use relational tables and explicit relationships initially; neither a graph data
 - **Publish:** prepare and preview an exact document and metadata; require an authorized human approval bound to their hashes; then create/upload/publish through Zenodo. Changed content invalidates approval. Test in the sandbox before a separately approved production publication.
 - **Public API:** the web UI and external clients use the same versioned research, status, cancellation, event, and result endpoints. Publish API documentation. Paid research access is quota controlled; do not expose unlimited anonymous model calls.
 
+### Implemented full-text reading boundary
+
+The model explicitly opens an unambiguous discovered arXiv HTML candidate, then chooses exact ranges from its immutable heading index. An index is metadata, not evidence. Only a saved window of at most8,000 Unicode codepoints becomes a source read. Resolved versions are journalled before HTML retrieval; resume returns the original pinned snapshot. Coverage includes the full extraction hash, exact version and exclusive range. It survives memory, reassessment, source inspectors and generated passages/exports. Multiple windows remain one paper, and cited primary versions cannot mix abstracts or different snapshots. Fixed-host/size/deadline checks, independent storage validation and bounded identity context protect the boundary. See [FULL_TEXT.md](FULL_TEXT.md); native provider compatibility and scientific support remain separate verification gates.
+
 ### Implemented memory and higher-level research boundary
 
 Memory scope derives from the current run’s active browser session, never model arguments. Search yields earlier completed finding references; opening a finding yields its immutable assessment and references to actually quoted source versions. A separate action reads original source text and persists its read link in the new run. Saved model prose cannot serve as a source. Conflicting versions under one source identifier are rejected.

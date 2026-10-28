@@ -420,7 +420,7 @@ def test_identity_count_is_bounded_for_external_iterables():
     with pytest.raises(ValueError, match="reference limit"):
         distinct_paper_count(values)
     context = (
-        reference(f"fixture:{index}", f"https://example.org/{index}") for index in range(201)
+        reference(f"fixture:{index}", f"https://example.org/{index}") for index in range(257)
     )
     with pytest.raises(ValueError, match="reference limit"):
         distinct_paper_count((), context=context)

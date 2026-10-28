@@ -5,6 +5,14 @@ import { BIBLIOGRAPHY } from '../research/bibliography.test-support'
 
 afterEach(() => vi.unstubAllGlobals())
 describe('owned literature watch protocol', () => {
+  it('preserves exact source-document coverage without interpreting a window as an entire paper', () => {
+    const fixture = detail(), snapshot = '99999999-9999-4999-8999-999999999999'
+    const coverage = { snapshot_id: snapshot, snapshot_sha256: 'c'.repeat(64), arxiv_id: BIBLIOGRAPHY.arxiv_id, arxiv_version: 2, start: 100, end: 100 + Array.from(fixture.document.text).length, total: 10000 }
+    const document = { ...fixture.document, source_id: `arxiv-html:${snapshot}:${coverage.start}:${coverage.end}`, content_kind: 'full_text', url: 'https://arxiv.org/html/2610.00001v2', bibliography: BIBLIOGRAPHY, coverage }
+    expect(parseSourceDetail({ ...fixture, document }).document.coverage).toEqual(coverage)
+    expect(parseSourceDetail(fixture).document).not.toHaveProperty('coverage')
+    for (const change of [{ text: document.text + 'x' }, { content_kind: 'abstract' }, { bibliography: undefined }, { url: 'https://arxiv.org/html/2610.00001v3' }]) expect(() => parseSourceDetail({ ...fixture, document: { ...document, ...change } })).toThrow('invalid_response')
+  })
   it('requires explicit collection availability and never accepts model execution', () => {
     expect(parseCapabilities(capabilities(false)).execution_available).toBe(false)
     expect(() => parseCapabilities({ ...capabilities(), model_calls: true })).toThrow()

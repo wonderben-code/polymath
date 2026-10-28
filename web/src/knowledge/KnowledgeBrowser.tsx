@@ -3,6 +3,10 @@ import type { FormEvent, KeyboardEvent } from 'react'
 import { KnowledgeError, loadKnowledge } from './client'
 import type { KnowledgeData, KnowledgeKind, KnowledgeNode } from './client'
 import { WatchWorkspace } from '../ingestion/WatchWorkspace'
+import { SourceCoverageNotice } from '../research/SourceCoverageNotice'
+import { Bibliography } from '../research/bibliography'
+import type { SourceCoverage } from '../research/sourceCoverage'
+import { sourceIdentityCount } from '../research/sourcePresentation'
 import './knowledge.css'
 
 export interface KnowledgeBrowserProps {
@@ -27,8 +31,8 @@ function shortLabel(label: string): string {
   return characters.length > 23 ? characters.slice(0, 22).join('') + '…' : label
 }
 
-function sourceKind(value: string | null) {
-  return value === 'full_text' ? 'Full-text snapshot' : value === 'abstract' ? 'Abstract snapshot' : null
+function sourceKind(value: string | null, coverage?: SourceCoverage) {
+  return coverage ? 'Full text excerpt' : value === 'full_text' ? 'Full-text snapshot' : value === 'abstract' ? 'Abstract snapshot' : null
 }
 
 function NodeDetail({ node, data, onSelect, onOpenRun, onOpenSource, onOpenFinding }: { node: KnowledgeNode; data: KnowledgeData; onSelect: (id: string) => void; onOpenRun: (id: string) => void; onOpenSource: (watchId: string, sourceId: string) => void; onOpenFinding?: (id: string) => void }) {
@@ -39,8 +43,10 @@ function NodeDetail({ node, data, onSelect, onOpenRun, onOpenSource, onOpenFindi
   return <section className="knowledge-node-detail" aria-label="Selected knowledge record">
     <span className="eyebrow accent">{kinds[node.kind]}</span>
     <h4>{node.label}</h4>
-    {sourceKind(node.content_kind) && <p>{sourceKind(node.content_kind)}</p>}
+    {sourceKind(node.content_kind, node.coverage) && <p>{sourceKind(node.content_kind, node.coverage)}</p>}
     {node.source_id && <p className="knowledge-source-id">{node.source_id}</p>}
+    {node.kind === 'source' && <SourceCoverageNotice coverage={node.coverage} contentKind={node.content_kind ?? undefined} />}
+    {node.coverage && <Bibliography value={node.bibliography} />}
     {node.assessment && (!node.assessment.is_current || !node.assessment.is_supported) && <p className="knowledge-limit">{node.assessment.state === 'unsupported' ? 'Unsupported by the latest model assessment.' : 'Historical finding; a newer version is current.'} Saved text remains available. New source-based generation requires the current supported version.</p>}
     {node.assessment_status === 'unapplied_reassessment' && <p className="knowledge-limit">A saved source copy from an unapplied reassessment. It does not establish a current finding.</p>}
     <p>{node.kind === 'field' ? 'A field named in saved research. Its links show recorded research relationships.' : node.kind === 'source' ? node.task_kind === 'ingest_literature' ? 'An unassessed source version collected by a literature watch. Read its saved text before starting a separate investigation.' : 'A source version saved during an investigation. Open its research record to inspect the evidence.' : 'A saved research finding. Its links preserve the recorded mapping and source associations.'}</p>
@@ -66,7 +72,7 @@ function MapView({ data, selected, onSelect, onOpenRun, onOpenSource, onOpenFind
       <div className="knowledge-map">
         <svg viewBox="0 0 900 450" role="group" aria-label="Saved research relationship map">
           <title>Fields, findings, and saved source versions</title>
-          {columns.map((kind, index) => <text key={kind} x={85 + index * 300} y="28" className="knowledge-map-column">{kinds[kind]}s</text>)}
+          {columns.map((kind, index) => <text key={kind} x={85 + index * 300} y="28" className="knowledge-map-column">{kind === 'source' ? 'Source versions' : `${kinds[kind]}s`}</text>)}
           <g aria-hidden="true">{data.edges.map((edge) => {
             const start = locations.get(edge.source), end = locations.get(edge.target)
             if (!start || !end) return null
@@ -150,6 +156,8 @@ export function KnowledgeBrowser({ enabled, onOpenRun, refreshToken, canInvestig
   }, [canInvestigate])
 
   const bridges = data ? [...new Map(data.nodes.filter((node) => node.kind === 'finding' && node.finding_outcome === 'bridge' && node.result_id !== null).map((node) => [node.result_id!, node])).values()] : []
+  const sourceRecords = data?.nodes.flatMap((node) => node.kind === 'source' && node.source_id && node.content_kind ? [{ source_id: node.source_id, content_kind: node.content_kind, coverage: node.coverage, bibliography: node.bibliography }] : []) ?? []
+  const hasExcerpts = sourceRecords.some((source) => source.coverage), paperCount = sourceIdentityCount(sourceRecords)
   const canChoose = enabled && phase === 'ready' && canInvestigate && !investigating && !!onInvestigateBridges
 
   function chooseBridge(resultId: string) {
@@ -189,8 +197,8 @@ export function KnowledgeBrowser({ enabled, onOpenRun, refreshToken, canInvestig
       <p className="knowledge-coverage">Current browser session only · {data.findingsConsidered} saved {data.findingsConsidered === 1 ? 'finding' : 'findings'} considered</p>
       {data.truncated && <p className="knowledge-limit" role="status">This is a bounded view of your library. Narrow the search to inspect more specific records.</p>}
       {data.items.length === 0 && data.nodes.length === 0 ? <p className="knowledge-message">No saved knowledge matches this search. Completed investigations will build the library.</p> : <>
-        <div className="knowledge-search-results"><h3>Matching records</h3>{data.items.length ? <ul aria-label="Matching saved research">{data.items.map((item) => <li key={item.id}><div><span className="knowledge-record-kind">{item.task_kind === 'ingest_literature' ? 'Unassessed source version' : item.type === 'source' ? sourceKind(item.content_kind) || 'Source' : 'Finding'}</span><h4>{item.title}</h4>{item.summary && <p>{item.summary}</p>}</div>{item.task_kind === 'ingest_literature' && item.watch_id && item.source_version_id ? <button type="button" aria-label={`Read unassessed source: ${item.title}`} onClick={() => readWatchSource(item.watch_id!, item.source_version_id!)} disabled={!csrfToken}>Read unassessed source<span className="knowledge-sr-only">: {item.title}</span></button> : item.task_kind === 'reassess_finding' ? (item.assessment_result_id || item.type === 'finding' && item.result_id) && onOpenFinding ? <button type="button" aria-label={`Open saved finding version: ${item.title}`} onClick={() => onOpenFinding((item.assessment_result_id || item.result_id)!)}>Open saved finding version</button> : <span className="knowledge-record-kind">Unapplied reassessment material</span> : <button type="button" onClick={() => onOpenRun(item.run_id)}>Open investigation<span className="knowledge-sr-only">: {item.title}</span></button>}</li>)}</ul> : <p className="knowledge-message">No matching record summaries were returned. Saved relationships remain available below.</p>}</div>
-        {data.nodes.length > 0 && <div className="knowledge-graph-section"><h3>Saved relationships</h3><p className="knowledge-map-note">Field links describe a saved mapping or model-selected research direction. Source links identify evidence associated with a finding. Curved links show earlier bridges investigated by a follow-up; they do not provide independent support. Collected sources without finding links remain unassessed.</p><MapView data={data} selected={selected} onSelect={setSelected} onOpenRun={onOpenRun} onOpenSource={readWatchSource} onOpenFinding={onOpenFinding} /></div>}
+        <div className="knowledge-search-results"><h3>Matching records</h3>{data.items.length ? <ul aria-label="Matching saved research">{data.items.map((item) => <li key={item.id}><div><span className="knowledge-record-kind">{item.coverage ? 'Full text excerpt' : item.task_kind === 'ingest_literature' ? 'Unassessed source version' : item.type === 'source' ? sourceKind(item.content_kind, item.coverage) || 'Source' : 'Finding'}</span><h4>{item.title}</h4>{item.summary && <p>{item.summary}</p>}{item.coverage && <p className="knowledge-map-note">Saved characters {item.coverage.start}–{item.coverage.end} of {item.coverage.total} (end excluded) · arXiv {item.coverage.arxiv_id}v{item.coverage.arxiv_version}</p>}</div>{item.task_kind === 'ingest_literature' && item.watch_id && item.source_version_id ? <button type="button" aria-label={`Read unassessed source: ${item.title}`} onClick={() => readWatchSource(item.watch_id!, item.source_version_id!)} disabled={!csrfToken}>Read unassessed source<span className="knowledge-sr-only">: {item.title}</span></button> : item.task_kind === 'reassess_finding' ? (item.assessment_result_id || item.type === 'finding' && item.result_id) && onOpenFinding ? <button type="button" aria-label={`Open saved finding version: ${item.title}`} onClick={() => onOpenFinding((item.assessment_result_id || item.result_id)!)}>Open saved finding version</button> : <span className="knowledge-record-kind">Unapplied reassessment material</span> : <button type="button" onClick={() => onOpenRun(item.run_id)}>Open investigation<span className="knowledge-sr-only">: {item.title}</span></button>}</li>)}</ul> : <p className="knowledge-message">No matching record summaries were returned. Saved relationships remain available below.</p>}</div>
+        {data.nodes.length > 0 && <div className="knowledge-graph-section"><h3>Saved relationships</h3>{hasExcerpts && <p className="source-paper-count">{sourceRecords.length} saved source versions · {paperCount} paper {paperCount === 1 ? 'identity' : 'identities'}. Multiple excerpts of one paper are separate saved windows, not independent papers.</p>}<p className="knowledge-map-note">Field links describe a saved mapping or model-selected research direction. Source links identify evidence associated with a finding. Curved links show earlier bridges investigated by a follow-up; they do not provide independent support. Collected sources without finding links remain unassessed.</p><MapView data={data} selected={selected} onSelect={setSelected} onOpenRun={onOpenRun} onOpenSource={readWatchSource} onOpenFinding={onOpenFinding} /></div>}
         {bridges.length > 0 && <fieldset className="knowledge-bridge-selection">
           <legend>Investigate connections between bridges</legend>
           <p>Choose two to four saved bridges. Polymath will revisit their original evidence and test whether a shared structure holds up.</p>

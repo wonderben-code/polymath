@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from typing import Annotated, Literal
 
-from pydantic import Field, model_validator
+from pydantic import Field, model_serializer, model_validator
 
-from polymath.literature.identity import distinct_paper_count
+from polymath.literature.identity import (
+    MAX_IDENTITY_REFERENCES,
+    paper_aliases,
+    validate_selected_paper_versions,
+)
 from polymath.research.controller import (
     _verify_answer_evidence,
     _verify_evidence,
@@ -23,6 +27,7 @@ from polymath.research.models import (
     ResearchEvent,
     ResearchMode,
     ResearchResult,
+    SourceCoverage,
     SourceDocument,
     SourceReference,
     StrictModel,
@@ -133,13 +138,28 @@ class VerifiedAssessmentCitation(AssessmentCitation):
     source_id: Annotated[Text, Field(max_length=200)]
     source_sha256: ContentHash
     content_kind: Literal["abstract", "full_text"]
+    coverage: SourceCoverage | None = None
     start: Annotated[int, Field(ge=0)]
     end: Annotated[int, Field(ge=1)]
+
+    @model_serializer(mode="wrap")
+    def preserve_absent_coverage(self, handler):
+        data = handler(self)
+        if self.coverage is None:
+            data.pop("coverage", None)
+        return data
 
     @model_validator(mode="after")
     def quote_span(self) -> VerifiedAssessmentCitation:
         if self.end - self.start != len(self.quote):
             raise ValueError("assessment quote offsets must preserve exact Unicode text")
+        if self.coverage is not None and (
+            self.content_kind != "full_text"
+            or self.source_id
+            != (f"arxiv-html:{self.coverage.snapshot_id}:{self.coverage.start}:{self.coverage.end}")
+            or self.end > self.coverage.end - self.coverage.start
+        ):
+            raise ValueError("assessment quote must retain its exact full-text excerpt scope")
         return self
 
 
@@ -240,6 +260,7 @@ def verify_assessment_quotes(
                     source_id=source.source_id,
                     source_sha256=source.content_sha256,
                     content_kind=source.content_kind,
+                    coverage=source.coverage,
                     start=start,
                     end=start + len(citation.quote),
                 )
@@ -251,6 +272,8 @@ def validate_assessment_result(
     result: AssessmentResult,
     basis: AssessmentBasis,
     observed: Mapping[str, AssessmentSourceSnapshot],
+    *,
+    alias_context: Iterable[SourceReference] = (),
 ) -> None:
     """Recheck version/quote coverage; semantic interpretation is still model-assessed."""
     result = AssessmentResult.model_validate_json(result.model_dump_json())
@@ -275,6 +298,7 @@ def validate_assessment_result(
             or document.title != reference.title
             or document.url != reference.url
             or document.bibliography != reference.bibliography
+            or document.coverage != reference.coverage
             or document.content_sha256 != reference.content_sha256
             or document.content_kind != reference.content_kind
         ):
@@ -315,9 +339,20 @@ def validate_assessment_result(
         selected[document.source_id] = document
     if tuple(selected.values()) != revised.sources:
         raise ValueError("assessment_current_versions_mismatch")
-    context = tuple(snapshot.document for snapshot in observed.values())
-    if distinct_paper_count(selected.values(), context=context) != len(selected):
-        raise ValueError("assessment_ambiguous_paper_version")
+    context = {
+        paper_aliases(snapshot.document): snapshot.document for snapshot in observed.values()
+    }
+    try:
+        for position, reference in enumerate(alias_context):
+            if position >= MAX_IDENTITY_REFERENCES:
+                raise ValueError("paper identity reference limit exceeded")
+            context.setdefault(paper_aliases(reference), reference)
+            if len(context) > MAX_IDENTITY_REFERENCES:
+                raise ValueError("paper identity reference limit exceeded")
+        validate_selected_paper_versions(selected.values(), context=context.values())
+    except ValueError:
+        raise ValueError("assessment_ambiguous_paper_version") from None
+    context = tuple(context.values())
     purposes = set(result.search_purposes)
     if isinstance(revised.finding, AnswerFinding):
         if basis.mode != "ask" or revised.finding.question != basis.prior_finding.question:

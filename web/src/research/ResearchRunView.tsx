@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react'
 import { Bibliography } from './bibliography'
 import { FindingVersionNotice } from '../assessments/FindingVersionNotice'
+import { SourceCoverageNotice } from './SourceCoverageNotice'
+import { groupSourceVersions, sourceContentLabel } from './sourcePresentation'
 import type {
   AnswerClaim,
   AnswerFinding,
@@ -73,14 +75,20 @@ function SourceLink({ source }: { source: SourceDocument }) {
     : <span className="research-source-title">{source.title}<span className="research-source-warning">Source link unavailable</span></span>
 }
 
-function sourceKind(kind: SourceDocument['content_kind']) {
-  return kind === 'abstract' ? 'Abstract only' : 'Full text retrieved'
-}
-
 function sourceOrigin(source: SourceDocument): string {
+  if (source.coverage) return 'Saved excerpt from a versioned arXiv HTML paper'
   if (source.extraction_method.startsWith('openalex_')) return 'Saved OpenAlex abstract snapshot'
   if (source.extraction_method.startsWith('arxiv_')) return 'Saved arXiv abstract snapshot'
   return 'Saved source snapshot'
+}
+
+function SourceVersions({ versions }: { versions: SourceDocument[] }) {
+  const first = versions[0], excerpts = versions.filter((source) => source.coverage)
+  const sameSnapshot = excerpts.length === versions.length && excerpts.every((source) => source.coverage?.snapshot_id === first.coverage?.snapshot_id)
+  return <li className="research-paper-group"><div><SourceLink source={first} /><span className="research-source-kind">{versions.length === 1 ? sourceContentLabel(first.content_kind, first.coverage) : `${versions.length} saved ${sameSnapshot ? 'excerpts' : 'source versions'}`}</span></div>
+    {versions.length > 1 && <p className="source-paper-count">{excerpts.length} saved full-text {excerpts.length === 1 ? 'excerpt' : 'excerpts'} from this paper identity. These versions are not independent papers.</p>}
+    {versions.length === 1 && !first.coverage ? <><p>{sourceOrigin(first)}</p><SourceCoverageNotice contentKind={first.content_kind} /><Bibliography value={first.bibliography} /></> : <ul className="research-source-windows" aria-label={`Saved versions of ${first.title}`}>{versions.map((source) => <li key={source.source_id}><p><strong>{sourceContentLabel(source.content_kind, source.coverage)}</strong> · {sourceOrigin(source)}</p><SourceCoverageNotice coverage={source.coverage} contentKind={source.content_kind} />{source.coverage && <details className="research-source-window-text"><summary>Read this saved excerpt</summary><p className="research-source-text">{source.text}</p></details>}<Bibliography value={source.bibliography} /></li>)}</ul>}
+  </li>
 }
 
 function quoteMatches(quote: VerifiedQuote, source: SourceDocument | undefined): boolean {
@@ -138,7 +146,7 @@ function ClaimEvidence({ claim, result, ordinal }: { claim: AnswerClaim; result:
     {quotes.length ? quotes.map((quote, index) => {
       const source = sources.get(quote.source_id)
       const matched = quoteMatches(quote, source)
-      return <details className="research-quote" key={`${claim.id}-${quote.source_id}-${index}`}><summary><span>{source?.title ?? 'Source unavailable'}</span><span className={`research-evidence-label${matched ? '' : ' needs-review'}`}>{matched ? sourceKind(quote.content_kind) : 'Quotation needs review'}</span></summary><div className="research-quote-body"><p className="research-quote-scope">{matched ? 'Quotation matches the saved source text.' : 'This quotation could not be matched to the saved source and must not be treated as verified evidence.'}</p><blockquote>{quote.quote}</blockquote><p className="research-claim"><span>Recorded support:</span> {quote.supports}</p>{source && <SourceLink source={source} />}</div></details>
+      return <details className="research-quote" key={`${claim.id}-${quote.source_id}-${index}`}><summary><span>{source?.title ?? 'Source unavailable'}</span><span className={`research-evidence-label${matched ? '' : ' needs-review'}`}>{matched ? sourceContentLabel(quote.content_kind, source?.coverage) : 'Quotation needs review'}</span></summary><div className="research-quote-body"><p className="research-quote-scope">{matched ? 'Quotation matches the saved source text.' : 'This quotation could not be matched to the saved source and must not be treated as verified evidence.'}</p><blockquote>{quote.quote}</blockquote><p className="research-claim"><span>Recorded support:</span> {quote.supports}</p>{source && <><SourceLink source={source} /><SourceCoverageNotice coverage={source.coverage} contentKind={source.content_kind} quoteStart={matched ? quote.start : undefined} quoteEnd={matched ? quote.end : undefined} />{source.coverage && matched && <details className="source-coverage-integrity"><summary>Saved excerpt content hash</summary><dl><dt>Excerpt content SHA-256</dt><dd>{quote.source_sha256}</dd></dl><p>This hash identifies the exact saved excerpt, separately from the complete extracted snapshot.</p></details>}</>}</div></details>
     }) : <p className="research-citation-warning">No matched source quotations saved for this claim.</p>}
   </section>
 }
@@ -206,16 +214,17 @@ function Bridge({ finding }: { finding: BridgeFinding }) {
 
 function Evidence({ result }: { result: ResearchResult }) {
   const sources = new Map(result.sources.map((source) => [source.source_id, source]))
+  const groups = groupSourceVersions(result.sources), hasExcerpts = result.sources.some((source) => source.coverage)
   return (
     <section className="research-evidence" aria-labelledby="research-evidence-title">
-      <div className="research-section-heading"><div><span className="eyebrow accent">CHECK THE SOURCES</span><h3 id="research-evidence-title">Evidence you can inspect</h3></div><span className="research-count">{result.sources.length} saved {result.sources.length === 1 ? 'source' : 'sources'}</span></div>
-      <p className="research-scope-note">Quotation matching checks the saved text. It does not establish whether a scientific interpretation or connection is correct.</p>
+      <div className="research-section-heading"><div><span className="eyebrow accent">CHECK THE SOURCES</span><h3 id="research-evidence-title">Evidence you can inspect</h3></div><span className="research-count">{hasExcerpts ? `${result.sources.length} saved source versions · ${groups.length} paper ${groups.length === 1 ? 'identity' : 'identities'}` : `${result.sources.length} saved ${result.sources.length === 1 ? 'source' : 'sources'}`}</span></div>
+      <p className="research-scope-note">Quotation matching checks the saved text. It does not establish whether a scientific interpretation or connection is correct.</p>{hasExcerpts && <p className="source-paper-count">Excerpts and versions from the same arXiv paper share one paper identity. Saved windows do not establish that the whole paper was read or provide independent corroboration.</p>}
       {result.finding?.outcome !== 'answer' && result.quotes.length > 0 && <div className="research-quotes">{result.quotes.map((quote, index) => {
         const source = sources.get(quote.source_id)
         const matched = quoteMatches(quote, source)
-        return <details className="research-quote" key={`${quote.source_id}-${quote.start}-${index}`}><summary><span>{source ? source.title : 'Source unavailable'}</span><span className={`research-evidence-label${matched ? '' : ' needs-review'}`}>{matched ? sourceKind(quote.content_kind) : 'Quotation needs review'}</span></summary><div className="research-quote-body"><p className="research-quote-scope">{matched ? 'Quotation matches the saved source text.' : 'This quotation could not be matched to the saved source and must not be treated as verified evidence.'}</p><blockquote>{quote.quote}</blockquote><p className="research-claim"><span>Recorded support:</span> {quote.supports}</p>{source && <SourceLink source={source} />}</div></details>
+        return <details className="research-quote" key={`${quote.source_id}-${quote.start}-${index}`}><summary><span>{source ? source.title : 'Source unavailable'}</span><span className={`research-evidence-label${matched ? '' : ' needs-review'}`}>{matched ? sourceContentLabel(quote.content_kind, source?.coverage) : 'Quotation needs review'}</span></summary><div className="research-quote-body"><p className="research-quote-scope">{matched ? 'Quotation matches the saved source text.' : 'This quotation could not be matched to the saved source and must not be treated as verified evidence.'}</p><blockquote>{quote.quote}</blockquote><p className="research-claim"><span>Recorded support:</span> {quote.supports}</p>{source && <><SourceLink source={source} /><SourceCoverageNotice coverage={source.coverage} contentKind={source.content_kind} quoteStart={matched ? quote.start : undefined} quoteEnd={matched ? quote.end : undefined} />{source.coverage && matched && <details className="source-coverage-integrity"><summary>Saved excerpt content hash</summary><dl><dt>Excerpt content SHA-256</dt><dd>{quote.source_sha256}</dd></dl><p>This hash identifies the exact saved excerpt, separately from the complete extracted snapshot.</p></details>}</>}</div></details>
       })}</div>}
-      {result.sources.length > 0 ? <ul className="research-source-list" aria-label="Saved sources">{result.sources.map((source) => <li key={source.source_id}><div><SourceLink source={source} /><span className="research-source-kind">{sourceKind(source.content_kind)}</span></div><p>{sourceOrigin(source)}</p><Bibliography value={source.bibliography} /></li>)}</ul> : <p className="research-empty">No source text has been saved for this outcome.</p>}
+      {result.sources.length > 0 ? <ul className="research-source-list" aria-label="Saved sources">{groups.map((group) => <SourceVersions key={group.identity} versions={group.versions} />)}</ul> : <p className="research-empty">No source text has been saved for this outcome.</p>}
     </section>
   )
 }

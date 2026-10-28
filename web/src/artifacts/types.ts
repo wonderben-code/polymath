@@ -1,5 +1,6 @@
 import type { ResearchActivityEvent } from '../research/types'
 import type { SourceBibliography } from '../research/bibliography'
+import type { SourceCoverage } from '../research/sourceCoverage'
 
 export type ArtifactKind = 'formalise' | 'write_summary' | 'write_paper'
 export type ArtifactStatus = 'ready' | 'insufficient_evidence' | 'failed' | 'limit_reached'
@@ -42,6 +43,7 @@ export interface ArtifactPassage {
   supports: string
   claim_id: string | null
   bibliography?: SourceBibliography
+  coverage?: SourceCoverage
 }
 
 export interface DocumentSection {

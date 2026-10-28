@@ -128,6 +128,9 @@ def _sources(owner_hash: str, query: str = ""):
             SourceVersion.source_id,
             SourceVersion.content_kind,
             SourceRetrieval.title,
+            SourceRetrieval.url,
+            SourceRetrieval.bibliography,
+            SourceRetrieval.coverage,
             RunEvidenceSource.run_id,
             ResearchRun.task_kind,
             WatchSeenSourceVersion.watch_id,
@@ -183,6 +186,9 @@ def _sources(owner_hash: str, query: str = ""):
             ranked.c.source_id,
             ranked.c.content_kind,
             ranked.c.title,
+            ranked.c.url,
+            ranked.c.bibliography,
+            ranked.c.coverage,
             ranked.c.run_id,
             ranked.c.task_kind,
             ranked.c.watch_id,
@@ -247,6 +253,17 @@ def _findings(owner_hash: str, query: str = "", *, current_only: bool = True):
     return statement.order_by(EvidenceResult.created_at.desc(), EvidenceResult.id)
 
 
+def _coverage_metadata(row) -> dict:
+    if row.coverage is None:
+        return {}
+    return {
+        "coverage": row.coverage,
+        "bibliography": row.bibliography,
+        "url": row.url,
+        "read_scope": "full_text_excerpt",
+    }
+
+
 def _source_item(row) -> dict:
     return {
         "id": f"source:{row.id}",
@@ -272,10 +289,13 @@ def _source_item(row) -> dict:
             else "saved_snapshot"
         ),
         "summary": (
-            f"Collected {row.content_kind.replace('_', ' ')}; unassessed source version"
+            "Saved FULL TEXT EXCERPT; exact bounded snapshot window"
+            if row.coverage is not None
+            else f"Collected {row.content_kind.replace('_', ' ')}; unassessed source version"
             if row.task_kind == "ingest_literature"
             else f"Saved {row.content_kind.replace('_', ' ')} snapshot"
         ),
+        **_coverage_metadata(row),
     }
 
 
@@ -351,6 +371,9 @@ def _graph(session: Session, owner_hash: str, query: str) -> dict:
                 SourceVersion.source_id,
                 SourceVersion.content_kind,
                 SourceRetrieval.title,
+                SourceRetrieval.url,
+                SourceRetrieval.bibliography,
+                SourceRetrieval.coverage,
             )
             .join(SourceVersion, SourceVersion.id == EvidenceQuote.version_id)
             .join(SourceRetrieval, SourceRetrieval.id == EvidenceQuote.retrieval_id)
@@ -440,6 +463,7 @@ def _graph(session: Session, owner_hash: str, query: str) -> dict:
                 "task_kind": item["task_kind"],
                 "assessment_result_id": str(row.id),
                 "assessment_status": "current_supported",
+                **_coverage_metadata(source),
             }
             edge_id = f"supported_by:{node['id']}:{source_node_id}"
             proposed_edges[edge_id] = {
@@ -478,6 +502,7 @@ def _graph(session: Session, owner_hash: str, query: str) -> dict:
                     str(row.assessment_result_id) if row.assessment_result_id else None
                 ),
                 "assessment_status": _source_item(row)["assessment_status"],
+                **_coverage_metadata(row),
             }
     return {
         "nodes": list(nodes.values()),

@@ -27,14 +27,23 @@ from polymath.assessment_contracts import (
     validate_assessment_result,
     verify_assessment_quotes,
 )
+from polymath.full_text_contracts import FullTextIndex
 from polymath.research.controller import (
     SAFE_MODEL_ERRORS,
+    _checked_full_text_index,
+    _checked_full_text_window,
+    _complete_identity_context,
+    _extra_identity_context,
+    _retain_full_text_availability,
     _verify_answer_evidence,
     _verify_evidence,
 )
 from polymath.research.meta import ModelError, ModelReply, ResearchModel
 from polymath.research.models import (
     AnswerFinding,
+    FullTextAvailability,
+    OpenFullTextAction,
+    ReadFullTextWindowAction,
     ResearchEvent,
     ResearchResult,
     SearchAction,
@@ -49,6 +58,8 @@ AssessmentAction = Annotated[
     ReadAssessmentSourceAction
     | ReadAssessmentLiteratureAction
     | SearchAction
+    | OpenFullTextAction
+    | ReadFullTextWindowAction
     | ConcludeAssessmentAction,
     Field(discriminator="kind"),
 ]
@@ -61,6 +72,12 @@ class AssessmentTools(Protocol):
     async def search(self, query: str, purpose: str) -> SearchResults: ...
 
     async def read_literature_source(self, source_id: str) -> AssessmentSourceSnapshot: ...
+
+    async def open_full_text(self, source_id: str) -> FullTextIndex: ...
+
+    async def read_full_text_window(
+        self, snapshot_id: str, start: int, end: int
+    ) -> AssessmentSourceSnapshot: ...
 
 
 @dataclass(frozen=True)
@@ -131,8 +148,11 @@ when the judgement is unchanged; it is not silently restored to supported.
 
 A revised finding must independently satisfy the normal positive bridge/answer
 contract and successful counterevidence AND prior_work search attempts. Select
-ONE current retrieval per canonical paper in selected_retrieval_ids, quoting
-that selected version only in revised_finding. Use judgement citations to compare
+ONE current version per canonical paper in selected_retrieval_ids, quoting
+that selected version only in revised_finding. Multiple exact windows from the
+SAME immutable full-text snapshot/version are allowed; they count as ONE paper.
+Never mix different snapshots or an abstract with a full-text version as current.
+Use judgement citations to compare
 old/new versions, rather than mixing versions in the replacement. Keep canonical
 source IDs in bridge/answer citations; retrieval UUIDs select their exact text.
 Ask retains the exact original question and individually cited Known/Postulated/
@@ -140,7 +160,19 @@ Speculative claims; retained claim IDs cannot gain stronger labels automatically
 Surprise retains its original field selections. Preserve uncertainty, objections,
 derivations, caveats, and limitations. Never claim verification, a proof, or an
 increase in confidence merely because the model has reassessed its own output.
+
+Full text is optional. After a successful search supplies an unambiguous
+full_text candidate, open_full_text returns a heading index, not paper text or
+evidence. Use read_full_text_window only for an opened snapshot, with an exact
+bounded character range of at most8000 characters. A successful window read is
+a FULL TEXT EXCERPT, never a whole-paper read. Extracted HTML may omit equations,
+figures, and tables. State these coverage limitations when discussing excerpts.
 """
+
+EXCERPT_LIMITATION = (
+    "Only exact FULL TEXT EXCERPTS were read, not the whole paper. "
+    "Extracted HTML text may omit equations, figures, and tables; a heading index is metadata."
+)
 
 SAFE_VALIDATION_ERRORS = {
     "assessment_source_not_read",
@@ -167,6 +199,10 @@ SAFE_VALIDATION_ERRORS = {
     "postulated_requires_distinct_sources",
     "fields_not_selected",
     "bridge_outside_current_fields",
+    "assessment_excerpt_scope_required",
+    "identity_context_unavailable",
+    "identity_context_limit",
+    "selected_paper_version_conflict",
 }
 
 
@@ -176,6 +212,7 @@ def _match_pinned(reference: AssessmentSourceReference, document: SourceDocument
         or document.title != reference.title
         or document.url != reference.url
         or document.bibliography != reference.bibliography
+        or document.coverage != reference.coverage
         or document.content_sha256 != reference.content_sha256
         or document.content_kind != reference.content_kind
     ):
@@ -209,6 +246,8 @@ class AssessmentController:
         ]
         references = {item.retrieval_id: item for item in basis.sources}
         discovered: dict[str, SourceReference] = {}
+        full_text: dict[str, FullTextAvailability] = {}
+        opened: dict[str, FullTextIndex] = {}
         observed: dict[str, AssessmentSourceSnapshot] = {}
         purposes: set[str] = set()
         events: list[ResearchEvent] = []
@@ -234,16 +273,25 @@ class AssessmentController:
         def result(
             status, *, judgement=None, revised=None, quotes=(), error_code=None, reason=None
         ):
-            return AssessmentResult(
-                status=status,
-                disposition=judgement.disposition if judgement else "inconclusive",
-                rationale=judgement.rationale if judgement else (),
-                limitations=judgement.limitations
+            limitations = (
+                judgement.limitations
                 if judgement
                 else (
                     "This assessment ended before a complete evidence-backed judgement; "
                     "the prior state is retained.",
-                ),
+                )
+            )
+            if any(item.document.coverage for item in observed.values()) and (
+                EXCERPT_LIMITATION not in limitations
+            ):
+                if len(limitations) >= 8:
+                    raise ValueError("assessment_excerpt_scope_required")
+                limitations = (*limitations, EXCERPT_LIMITATION)
+            return AssessmentResult(
+                status=status,
+                disposition=judgement.disposition if judgement else "inconclusive",
+                rationale=judgement.rationale if judgement else (),
+                limitations=limitations,
                 observed_retrieval_ids=tuple(observed),
                 selected_retrieval_ids=judgement.selected_retrieval_ids if judgement else (),
                 quotes=quotes,
@@ -401,7 +449,9 @@ class AssessmentController:
                         candidate[source.source_id] = source
                     if len(candidate) > 200:
                         raise ValueError("assessment_discovery_limit")
+                    availability = _retain_full_text_availability(full_text, found.full_text)
                     discovered = candidate
+                    full_text = availability
                 except Exception:
                     observation({"error": "assessment_literature_search_failed"})
                     await event(
@@ -422,6 +472,91 @@ class AssessmentController:
                     f"found {len(found.sources)} sources."
                     + (" Some providers were unavailable." if found.provider_failures else ""),
                 )
+            elif isinstance(action, OpenFullTextAction):
+                reference = discovered.get(action.source_id)
+                availability = full_text.get(action.source_id)
+                if reference is None or availability is None or availability.status != "candidate":
+                    if await reject("assessment_full_text_not_discovered"):
+                        return result("failed", error_code="repair_limit")
+                    continue
+                try:
+                    index = _checked_full_text_index(
+                        await asyncio.wait_for(
+                            self.tools.open_full_text(action.source_id),
+                            timeout=self.limits.tool_timeout_seconds,
+                        ),
+                        reference,
+                        availability,
+                    )
+                    previous = opened.get(index.snapshot_id)
+                    if previous is not None and previous != index:
+                        raise ValueError("full_text_index_mismatch")
+                    opened[index.snapshot_id] = index
+                except Exception:
+                    observation({"error": "assessment_full_text_open_failed"})
+                    await event("tool_failed", "The full-text heading index could not be opened.")
+                    continue
+                observation(
+                    {
+                        "kind": "full_text_index",
+                        **index.model_dump(mode="json"),
+                        "scope": (
+                            "Metadata only; no source text has been read by opening this index."
+                        ),
+                    }
+                )
+                await event(
+                    "full_text_index_opened",
+                    "Opened an arXiv HTML heading index; no text window was read.",
+                )
+            elif isinstance(action, ReadFullTextWindowAction):
+                index = opened.get(action.snapshot_id)
+                if index is None or action.end > index.total_chars:
+                    if await reject("assessment_full_text_not_opened"):
+                        return result("failed", error_code="repair_limit")
+                    continue
+                repeated = any(
+                    item.document.coverage is not None
+                    and (
+                        item.document.coverage.snapshot_id,
+                        item.document.coverage.start,
+                        item.document.coverage.end,
+                    )
+                    == (action.snapshot_id, action.start, action.end)
+                    for item in observed.values()
+                )
+                if len(observed) >= self.limits.max_sources and not repeated:
+                    if await reject("assessment_source_limit"):
+                        return result("failed", error_code="repair_limit")
+                    continue
+                try:
+                    snapshot = await asyncio.wait_for(
+                        self.tools.read_full_text_window(
+                            action.snapshot_id, action.start, action.end
+                        ),
+                        timeout=self.limits.tool_timeout_seconds,
+                    )
+                    if not isinstance(snapshot, AssessmentSourceSnapshot):
+                        raise ValueError("invalid_assessment_source")
+                    _checked_full_text_window(snapshot.document, index, action.start, action.end)
+                    snapshot = retain(snapshot)
+                except Exception:
+                    observation({"error": "assessment_full_text_read_failed"})
+                    await event("tool_failed", "The exact full-text excerpt could not be read.")
+                    continue
+                observation(
+                    {
+                        "kind": "assessment_source_text",
+                        "role": "full_text_excerpt",
+                        **snapshot.model_dump(mode="json"),
+                        "limitations": [EXCERPT_LIMITATION],
+                    }
+                )
+                await event(
+                    "full_text_excerpt_read",
+                    f"Read FULL TEXT EXCERPT characters {action.start}–{action.end} "
+                    f"of {index.total_chars}; the whole paper was not read.",
+                )
             elif isinstance(action, ReadAssessmentLiteratureAction):
                 reference = discovered.get(action.source_id)
                 if reference is None:
@@ -441,6 +576,7 @@ class AssessmentController:
                         or document.title != reference.title
                         or document.url != reference.url
                         or document.bibliography != reference.bibliography
+                        or document.coverage != reference.coverage
                     ):
                         raise ValueError("assessment_discovered_source_mismatch")
                     snapshot = retain(snapshot)
@@ -464,6 +600,13 @@ class AssessmentController:
                 )
             elif isinstance(action, ConcludeAssessmentAction):
                 try:
+                    extra_context = await _extra_identity_context(
+                        self.tools, self.limits.tool_timeout_seconds
+                    )
+                    extra_context = _complete_identity_context((), opened.values(), extra_context)
+                    context = _complete_identity_context(
+                        (item.document for item in observed.values()), (), extra_context
+                    )
                     revised = None
                     if action.revised_finding is not None:
                         selected = {}
@@ -475,7 +618,6 @@ class AssessmentController:
                             if document.source_id in selected:
                                 raise ValueError("assessment_ambiguous_source_version")
                             selected[document.source_id] = document
-                        context = tuple(snapshot.document for snapshot in observed.values())
                         finding = action.revised_finding
                         verified = (
                             _verify_answer_evidence(
@@ -499,7 +641,9 @@ class AssessmentController:
                         )
                     quotes = verify_assessment_quotes(action.rationale, observed)
                     proposed = result("completed", judgement=action, revised=revised, quotes=quotes)
-                    validate_assessment_result(proposed, basis, observed)
+                    validate_assessment_result(
+                        proposed, basis, observed, alias_context=extra_context
+                    )
                 except ValueError as error:
                     code = (
                         str(error)

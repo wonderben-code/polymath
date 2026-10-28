@@ -1,3 +1,8 @@
+import { parseBibliography } from '../research/bibliography'
+import type { SourceBibliography } from '../research/bibliography'
+import { parseSourceCoverage, validateSourceCoverageContext } from '../research/sourceCoverage'
+import type { SourceCoverage } from '../research/sourceCoverage'
+
 export type KnowledgeKind = 'field' | 'source' | 'finding'
 export interface KnowledgeAssessment {
   root_result_id: string; current_result_id: string; state: 'supported' | 'unsupported'; revision: number
@@ -20,6 +25,10 @@ export interface KnowledgeItem {
   assessment?: KnowledgeAssessment | null
   assessment_status?: SourceAssessment | null
   assessment_result_id?: string | null
+  coverage?: SourceCoverage
+  bibliography?: SourceBibliography
+  url?: string
+  read_scope?: 'full_text_excerpt'
 }
 
 export interface KnowledgeNode {
@@ -37,6 +46,10 @@ export interface KnowledgeNode {
   assessment?: KnowledgeAssessment | null
   assessment_status?: SourceAssessment | null
   assessment_result_id?: string | null
+  coverage?: SourceCoverage
+  bibliography?: SourceBibliography
+  url?: string
+  read_scope?: 'full_text_excerpt'
 }
 
 export interface KnowledgeEdge {
@@ -107,6 +120,7 @@ function unique(items: { id: string }[]) {
 }
 
 function sourceNavigation(entry: Record<string, unknown>, source: boolean) {
+  const invalid = (): never => { throw new KnowledgeError('invalid_response') }
   const task = entry.task_kind === undefined || entry.task_kind === null ? null : text(entry.task_kind, 80)
   const watchId = entry.watch_id === undefined ? null : identity(entry.watch_id, true)
   const versionId = entry.source_version_id === undefined ? null : identity(entry.source_version_id, true)
@@ -123,7 +137,14 @@ function sourceNavigation(entry: Record<string, unknown>, source: boolean) {
     assessment = { root_result_id: identity(item.root_result_id)!, current_result_id: current, state: item.state, revision: item.revision as number, last_assessment_id: identity(item.last_assessment_id, true), is_current: isCurrent, is_supported: supported, is_historical: historical }
     if (entry.history_url !== undefined && entry.history_url !== `/api/v1/assessments/heads/${assessment.root_result_id}/history`) throw new KnowledgeError('invalid_response')
   }
-  return { task_kind: task, watch_id: watchId, source_version_id: versionId, assessment_status: sourceStatus as SourceAssessment | null, assessment_result_id: resultId, assessment }
+  const coverage = parseSourceCoverage(entry.coverage, invalid), bibliography = parseBibliography(entry.bibliography, invalid)
+  const url = entry.url === undefined || entry.url === null ? undefined : text(entry.url, 2000)
+  if (coverage) {
+    const contentKind = kind(entry.content_kind)
+    if (!source || !url || !contentKind || entry.read_scope !== 'full_text_excerpt') return invalid()
+    validateSourceCoverageContext({ source_id: text(entry.source_id, 200), url, bibliography, coverage, content_kind: contentKind }, invalid)
+  } else if (entry.read_scope !== undefined && entry.read_scope !== null) return invalid()
+  return { task_kind: task, watch_id: watchId, source_version_id: versionId, assessment_status: sourceStatus as SourceAssessment | null, assessment_result_id: resultId, assessment, ...(coverage ? { coverage, read_scope: 'full_text_excerpt' as const } : {}), ...(bibliography ? { bibliography } : {}), ...(url ? { url } : {}) }
 }
 
 async function response(path: string, signal: AbortSignal): Promise<unknown> {

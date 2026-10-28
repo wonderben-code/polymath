@@ -1,5 +1,6 @@
 import type { AnswerFinding, BridgeFinding, FieldSelection, MemoryReadReference, ResearchActivityEvent, ResearchResult, VerifiedQuote } from '../research/types'
 import type { SourceBibliography } from '../research/bibliography'
+import type { SourceCoverage } from '../research/sourceCoverage'
 
 export type AssessmentDisposition = 'unchanged' | 'revised' | 'unsupported' | 'inconclusive'
 export type AssessmentJobStatus = 'queued' | 'running' | 'waiting_retry' | 'cancel_requested' | 'cancelled' | 'succeeded' | 'failed' | 'interrupted'
@@ -105,6 +106,7 @@ export interface ObservedAssessmentSource {
   title: string
   url: string
   bibliography?: SourceBibliography
+  coverage?: SourceCoverage
   retrieval_id: string
   version_id: string
   content_sha256: string
@@ -126,6 +128,7 @@ export interface AssessmentQuote extends AssessmentCitation {
   source_id: string
   source_sha256: string
   content_kind: 'abstract' | 'full_text'
+  coverage?: SourceCoverage
   start: number
   end: number
 }

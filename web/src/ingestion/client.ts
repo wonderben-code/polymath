@@ -1,5 +1,6 @@
 import type { SourceDocument } from '../research/types'
 import { parseBibliography } from '../research/bibliography'
+import { parseSourceCoverage, validateSourceCoverageContext } from '../research/sourceCoverage'
 
 export type Provider = 'openalex' | 'arxiv'
 export type TickStatus = 'queued' | 'running' | 'waiting_retry' | 'cancel_requested' | 'cancelled' | 'succeeded' | 'failed' | 'interrupted'
@@ -119,10 +120,13 @@ export function parseTick(value: unknown): WatchTick {
 export function parseSourceDetail(value: unknown): WatchSourceDetail {
   const item = object(value), doc = object(item.document)
   if (item.id !== item.version_id) return invalid()
-  return { id: id(item.id), watch_id: id(item.watch_id), run_id: id(item.run_id), version_id: id(item.version_id), retrieval_id: id(item.retrieval_id), content_sha256: hash(item.content_sha256), metadata_sha256: hash(item.metadata_sha256), ...assessmentContext(item), document: {
+  const bibliography = parseBibliography(doc.bibliography, invalid), coverage = parseSourceCoverage(doc.coverage, invalid)
+  const document: SourceDocument = {
     source_id: text(doc.source_id, 200), title: text(doc.title, 1000), url: safeUrl(doc.url), text: text(doc.text, 20000), content_kind: member(doc.content_kind, ['abstract', 'full_text']), retrieved_at: date(doc.retrieved_at), extraction_method: text(doc.extraction_method, 100),
-    ...(doc.bibliography === undefined || doc.bibliography === null ? {} : { bibliography: parseBibliography(doc.bibliography, invalid) }),
-  } }
+    ...(bibliography === undefined ? {} : { bibliography }), ...(coverage === undefined ? {} : { coverage }),
+  }
+  validateSourceCoverageContext(document, invalid)
+  return { id: id(item.id), watch_id: id(item.watch_id), run_id: id(item.run_id), version_id: id(item.version_id), retrieval_id: id(item.retrieval_id), content_sha256: hash(item.content_sha256), metadata_sha256: hash(item.metadata_sha256), ...assessmentContext(item), document }
 }
 function page<T>(value: unknown, key: string, parse: (item: unknown) => T): Page<T> {
   const item = object(value), values = item[key]

@@ -214,6 +214,7 @@ class ResearchMemory:
                 raise MemoryError("memory_source_limit")
             sources = {}
             for version, retrieval in rows:
+                document = _document(version, retrieval)
                 sources.setdefault(
                     retrieval.id,
                     MemorySourceReference(
@@ -222,7 +223,8 @@ class ResearchMemory:
                             source_id=version.source_id,
                             title=retrieval.title,
                             url=retrieval.url,
-                            bibliography=_document(version, retrieval).bibliography,
+                            bibliography=document.bibliography,
+                            coverage=document.coverage,
                         ),
                         content_sha256=version.content_sha256,
                         content_kind=version.content_kind,

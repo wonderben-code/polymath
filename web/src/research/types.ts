@@ -1,4 +1,5 @@
 import type { SourceBibliography } from './bibliography'
+import type { SourceCoverage } from './sourceCoverage'
 import type { FindingVersionNoticeProps } from '../assessments/FindingVersionNotice'
 
 export interface ResearchRunSummary {
@@ -24,6 +25,7 @@ export interface SourceDocument {
   retrieved_at: string
   extraction_method: string
   bibliography?: SourceBibliography
+  coverage?: SourceCoverage
 }
 
 export interface EvidenceQuote {

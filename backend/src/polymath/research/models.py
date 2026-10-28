@@ -32,6 +32,9 @@ ArtifactId = Annotated[
 ContentHash = Annotated[str, StringConstraints(strict=True, pattern=r"^[0-9a-f]{64}$")]
 ResearchMode = Literal["explore", "ask", "surprise"]
 MAX_BIBLIOGRAPHY_BYTES = 60_000
+MAX_FULL_TEXT_CHARACTERS = 250_000
+MAX_FULL_TEXT_WINDOW = 8_000
+MAX_FULL_TEXT_HEADINGS = 80
 
 
 class StrictModel(BaseModel):
@@ -188,11 +191,53 @@ class SourceBibliography(StrictModel):
         return self
 
 
+class ArxivFullTextLocator(StrictModel):
+    arxiv_id: Annotated[str, Field(max_length=100)]
+    arxiv_version: Annotated[int, Field(ge=1, le=9999)] | None = None
+
+    @field_validator("arxiv_id")
+    @classmethod
+    def base_identity(cls, value: str) -> str:
+        base, version = _canonical_arxiv(value)
+        if version is not None:
+            raise ValueError("arXiv locator requires separate base and version")
+        return base
+
+
+class SourceCoverage(ArxivFullTextLocator):
+    snapshot_id: ArtifactId
+    snapshot_sha256: ContentHash
+    arxiv_version: Annotated[int, Field(ge=1, le=9999)]
+    start: Annotated[int, Field(ge=0, lt=MAX_FULL_TEXT_CHARACTERS)]
+    end: Annotated[int, Field(ge=1, le=MAX_FULL_TEXT_CHARACTERS)]
+    total: Annotated[int, Field(ge=1, le=MAX_FULL_TEXT_CHARACTERS)]
+
+    @model_validator(mode="after")
+    def bounded_window(self) -> SourceCoverage:
+        if not self.start < self.end <= self.total or self.end - self.start > MAX_FULL_TEXT_WINDOW:
+            raise ValueError("full-text coverage must identify a bounded exact window")
+        return self
+
+
 class SourceReference(StrictModel):
     source_id: SourceId
     title: Annotated[Text, Field(max_length=1000)]
     url: Annotated[str, StringConstraints(pattern=r"^https://[^\s]+$", max_length=2000)]
     bibliography: SourceBibliography | None = None
+    coverage: SourceCoverage | None = None
+
+    @model_validator(mode="after")
+    def full_text_identity(self) -> SourceReference:
+        coverage = self.coverage
+        if coverage is not None and (
+            self.source_id != f"arxiv-html:{coverage.snapshot_id}:{coverage.start}:{coverage.end}"
+            or self.url != f"https://arxiv.org/html/{coverage.arxiv_id}v{coverage.arxiv_version}"
+            or self.bibliography is None
+            or self.bibliography.arxiv_id != coverage.arxiv_id
+            or self.bibliography.arxiv_version != coverage.arxiv_version
+        ):
+            raise ValueError("full-text coverage requires its exact locator and paper aliases")
+        return self
 
     @model_serializer(mode="wrap")
     def preserve_absent_bibliography(self, handler):
@@ -201,6 +246,8 @@ class SourceReference(StrictModel):
         data = handler(self)
         if self.bibliography is None:
             data.pop("bibliography", None)
+        if self.coverage is None:
+            data.pop("coverage", None)
         return data
 
 
@@ -217,9 +264,38 @@ class ProviderFailure(StrictModel):
     ]
 
 
+class FullTextAvailability(StrictModel):
+    source_id: SourceId
+    provider: Literal["arxiv_html"] = "arxiv_html"
+    status: Literal["candidate", "ambiguous"]
+    locator: ArxivFullTextLocator | None = None
+
+    @model_validator(mode="after")
+    def candidate_locator(self) -> FullTextAvailability:
+        if (self.status == "candidate") != (self.locator is not None):
+            raise ValueError("full-text candidates require one unambiguous validated locator")
+        return self
+
+
 class SearchResults(StrictModel):
     sources: Annotated[tuple[SourceReference, ...], Field(max_length=10)]
     provider_failures: Annotated[tuple[ProviderFailure, ...], Field(max_length=2)] = ()
+    full_text: Annotated[tuple[FullTextAvailability, ...], Field(max_length=10)] = ()
+
+    @model_validator(mode="after")
+    def known_full_text_sources(self) -> SearchResults:
+        identifiers = {source.source_id for source in self.sources}
+        candidates = [candidate.source_id for candidate in self.full_text]
+        if len(set(candidates)) != len(candidates) or not set(candidates).issubset(identifiers):
+            raise ValueError("full-text availability must bind distinct discovered sources")
+        return self
+
+    @model_serializer(mode="wrap")
+    def omit_absent_full_text(self, handler):
+        data = handler(self)
+        if not self.full_text:
+            data.pop("full_text", None)
+        return data
 
 
 class SourceDocument(SourceReference):
@@ -232,6 +308,11 @@ class SourceDocument(SourceReference):
     def require_timezone(self) -> SourceDocument:
         if self.retrieved_at.tzinfo is None:
             raise ValueError("retrieved_at must include its timezone")
+        if self.coverage is not None and (
+            self.content_kind != "full_text"
+            or self.coverage.end - self.coverage.start != len(self.text)
+        ):
+            raise ValueError("full-text window text must match its exact coverage")
         return self
 
     @property
@@ -248,6 +329,24 @@ class SearchAction(StrictModel):
 class ReadAction(StrictModel):
     kind: Literal["read_source"]
     source_id: SourceId
+
+
+class OpenFullTextAction(StrictModel):
+    kind: Literal["open_full_text"]
+    source_id: SourceId
+
+
+class ReadFullTextWindowAction(StrictModel):
+    kind: Literal["read_full_text_window"]
+    snapshot_id: ArtifactId
+    start: Annotated[int, Field(ge=0, lt=MAX_FULL_TEXT_CHARACTERS)]
+    end: Annotated[int, Field(ge=1, le=MAX_FULL_TEXT_CHARACTERS)]
+
+    @model_validator(mode="after")
+    def bounded_window(self) -> ReadFullTextWindowAction:
+        if not 0 < self.end - self.start <= MAX_FULL_TEXT_WINDOW:
+            raise ValueError("full-text reads require a window of at most8000 characters")
+        return self
 
 
 class SearchMemoryAction(StrictModel):
@@ -449,6 +548,8 @@ class ConcludeAction(StrictModel):
 Action = Annotated[
     SearchAction
     | ReadAction
+    | OpenFullTextAction
+    | ReadFullTextWindowAction
     | SearchMemoryAction
     | ReadMemoryAction
     | ReadMemorySourceAction

@@ -36,6 +36,7 @@ from polymath.research.models import (
     InsufficientFinding,
     ResearchResult,
     SourceBibliography,
+    SourceCoverage,
     SourceDocument,
 )
 
@@ -107,6 +108,8 @@ def _validate_document(document: SourceDocument) -> SourceDocument:
         raise EvidenceError("invalid_source_document")
     try:
         document = SourceDocument.model_validate_json(document.model_dump_json())
+        if document.source_id.startswith("arxiv-html:") and document.coverage is None:
+            raise ValueError
         _hash(document.text)
         textual = (
             document.source_id
@@ -133,6 +136,8 @@ def _metadata(document: SourceDocument) -> dict:
     # Absence preserves the exact metadata hashes of historical retrievals.
     if document.bibliography is not None:
         metadata["bibliography"] = document.bibliography.model_dump(mode="json")
+    if document.coverage is not None:
+        metadata["coverage"] = document.coverage.model_dump(mode="json")
     return metadata
 
 
@@ -154,6 +159,11 @@ def _document(version: SourceVersion, retrieval: SourceRetrieval) -> SourceDocum
         bibliography=(
             SourceBibliography.model_validate_json(json.dumps(retrieval.bibliography))
             if retrieval.bibliography is not None
+            else None
+        ),
+        coverage=(
+            SourceCoverage.model_validate_json(json.dumps(retrieval.coverage))
+            if retrieval.coverage is not None
             else None
         ),
     )
@@ -180,6 +190,13 @@ class EvidenceStore:
         metadata_hash = _hash(_canonical(metadata))
         with Session(self.engine) as session, session.begin():
             _owned(session, lease)
+            if document.coverage is not None:
+                from polymath.full_text import FullTextError, validate_window_source
+
+                try:
+                    validate_window_source(session, lease.run_id, document)
+                except FullTextError:
+                    raise EvidenceError("source_coverage_not_authorized") from None
             version_id = uuid.uuid4()
             session.execute(
                 insert(SourceVersion)
@@ -216,6 +233,16 @@ class EvidenceStore:
                         if document.bibliography is not None
                         else None
                     ),
+                    coverage=(
+                        document.coverage.model_dump(mode="json")
+                        if document.coverage is not None
+                        else None
+                    ),
+                    full_text_snapshot_id=(
+                        uuid.UUID(document.coverage.snapshot_id)
+                        if document.coverage is not None
+                        else None
+                    ),
                 )
                 .on_conflict_do_nothing(constraint="uq_source_retrieval")
             )
@@ -234,6 +261,15 @@ class EvidenceStore:
                 if count >= MAX_RUN_RETRIEVALS:
                     raise EvidenceError("run_source_limit")
                 session.add(RunEvidenceSource(run_id=lease.run_id, retrieval_id=retrieval.id))
+            if document.coverage is not None:
+                from polymath.full_text import check_window_owner
+
+                session.flush()
+                _owned(session, lease)
+                try:
+                    check_window_owner(session, lease.run_id)
+                except FullTextError:
+                    raise EvidenceError("source_coverage_not_authorized") from None
             return _artifact(version, retrieval)
 
     def get_document(self, run_id: uuid.UUID, retrieval_id: uuid.UUID) -> SourceDocument:
@@ -305,10 +341,27 @@ class EvidenceStore:
                     raise EvidenceError("ambiguous_source_version")
                 source_map[document.source_id] = (version, retrieval)
                 refs.append({"version_id": str(version.id), "retrieval_id": str(retrieval.id)})
-            alias_context = tuple(
+            from polymath.full_text import owned_identity_context
+            from polymath.literature.identity import paper_aliases, validate_selected_paper_versions
+
+            identity_refs = tuple(
                 _document(*row) for row in session.execute(_bound_sources(session, run.id)).all()
-            )
+            ) + owned_identity_context(session, run.id)
+            distinct_context = {}
+            for reference in identity_refs:
+                distinct_context.setdefault(paper_aliases(reference), reference)
+                if len(distinct_context) > 256:
+                    raise EvidenceError("source_identity_context_limit")
+            alias_context = tuple(distinct_context.values())
             quote_rows = self._validate_quotes(result, source_map, alias_context=alias_context)
+            cited_ids = {quote.source_id for quote in result.quotes}
+            try:
+                validate_selected_paper_versions(
+                    tuple(doc for doc in result.sources if doc.source_id in cited_ids),
+                    context=alias_context,
+                )
+            except ValueError:
+                raise EvidenceError("selected_paper_version_conflict") from None
             self._validate_parent_evidence(session, run, result, quote_rows)
             payload = result.model_dump(mode="json")
             payload["sources"] = []

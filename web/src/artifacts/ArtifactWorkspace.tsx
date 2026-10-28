@@ -1,5 +1,7 @@
 import { useEffect, useId, useState } from 'react'
 import { Bibliography } from '../research/bibliography'
+import { SourceCoverageNotice } from '../research/SourceCoverageNotice'
+import { sourceContentLabel, sourceIdentityCount } from '../research/sourcePresentation'
 import { exportUrl } from './client'
 import type { ArtifactKind, ArtifactPassage, CitedText, DocumentDraft, FiniteCheckResult, FormalisationDraft, SavedArtifact } from './types'
 import { useArtifactWorkspace } from './useArtifactWorkspace'
@@ -81,6 +83,7 @@ function Document({ draft, artifactId }: { draft: DocumentDraft; artifactId: str
 
 function Preview({ artifact }: { artifact: SavedArtifact }) {
   const draft = artifact.payload.draft
+  const hasExcerpts = artifact.passages.some((passage) => passage.coverage), paperCount = sourceIdentityCount(artifact.passages)
   if (!draft) return <div className="artifact-empty-outcome"><h3>{artifact.status === 'insufficient_evidence' ? 'More evidence is needed' : artifact.status === 'limit_reached' ? 'Generation reached its limit' : 'No complete document was produced'}</h3><p>{artifact.payload.reason || 'The task stopped before it could produce a supported complete draft. The recorded activity is retained.'}</p></div>
   return <article className="artifact-preview" aria-label="Saved document preview">
     <header className="artifact-preview-heading"><span className="eyebrow accent">{draft.kind === 'formalisation' ? 'MATHEMATICAL CONJECTURE' : draft.kind === 'paper' ? 'RESEARCH PAPER' : 'PLAIN-ENGLISH SUMMARY'}</span><h3>{draft.title}</h3><p>Source-bound draft · {new Date(artifact.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}</p></header>
@@ -89,11 +92,12 @@ function Preview({ artifact }: { artifact: SavedArtifact }) {
     <section className="artifact-document-section"><h4>{draft.kind === 'formalisation' ? 'Limitations and open work' : 'Scope and remaining limits'}</h4><ul>{draft.limitations.map((item, index) => <li key={index}>{item}</li>)}</ul></section>
     {artifact.formalisation_id && <p className="artifact-scope">This document incorporates a saved conjecture. Its mathematical arguments retain their unverified status.</p>}
     {artifact.formalisation_id && artifact.formalisation_checks.length > 0 && <section className="artifact-document-section"><h4>Checks from the saved conjecture</h4><p className="artifact-scope">These are the recorded checks of the exact conjecture version included in this document. Their outcomes remain visible alongside the generated account.</p>{artifact.formalisation_checks.map((check, index) => <Check key={`${check.conjecture_sha256}-${index}`} check={check} number={index + 1} />)}</section>}
-    <section className="artifact-document-section artifact-references"><h4>Original source passages</h4><p className="artifact-scope">Each citation opens an exact passage from the saved finding’s original evidence.</p><ol aria-label="Document source passages">{artifact.passages.map((passage) => <li key={passage.ordinal} id={`artifact-passage-${artifact.id}-${passage.ordinal}`} tabIndex={-1} value={passage.ordinal + 1}>
-      <div className="artifact-reference-heading"><PassageLink passage={passage} /><span>{passage.content_kind === 'abstract' ? 'Abstract only' : 'Full-text snapshot'}</span></div>
+    <section className="artifact-document-section artifact-references"><h4>Original source passages</h4><p className="artifact-scope">Each citation opens an exact passage from the saved finding’s original evidence.</p>{hasExcerpts && <p className="source-paper-count">{artifact.passages.length} saved passages · {paperCount} paper {paperCount === 1 ? 'identity' : 'identities'}. Excerpts and versions of the same paper do not provide independent corroboration.</p>}<ol aria-label="Document source passages">{artifact.passages.map((passage) => <li key={passage.ordinal} id={`artifact-passage-${artifact.id}-${passage.ordinal}`} tabIndex={-1} value={passage.ordinal + 1}>
+      <div className="artifact-reference-heading"><PassageLink passage={passage} /><span>{sourceContentLabel(passage.content_kind, passage.coverage)}</span></div>
       <blockquote>{passage.quote}</blockquote><p className="artifact-reference-support">Recorded association: {passage.supports}</p>
+      <SourceCoverageNotice coverage={passage.coverage} contentKind={passage.content_kind} />
       <Bibliography value={passage.bibliography} />
-      <details><summary>Saved source version</summary><dl><dt>Source</dt><dd>{passage.source_id}</dd><dt>Content hash</dt><dd>{passage.content_sha256}</dd></dl></details>
+      <details><summary>Saved source version</summary><dl><dt>Source</dt><dd>{passage.source_id}</dd><dt>{passage.coverage ? 'Excerpt content hash' : 'Content hash'}</dt><dd>{passage.content_sha256}</dd></dl></details>
     </li>)}</ol></section>
     <footer className="artifact-export"><a className="artifact-download" href={exportUrl(artifact.id)} download>Download saved Markdown<span aria-hidden="true"> ↓</span></a><p>The download contains the exact saved document, citations, and limitations.</p><details><summary>Document version</summary><dl><dt>Document hash</dt><dd>{artifact.markdown_sha256}</dd><dt>Source finding</dt><dd>{artifact.source_result_id}</dd><dt>Source finding hash</dt><dd>{artifact.source_sha256}</dd></dl></details></footer>
   </article>

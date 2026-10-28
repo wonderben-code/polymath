@@ -83,9 +83,15 @@ def test_postulated_answer_requires_independent_papers_while_known_claim_can_cit
         with pytest.raises(ValueError, match="postulated_requires_distinct_sources"):
             _verify_answer_evidence(finding, sources, {"counterevidence", "prior_work"})
     else:
-        assert (
-            len(_verify_answer_evidence(finding, sources, {"counterevidence", "prior_work"})) == 2
+        with pytest.raises(ValueError, match="selected_paper_version_conflict"):
+            _verify_answer_evidence(finding, sources, {"counterevidence", "prior_work"})
+        # A Known model label can cite one paper, while preserving one primary
+        # version instead of mixing its abstract and a different full-text version.
+        single = finding.model_copy(
+            update={"claims": (claim.model_copy(update={"evidence": (claim.evidence[0],)}),)}
         )
+        verified = _verify_answer_evidence(single, sources, {"counterevidence", "prior_work"})
+        assert len(verified) == 1 and verified[0].source_id == docs[0].source_id
 
 
 def test_generated_references_include_only_available_escaped_provider_metadata():

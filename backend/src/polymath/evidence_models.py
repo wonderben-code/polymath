@@ -51,6 +51,13 @@ class SourceRetrieval(Base):
             "AND octet_length(bibliography::text) <= 65536)",
             name="ck_source_bibliography",
         ),
+        CheckConstraint(
+            "(coverage IS NULL AND full_text_snapshot_id IS NULL) OR "
+            "(coverage IS NOT NULL AND full_text_snapshot_id IS NOT NULL AND "
+            "jsonb_typeof(coverage) = 'object' AND octet_length(coverage::text) <= 4096 AND "
+            "coverage->>'snapshot_id' = full_text_snapshot_id::text)",
+            name="ck_source_coverage",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
@@ -61,6 +68,10 @@ class SourceRetrieval(Base):
     retrieved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     extraction_method: Mapped[str] = mapped_column(String(100))
     bibliography: Mapped[dict | None] = mapped_column(JSONB(none_as_null=True), nullable=True)
+    coverage: Mapped[dict | None] = mapped_column(JSONB(none_as_null=True), nullable=True)
+    full_text_snapshot_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("arxiv_full_text_snapshots.id"), nullable=True
+    )
 
 
 class RunEvidenceSource(Base):

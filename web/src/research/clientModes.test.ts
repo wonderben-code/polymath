@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { parseResult, ResearchApiError } from './client'
+import { BIBLIOGRAPHY } from './bibliography.test-support'
 
 // Every source and claim in this file is synthetic. These tests verify the
 // browser's record boundary, not scientific findings or a live Meta model.
@@ -89,6 +90,16 @@ function rejects(value: unknown) {
 }
 
 describe('saved Ask and Surprise record boundary', () => {
+  it('preserves exact full-text window coverage and rejects document or quotation range mismatches', () => {
+    const fixture = legacyBridge(), snapshot = '99999999-9999-4999-8999-999999999999'
+    const coverage = { snapshot_id: snapshot, snapshot_sha256: 'c'.repeat(64), arxiv_id: BIBLIOGRAPHY.arxiv_id, arxiv_version: 2, start: 100, end: 100 + Array.from(quoteA).length, total: 10000 }
+    const sourceId = `arxiv-html:${snapshot}:${coverage.start}:${coverage.end}`
+    const value = { ...fixture, sources: [{ ...fixture.sources[0], source_id: sourceId, content_kind: 'full_text', url: 'https://arxiv.org/html/2610.00001v2', bibliography: BIBLIOGRAPHY, coverage }, fixture.sources[1]], finding: { ...fixture.finding, evidence: [{ ...fixture.finding.evidence[0], source_id: sourceId }, fixture.finding.evidence[1]] }, quotes: [{ ...fixture.quotes[0], source_id: sourceId, content_kind: 'full_text' }, fixture.quotes[1]] }
+    expect(parseResult(value).sources[0].coverage).toEqual(coverage)
+    expect(parseResult(legacyBridge()).sources[0]).not.toHaveProperty('coverage')
+    for (const change of [{ text: quoteA + 'x' }, { content_kind: 'abstract' }, { url: 'https://arxiv.org/abs/2610.00001v2' }, { bibliography: { ...BIBLIOGRAPHY, arxiv_version: 3 } }]) rejects({ ...value, sources: [{ ...value.sources[0], ...change }, value.sources[1]] })
+    rejects({ ...value, quotes: [{ ...value.quotes[0], end: value.quotes[0].end + 1 }, value.quotes[1]] })
+  })
   it('preserves only valid immutable memory references and defaults older records to no reads', () => {
     expect(parseResult(legacyBridge()).memory_reads).toEqual([])
     const memory = { result_id: '11111111-1111-4111-8111-111111111111', run_id: '22222222-2222-4222-8222-222222222222', content_sha256: 'a'.repeat(64) }

@@ -1,5 +1,6 @@
 import { parseActivity, ResearchApiError } from '../research/client'
 import { parseBibliography } from '../research/bibliography'
+import { parseSourceCoverage, validateSourceCoverageContext } from '../research/sourceCoverage'
 import type { ArtifactHistory, ArtifactJob, ArtifactKind, ArtifactPassage, ArtifactResult, CitedText, DocumentDraft, Expression, FiniteCheckResult, FiniteConjecture, FormalisationDraft, Relation, SavedArtifact } from './types'
 
 const UUID = /^[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}$/
@@ -155,7 +156,11 @@ function passage(value: unknown): ArtifactPassage {
   if (claimId !== null && !/^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(claimId)) return invalid()
   const quoted = text(item.quote, 4000)
   if (Array.from(quoted).length < 10) return invalid()
-  return { ordinal: integer(item.ordinal, 0, 63), source_id: text(item.source_id, 200), title: text(item.title, 1000), url, content_sha256: hash(item.content_sha256), content_kind: member(item.content_kind, ['abstract', 'full_text']), quote: quoted, supports: text(item.supports, 1500), claim_id: claimId, ...(item.bibliography === undefined || item.bibliography === null ? {} : { bibliography: parseBibliography(item.bibliography, invalid) }) }
+  const bibliography = parseBibliography(item.bibliography, invalid), coverage = parseSourceCoverage(item.coverage, invalid)
+  const parsed: ArtifactPassage = { ordinal: integer(item.ordinal, 0, 63), source_id: text(item.source_id, 200), title: text(item.title, 1000), url, content_sha256: hash(item.content_sha256), content_kind: member(item.content_kind, ['abstract', 'full_text']), quote: quoted, supports: text(item.supports, 1500), claim_id: claimId, ...(bibliography === undefined ? {} : { bibliography }), ...(coverage === undefined ? {} : { coverage }) }
+  validateSourceCoverageContext(parsed, invalid)
+  if (coverage && Array.from(quoted).length > coverage.end - coverage.start) return invalid()
+  return parsed
 }
 function paragraphs(draft: NonNullable<ArtifactResult['draft']>): CitedText[] {
   return draft.kind === 'formalisation' ? [...draft.definitions.map((item) => item.meaning), ...draft.assumptions, draft.conjecture, ...draft.proof_attempt] : [...draft.abstract, ...draft.sections.flatMap((section) => section.paragraphs)]

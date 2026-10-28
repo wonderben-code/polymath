@@ -184,6 +184,7 @@ def _basis_for_source(session: Session, source: EvidenceResult, state: dict, new
             title=retrieval.title,
             url=retrieval.url,
             bibliography=_document(version, retrieval).bibliography,
+            coverage=_document(version, retrieval).coverage,
             content_sha256=version.content_sha256,
             content_kind=version.content_kind,
             role=role,
@@ -405,6 +406,7 @@ def _basis(session: Session, run: ResearchRun):
             retrieval.url,
             link.role,
             document.bibliography,
+            document.coverage,
         ) != (
             reference.version_id,
             reference.retrieval_id,
@@ -415,6 +417,7 @@ def _basis(session: Session, run: ResearchRun):
             reference.url,
             reference.role,
             reference.bibliography,
+            reference.coverage,
         ):
             raise AssessmentError("assessment_input_integrity_failed")
     return request, basis
@@ -525,13 +528,19 @@ class AssessmentStore:
 
     def save(self, lease: JobLease, result) -> StoredAssessment:
         from polymath.assessment_contracts import AssessmentResult, validate_assessment_result
+        from polymath.full_text import owned_identity_context
 
         try:
             result = AssessmentResult.model_validate_json(result.model_dump_json())
             with Session(self.engine) as session, session.begin():
                 run = _owned(session, lease)
                 request, basis = _basis(session, run)
-                validate_assessment_result(result, basis, _observed(session, run.id))
+                validate_assessment_result(
+                    result,
+                    basis,
+                    _observed(session, run.id),
+                    alias_context=owned_identity_context(session, run.id),
+                )
                 if set(result.search_purposes) != set(
                     run.checkpoint.get("assessment_search_purposes", [])
                 ):
@@ -562,7 +571,12 @@ class AssessmentStore:
                 run = _owned(session, lease)
                 request, basis = _basis(session, run)
                 observed = _observed(session, run.id)
-                validate_assessment_result(result, basis, observed)
+                validate_assessment_result(
+                    result,
+                    basis,
+                    observed,
+                    alias_context=owned_identity_context(session, run.id),
+                )
                 if set(result.search_purposes) != set(
                     run.checkpoint.get("assessment_search_purposes", [])
                 ):
@@ -596,6 +610,11 @@ class AssessmentStore:
                             ),
                             "content_sha256": snapshot.document.content_sha256,
                             "content_kind": snapshot.document.content_kind,
+                            **(
+                                {"coverage": snapshot.document.coverage.model_dump(mode="json")}
+                                if snapshot.document.coverage is not None
+                                else {}
+                            ),
                         }
                         for snapshot in sorted(
                             observed.values(), key=lambda item: item.retrieval_id

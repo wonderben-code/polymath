@@ -25,6 +25,8 @@ from polymath.assessments import AssessmentStore
 from polymath.budget import BudgetError, BudgetService
 from polymath.dispatch import DispatchCoordinator, DispatchError
 from polymath.evidence import EvidenceStore
+from polymath.full_text import FullTextError, FullTextStore
+from polymath.full_text_contracts import ExtractedFullText, FullTextIndex
 from polymath.jobs import JobLease, JobRepository, LeaseLost, RunSnapshot
 from polymath.lineage import get_parent_refs
 from polymath.math_checks import (
@@ -38,11 +40,13 @@ from polymath.memory import ResearchMemory
 from polymath.research.controller import LiteratureTools, ResearchController, ResearchLimits
 from polymath.research.meta import META_COMPLETIONS_URL, ModelError, ModelReply, ResearchModel
 from polymath.research.models import (
+    ArxivFullTextLocator,
     MemoryFinding,
     MemorySearchResults,
     ResearchEvent,
     SearchResults,
     SourceDocument,
+    SourceReference,
 )
 
 if TYPE_CHECKING:
@@ -184,7 +188,7 @@ class _RecordedModel:
         request_id = f"model-{self.step:04d}"
         request_hash = _digest(
             {
-                "protocol": "polymath-worker-assessments-v7",
+                "protocol": "polymath-worker-full-text-v8",
                 "model_identity": self.policy.model_identity,
                 "endpoint": META_COMPLETIONS_URL,
                 "stream": False,
@@ -263,6 +267,7 @@ class _RecordedModel:
 class _RecordedTools:
     def __init__(self, context: _RunContext, tools: LiteratureTools):
         self.context, self.tools = context, tools
+        self.full_text = FullTextStore(context.evidence.engine)
         self.step = 0
 
     async def _cached(self, arguments: dict) -> tuple[str, str, dict | None]:
@@ -284,9 +289,16 @@ class _RecordedTools:
             # Fresh provider objects need their discovery boundary restored for a
             # future, not-yet-recorded read. This is a free bounded refresh; model
             # observations remain the immutable saved snapshot.
+            saved = SearchResults.model_validate_json(json.dumps(cached["payload"]))
             with suppress(Exception):
                 await self.tools.search(query, purpose)
-            return SearchResults.model_validate_json(json.dumps(cached["payload"]))
+            restore = getattr(self.tools, "restore_discovery", None)
+            if callable(restore):
+                try:
+                    restore(saved)
+                except Exception:
+                    raise ExecutionStopped("discovery_replay_unavailable") from None
+            return saved
         try:
             result = await self.tools.search(query, purpose)
             if isinstance(result, list):
@@ -327,6 +339,148 @@ class _RecordedTools:
             key, {"hash": digest, "retrieval_id": str(stored.retrieval_id)}
         )
         return document
+
+    async def identity_context(self) -> tuple[SourceReference, ...]:
+        try:
+            return await asyncio.to_thread(
+                self.full_text.owned_identity_context, self.context.lease
+            )
+        except (Exception, asyncio.CancelledError):
+            raise ExecutionStopped("full_text_identity_context_unavailable") from None
+
+    async def open_full_text(self, source_id: str) -> FullTextIndex:
+        # Durable pin first: reopening or resuming never refetches/reextracts an
+        # already observed body, even if the provider now serves another version.
+        try:
+            pinned = await asyncio.to_thread(
+                self.full_text.get_index, self.context.lease, source_id
+            )
+        except (Exception, asyncio.CancelledError):
+            raise ExecutionStopped("full_text_index_read_interrupted") from None
+        key = f"fulltext-index:{source_id}"
+        if pinned is not None:
+            try:
+                await self.context.save_cache(
+                    key,
+                    {"hash": _digest({"source_id": source_id}), "snapshot_id": pinned.snapshot_id},
+                )
+            except (Exception, asyncio.CancelledError):
+                raise ExecutionStopped("full_text_index_receipt_interrupted") from None
+            return pinned
+        snapshot = await self.context.checkpoint()
+        prior = snapshot.checkpoint.get("tool_observations", {}).get(key)
+        if prior is not None:
+            if prior.get("error"):
+                raise RuntimeError("recorded_full_text_unavailable")
+            raise ExecutionStopped("full_text_index_replay_unavailable")
+        try:
+            reference = self.tools.get_discovered_reference(source_id)
+            availability = self.tools.get_full_text_availability(source_id)
+            if (
+                not isinstance(reference, SourceReference)
+                or reference.source_id != source_id
+                or availability is None
+                or availability.status != "candidate"
+                or availability.locator is None
+            ):
+                raise ValueError("Full-text candidate is unavailable")
+            locator_key = f"fulltext-locator:{source_id}"
+            binding = {
+                "source": reference.model_dump(mode="json"),
+                "availability": availability.model_dump(mode="json"),
+            }
+            locator_hash = _digest(binding)
+            cached_locator = snapshot.checkpoint.get("tool_observations", {}).get(locator_key)
+            if cached_locator is not None:
+                if cached_locator.get("hash") != locator_hash:
+                    raise ExecutionStopped("full_text_locator_replay_conflict")
+                locator = ArxivFullTextLocator.model_validate_json(
+                    json.dumps(cached_locator["locator"])
+                )
+            else:
+                locator = await self.tools.resolve_full_text_locator(source_id)
+            if (
+                not isinstance(locator, ArxivFullTextLocator)
+                or locator.arxiv_version is None
+                or locator.arxiv_id != availability.locator.arxiv_id
+                or availability.locator.arxiv_version not in (None, locator.arxiv_version)
+            ):
+                raise ValueError("Full-text locator does not match frozen discovery")
+        except ExecutionStopped:
+            raise
+        except asyncio.CancelledError:
+            raise ExecutionStopped("full_text_locator_resolution_interrupted") from None
+        except Exception:
+            await self.context.save_cache(
+                key, {"hash": _digest({"source_id": source_id}), "error": True}
+            )
+            raise RuntimeError("full_text_unavailable") from None
+        # The resolved exact version is committed before any HTML request. A
+        # lost metadata/cache response stops rather than choosing a new latest.
+        if cached_locator is None:
+            try:
+                await self.context.save_cache(
+                    locator_key,
+                    {"hash": locator_hash, **binding, "locator": locator.model_dump(mode="json")},
+                )
+            except (Exception, asyncio.CancelledError):
+                raise ExecutionStopped("full_text_locator_receipt_interrupted") from None
+        try:
+            fetched = await self.tools.fetch_full_text(source_id, locator=locator)
+            if (
+                not isinstance(fetched, ExtractedFullText)
+                or fetched.arxiv_id != locator.arxiv_id
+                or fetched.arxiv_version != locator.arxiv_version
+            ):
+                raise ValueError("Full-text response does not match its resolved version")
+        except asyncio.CancelledError:
+            raise ExecutionStopped("full_text_fetch_interrupted") from None
+        except Exception:
+            await self.context.save_cache(
+                key, {"hash": _digest({"source_id": source_id}), "error": True}
+            )
+            raise RuntimeError("full_text_unavailable") from None
+        try:
+            index = await asyncio.to_thread(
+                self.full_text.save_snapshot, self.context.lease, reference, fetched
+            )
+            await self.context.save_cache(
+                key, {"hash": _digest({"source_id": source_id}), "snapshot_id": index.snapshot_id}
+            )
+            return index
+        except FullTextError as error:
+            if str(error) == "full_text_snapshot_already_indexed":
+                await self.context.save_cache(
+                    key, {"hash": _digest({"source_id": source_id}), "error": True}
+                )
+                raise RuntimeError("full_text_alias_already_indexed") from None
+            raise ExecutionStopped("full_text_index_commit_interrupted") from None
+        except (Exception, asyncio.CancelledError):
+            raise ExecutionStopped("full_text_index_commit_interrupted") from None
+
+    async def read_full_text_window(self, snapshot_id: str, start: int, end: int) -> SourceDocument:
+        key = f"fulltext-window:{snapshot_id}:{start}:{end}"
+        digest = _digest({"snapshot_id": snapshot_id, "start": start, "end": end})
+        try:
+            snapshot = await self.context.checkpoint()
+            cached = snapshot.checkpoint.get("tool_observations", {}).get(key)
+            if cached is not None and cached.get("hash") != digest:
+                raise ExecutionStopped("full_text_window_replay_conflict")
+            document = await asyncio.to_thread(
+                self.full_text.read_window, self.context.lease, snapshot_id, start, end
+            )
+            stored = await asyncio.to_thread(
+                self.context.evidence.save_source, self.context.lease, document
+            )
+            if cached is not None and cached.get("retrieval_id") != str(stored.retrieval_id):
+                raise ExecutionStopped("full_text_window_replay_conflict")
+            await self.context.save_cache(
+                key,
+                {"hash": digest, "retrieval_id": str(stored.retrieval_id)},
+            )
+            return document
+        except (Exception, asyncio.CancelledError):
+            raise ExecutionStopped("full_text_window_read_interrupted") from None
 
 
 class _RecordedMemory:
@@ -463,6 +617,28 @@ class _RecordedAssessmentTools:
     def __init__(self, context: _RunContext, store: AssessmentStore, tools: LiteratureTools):
         self.context, self.store = context, store
         self.literature = _RecordedTools(context, tools)
+
+    async def identity_context(self) -> tuple[SourceReference, ...]:
+        return await self.literature.identity_context()
+
+    async def open_full_text(self, source_id: str) -> FullTextIndex:
+        return await self.literature.open_full_text(source_id)
+
+    async def read_full_text_window(
+        self, snapshot_id: str, start: int, end: int
+    ) -> AssessmentSourceSnapshot:
+        document = await self.literature.read_full_text_window(snapshot_id, start, end)
+        try:
+            stored = await asyncio.to_thread(
+                self.context.evidence.save_source, self.context.lease, document
+            )
+            return AssessmentSourceSnapshot(
+                retrieval_id=str(stored.retrieval_id),
+                version_id=str(stored.version_id),
+                document=document,
+            )
+        except (Exception, asyncio.CancelledError):
+            raise ExecutionStopped("assessment_full_text_window_interrupted") from None
 
     async def read_source_by_retrieval(self, retrieval_id: str) -> SourceDocument:
         await self.context.check_owner()
@@ -712,7 +888,7 @@ class ResearchWorker:
                 assessment_limits = self.assessment_limits or AssessmentLimits()
             fingerprint = _digest(
                 {
-                    "protocol": "polymath-worker-assessments-v7",
+                    "protocol": "polymath-worker-full-text-v8",
                     "mode": snapshot.mode,
                     "task_kind": snapshot.task_kind,
                     "parents": [parent.model_dump(mode="json") for parent in parents],

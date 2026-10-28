@@ -1,4 +1,5 @@
 import { parseBibliography } from './bibliography'
+import { parseSourceCoverage, validateSourceCoverageContext } from './sourceCoverage'
 import type {
   AnswerClaim,
   AnswerFinding,
@@ -104,12 +105,15 @@ export function parseActivity(value: unknown): ResearchActivityEvent {
 
 function source(value: unknown): SourceDocument {
   const record = object(value)
-  return {
+  const bibliography = parseBibliography(record.bibliography, invalid), coverage = parseSourceCoverage(record.coverage, invalid)
+  const parsed: SourceDocument = {
     source_id: text(record.source_id, 400), title: text(record.title, 2000), url: text(record.url, 4000),
     text: text(record.text, 40000), content_kind: kind(record.content_kind),
     retrieved_at: date(record.retrieved_at), extraction_method: text(record.extraction_method, 200),
-    ...(record.bibliography === undefined || record.bibliography === null ? {} : { bibliography: parseBibliography(record.bibliography, invalid) }),
+    ...(bibliography === undefined ? {} : { bibliography }), ...(coverage === undefined ? {} : { coverage }),
   }
+  validateSourceCoverageContext(parsed, invalid)
+  return parsed
 }
 function evidence(value: unknown): EvidenceQuote {
   const record = object(value)
@@ -204,6 +208,11 @@ export function parseResult(value: unknown): ResearchResult {
     sources: list(result.sources, source), quotes: list(result.quotes, quote, 64), events: list(result.events, parseActivity, 2000),
     usage: { model_calls: integer(usage.model_calls), input_tokens_reported: integer(usage.input_tokens_reported), output_tokens_reported: integer(usage.output_tokens_reported), calls_without_usage: integer(usage.calls_without_usage) },
     error_code: result.error_code === null ? null : text(result.error_code, 100), validation_scope: result.validation_scope,
+  }
+  const covered = new Map(parsed.sources.filter((source) => source.coverage).map((source) => [source.source_id, source]))
+  for (const quote of parsed.quotes) {
+    const source = covered.get(quote.source_id)
+    if (source) { const characters = Array.from(source.text); if (quote.content_kind !== source.content_kind || quote.end > characters.length || quote.end - quote.start !== Array.from(quote.quote).length || characters.slice(quote.start, quote.end).join('') !== quote.quote) return invalid() }
   }
   if (new Set(parsed.memory_reads?.map((item) => item.result_id)).size !== parsed.memory_reads?.length) return invalid()
   if (mode !== 'surprise' && parsed.field_selections?.length) return invalid()

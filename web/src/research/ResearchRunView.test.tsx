@@ -173,7 +173,7 @@ describe('recorded research view', () => {
     await user.click(summaries[0])
     expect(screen.getByText(leftQuote)).toBeVisible()
     expect(screen.getAllByText('Abstract only')).toHaveLength(2)
-    expect(screen.getAllByText('Full text retrieved')).toHaveLength(2)
+    expect(screen.getAllByText('Full-text snapshot')).toHaveLength(2)
     expect(screen.getAllByRole('link', { name: /Synthetic information source/ })[0]).toHaveAttribute('rel', 'noopener noreferrer')
     expect(screen.getByText(/Quotation matching checks the saved text/)).toBeInTheDocument()
   })

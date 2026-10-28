@@ -7,6 +7,7 @@ from polymath import (  # noqa: F401
     assessment_models,
     budget_models,
     evidence_models,
+    full_text_models,
     ingestion_models,
     lineage_models,
     memory_models,

@@ -1,4 +1,6 @@
 import { Bibliography } from '../research/bibliography'
+import { SourceCoverageNotice } from '../research/SourceCoverageNotice'
+import { sourceContentLabel, sourceIdentityCount } from '../research/sourcePresentation'
 import type { AnswerFinding, BridgeFinding } from '../research/types'
 import type { AssessmentRecord, FindingHead } from './types'
 
@@ -11,6 +13,8 @@ export function AssessmentPreview({ record, head, onOpenFinding }: { record: Ass
   const result = record.payload.result, prior = record.payload.basis.prior_finding
   const revised = result.revised_result?.finding
   const sources = new Map([...record.payload.basis.sources, ...record.payload.observed_sources].map((source) => [source.retrieval_id, source]))
+  const citedSources = record.payload.verified_passages.flatMap((passage) => { const source = sources.get(passage.retrieval_id); return source ? [source] : [] })
+  const hasExcerpts = citedSources.some((source) => source.coverage), paperCount = sourceIdentityCount(citedSources)
   const isCurrent = record.applied && (record.disposition === 'revised' ? head?.current_result_id === record.candidate_result_id : head?.last_assessment_id === record.id)
   return <article className="assessment-result" aria-label="Saved evidence reassessment">
     <div className="assessment-row"><h5>{dispositionNames[record.disposition]}</h5><span className="assessment-note">{new Date(record.created_at).toLocaleString()}</span></div>
@@ -23,9 +27,9 @@ export function AssessmentPreview({ record, head, onOpenFinding }: { record: Ass
       return ordinal < 0 ? <span key={citationIndex}> [citation unavailable]</span> : <a key={citationIndex} href={`#assessment-passage-${record.id}-${ordinal}`} aria-label={`Read assessment source passage ${ordinal + 1}`}> [{ordinal + 1}]</a>
     })}</p>)}</section>}
     {result.limitations.length > 0 && <section><h6>Limits and remaining questions</h6><ul>{result.limitations.map((limitation, index) => <li key={index}>{limitation}</li>)}</ul></section>}
-    {record.payload.verified_passages.length > 0 && <section aria-label="Verified assessment passages"><h6>Exact saved source passages</h6><ol className="assessment-passages">{record.payload.verified_passages.map((passage, index) => {
+    {record.payload.verified_passages.length > 0 && <section aria-label="Verified assessment passages"><h6>Exact saved source passages</h6>{hasExcerpts && <p className="source-paper-count">{record.payload.verified_passages.length} saved passages · {paperCount} paper {paperCount === 1 ? 'identity' : 'identities'}. Multiple windows or versions of one paper are not independent evidence.</p>}<ol className="assessment-passages">{record.payload.verified_passages.map((passage, index) => {
       const source = sources.get(passage.retrieval_id), pinned = record.payload.basis.sources.find((item) => item.retrieval_id === passage.retrieval_id)
-      return <li key={index} id={`assessment-passage-${record.id}-${index}`} tabIndex={-1}><a href={source?.url} target="_blank" rel="noopener noreferrer">[{index + 1}] {source?.title || passage.source_id}</a><p className="assessment-note">{pinned?.role === 'historical' ? 'Earlier saved evidence' : pinned?.role === 'new' ? 'Selected watch source version' : 'Additional literature read during this assessment'} · {passage.content_kind === 'abstract' ? 'Abstract only' : 'Full-text snapshot'}</p><blockquote>{passage.quote}</blockquote><p>Recorded support: {passage.supports}</p><Bibliography value={source?.bibliography} /><details className="assessment-integrity"><summary>Exact passage version</summary><dl><dt>Content SHA-256</dt><dd>{passage.source_sha256}</dd><dt>Saved source version</dt><dd>{source?.version_id}</dd><dt>Saved retrieval</dt><dd>{passage.retrieval_id}</dd></dl></details></li>
+      return <li key={index} id={`assessment-passage-${record.id}-${index}`} tabIndex={-1}><a href={source?.url} target="_blank" rel="noopener noreferrer">[{index + 1}] {source?.title || passage.source_id}</a><p className="assessment-note">{pinned?.role === 'historical' ? 'Earlier saved evidence' : pinned?.role === 'new' ? 'Selected watch source version' : 'Additional literature read during this assessment'} · {sourceContentLabel(passage.content_kind, source?.coverage)}</p><blockquote>{passage.quote}</blockquote><p>Recorded support: {passage.supports}</p><SourceCoverageNotice coverage={source?.coverage} contentKind={passage.content_kind} quoteStart={passage.start} quoteEnd={passage.end} /><Bibliography value={source?.bibliography} /><details className="assessment-integrity"><summary>Exact passage version</summary><dl><dt>{source?.coverage ? 'Excerpt content SHA-256' : 'Content SHA-256'}</dt><dd>{passage.source_sha256}</dd><dt>Saved source version</dt><dd>{source?.version_id}</dd><dt>Saved retrieval</dt><dd>{passage.retrieval_id}</dd></dl></details></li>
     })}</ol></section>}
     <details className="assessment-integrity"><summary>Saved assessment version</summary><dl><dt>Earlier finding</dt><dd>{record.source_result_id}</dd><dt>Earlier finding hash</dt><dd>{record.source_sha256}</dd><dt>Selected source versions</dt><dd>{record.new_source_version_ids.join(', ')}</dd><dt>Assessment hash</dt><dd>{record.payload_sha256}</dd><dt>Pinned evidence hash</dt><dd>{record.basis_sha256}</dd><dt>Recorded model calls</dt><dd>{result.usage.model_calls}</dd></dl></details>
   </article>

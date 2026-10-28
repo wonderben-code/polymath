@@ -281,6 +281,7 @@ def _context_unchecked(
                 title=retrieval.title,
                 url=retrieval.url,
                 bibliography=document.bibliography,
+                coverage=document.coverage,
                 content_sha256=version.content_sha256,
                 content_kind=version.content_kind,
                 quote=evidence.quote,
@@ -439,15 +440,30 @@ def render_artifact(result: ArtifactResult, basis: ArtifactBasis) -> str:
     for passage in basis.passages:
         if passage.ordinal not in used:
             continue
+        scope = "FULL TEXT EXCERPT" if passage.coverage else passage.content_kind.replace("_", " ")
         lines += [
             f"### [{passage.ordinal + 1}] {_text(passage.title)}",
             "",
             _link(passage.url),
             "",
-            f"Read scope: {passage.content_kind.replace('_', ' ')}. "
+            f"Read scope: {scope}. "
             f"Source: `{_text(passage.source_id)}`. SHA-256: `{passage.content_sha256}`.",
             "",
         ]
+        if passage.coverage is not None:
+            coverage = passage.coverage
+            lines += [
+                f"Exact normalized character window [{coverage.start}, {coverage.end}) "
+                f"of {coverage.total}; arXiv `{coverage.arxiv_id}v{coverage.arxiv_version}`. "
+                "This excerpt does not indicate that the whole paper was read.",
+                "",
+                f"Full snapshot SHA-256: `{coverage.snapshot_sha256}`. "
+                f"Snapshot ID: `{coverage.snapshot_id}`.",
+                "",
+                "Extracted HTML text may omit equations, figures, and tables. "
+                "A heading index is metadata; only the cited excerpt was read.",
+                "",
+            ]
         if passage.bibliography is not None:
             bibliography = passage.bibliography
             if bibliography.authors:

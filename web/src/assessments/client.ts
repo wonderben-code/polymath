@@ -1,4 +1,5 @@
 import { parseBibliography } from '../research/bibliography'
+import { parseSourceCoverage, validateSourceCoverageContext } from '../research/sourceCoverage'
 import { parseResult } from '../research/client'
 import type { AnswerFinding, BridgeFinding, ClaimQuote, FieldSelection, MemoryReadReference, ResearchActivityEvent, ResearchResult, VerifiedQuote } from '../research/types'
 import type { AssessmentBasis, AssessmentCancellation, AssessmentCapabilities, AssessmentCitation, AssessmentDisposition, AssessmentHistory, AssessmentJob, AssessmentJobHistory, AssessmentJobStatus, AssessmentQuote, AssessmentRecord, AssessmentResult, AssessmentSourceReference, CreateAssessmentJob, FindingHead, FindingVersion, ObservedAssessmentSource } from './types'
@@ -81,9 +82,12 @@ function modeFinding(mode: AssessmentBasis['mode'], value: AnswerFinding | Bridg
 }
 function observedSource(value: unknown): ObservedAssessmentSource {
   const item = object(value)
-  return { retrieval_id: id(item.retrieval_id), version_id: id(item.version_id), source_id: text(item.source_id, 200), title: text(item.title, 1000), url: safeUrl(item.url), content_sha256: hash(item.content_sha256), content_kind: member(item.content_kind, ['abstract', 'full_text']), ...(item.bibliography === undefined || item.bibliography === null ? {} : { bibliography: parseBibliography(item.bibliography, invalid) }) }
+  const bibliography = parseBibliography(item.bibliography, invalid), coverage = parseSourceCoverage(item.coverage, invalid)
+  const parsed: ObservedAssessmentSource = { retrieval_id: id(item.retrieval_id), version_id: id(item.version_id), source_id: text(item.source_id, 200), title: text(item.title, 1000), url: safeUrl(item.url), content_sha256: hash(item.content_sha256), content_kind: member(item.content_kind, ['abstract', 'full_text']), ...(bibliography === undefined ? {} : { bibliography }), ...(coverage === undefined ? {} : { coverage }) }
+  validateSourceCoverageContext(parsed, invalid)
+  return parsed
 }
-function sourceIdentity(value: ObservedAssessmentSource): string { return JSON.stringify([value.retrieval_id, value.version_id, value.source_id, value.title, value.url, value.content_sha256, value.content_kind, value.bibliography ?? null]) }
+function sourceIdentity(value: ObservedAssessmentSource): string { return JSON.stringify([value.retrieval_id, value.version_id, value.source_id, value.title, value.url, value.content_sha256, value.content_kind, value.bibliography ?? null, value.coverage ?? null]) }
 function premiseIdentity(value: { source_id: string; source_sha256: string; content_kind: string }): string { return JSON.stringify([value.source_id, value.source_sha256, value.content_kind]) }
 
 export function parseAssessmentBasis(value: unknown): AssessmentBasis {
@@ -101,9 +105,9 @@ export function parseAssessmentBasis(value: unknown): AssessmentBasis {
 
 function citation(value: unknown): AssessmentCitation { const item = object(value); return { retrieval_id: id(item.retrieval_id), quote: quoteText(item.quote), supports: text(item.supports, 1500) } }
 function assessmentQuote(value: unknown): AssessmentQuote {
-  const item = object(value), parsed = citation(item), start = integer(item.start, 0, 20000), end = integer(item.end, 1, 20000)
+  const item = object(value), parsed = citation(item), start = integer(item.start, 0, 20000), end = integer(item.end, 1, 20000), coverage = parseSourceCoverage(item.coverage, invalid)
   if (end - start !== Array.from(parsed.quote).length) return invalid()
-  return { ...parsed, source_id: text(item.source_id, 200), source_sha256: hash(item.source_sha256), content_kind: member(item.content_kind, ['abstract', 'full_text']), start, end }
+  return { ...parsed, source_id: text(item.source_id, 200), source_sha256: hash(item.source_sha256), content_kind: member(item.content_kind, ['abstract', 'full_text']), start, end, ...(coverage === undefined ? {} : { coverage }) }
 }
 function positiveResult(value: unknown, basis: AssessmentBasis, selected: ObservedAssessmentSource[]): ResearchResult {
   const item = object(value), proposed = finding(item.finding), mode = member(item.mode, ['explore', 'ask', 'surprise']), selections = fields(item.field_selections)
@@ -111,7 +115,7 @@ function positiveResult(value: unknown, basis: AssessmentBasis, selected: Observ
   if (item.status !== proposed.outcome || item.validation_scope !== 'source_identity_and_quote_integrity' || mode !== basis.mode || !equal(selections, basis.field_selections) || !equal(memory, [basis.prior_reference]) || !Array.isArray(item.sources) || item.sources.length) return invalid()
   distinct(selected.map((source) => source.source_id)); modeFinding(mode, proposed, selections); findingQuotes(proposed, quotes)
   const available = new Map(selected.map((source) => [source.source_id, source]))
-  for (const quote of quotes) { const source = available.get(quote.source_id); if (!source || source.content_sha256 !== quote.source_sha256 || source.content_kind !== quote.content_kind) return invalid() }
+  for (const quote of quotes) { const source = available.get(quote.source_id); if (!source || source.content_sha256 !== quote.source_sha256 || source.content_kind !== quote.content_kind || source.coverage && quote.end > source.coverage.end - source.coverage.start) return invalid() }
   if (proposed.outcome === 'answer' && basis.prior_finding.outcome === 'answer') {
     if (proposed.question !== basis.prior_finding.question) return invalid()
     const rank = { known: 0, postulated: 1, speculative: 2 }, previous = new Map(basis.prior_finding.claims.map((claim) => [claim.id, claim.label]))
@@ -130,7 +134,7 @@ export function parseAssessment(value: unknown): AssessmentRecord {
   const rationale = list(raw.rationale, (value) => { const item = object(value); return { text: text(item.text, 2000), citations: list(item.citations, citation, 0, 8) } }, 0, 8)
   const quotes = list(raw.quotes, assessmentQuote, 0, 64), verified = list(payload.verified_passages, assessmentQuote, 0, 64), citations = rationale.flatMap((statement) => statement.citations)
   if (!equal(quotes, verified) || citations.length !== quotes.length) return invalid()
-  quotes.forEach((quote, index) => { const source = observedById.get(quote.retrieval_id), expected = citations[index]; if (!declared.includes(quote.retrieval_id) || !source || source.source_id !== quote.source_id || source.content_sha256 !== quote.source_sha256 || source.content_kind !== quote.content_kind || quote.retrieval_id !== expected.retrieval_id || quote.quote !== expected.quote || quote.supports !== expected.supports) return invalid() })
+  quotes.forEach((quote, index) => { const source = observedById.get(quote.retrieval_id), expected = citations[index]; if (!declared.includes(quote.retrieval_id) || !source || source.source_id !== quote.source_id || source.content_sha256 !== quote.source_sha256 || source.content_kind !== quote.content_kind || !equal(source.coverage ?? null, quote.coverage ?? null) || source.coverage && quote.end > source.coverage.end - source.coverage.start || quote.retrieval_id !== expected.retrieval_id || quote.quote !== expected.quote || quote.supports !== expected.supports) return invalid() })
   const status = member(raw.status, ['completed', 'failed', 'limit_reached']), disposition = member(raw.disposition, DISPOSITIONS)
   if (status !== 'completed' && disposition !== 'inconclusive' || status === 'completed' && !rationale.length || raw.validation_scope !== 'version_bound_quote_integrity') return invalid()
   if (disposition === 'revised' ? raw.revised_result === null || !selected.length : raw.revised_result !== null || !!selected.length) return invalid()
@@ -266,7 +270,7 @@ export function parseFindingVersion(value: unknown): FindingVersion {
   const proposed = finding(parsed.finding), selections = fields(parsed.field_selections), quotes = list(parsed.quotes, researchQuote, 1, 64), mode = member(run.mode, ['explore', 'ask', 'surprise'])
   if (parsed.mode !== mode) return invalid()
   modeFinding(mode, proposed, selections); findingQuotes(proposed, quotes)
-  const sources = list(parsed.sources, (raw) => { const source = object(raw); return { source_id: text(source.source_id, 200), title: text(source.title, 1000), url: safeUrl(source.url), text: text(source.text, 20000), content_kind: member(source.content_kind, ['abstract', 'full_text']), retrieved_at: date(source.retrieved_at), extraction_method: text(source.extraction_method, 100), ...(source.bibliography === undefined ? {} : { bibliography: parseBibliography(source.bibliography, invalid) }) } }, 1, 200)
+  const sources = list(parsed.sources, (raw) => { const source = object(raw), bibliography = parseBibliography(source.bibliography, invalid), coverage = parseSourceCoverage(source.coverage, invalid); const document = { source_id: text(source.source_id, 200), title: text(source.title, 1000), url: safeUrl(source.url), text: text(source.text, 20000), content_kind: member(source.content_kind, ['abstract', 'full_text']), retrieved_at: date(source.retrieved_at), extraction_method: text(source.extraction_method, 100), ...(bibliography === undefined ? {} : { bibliography }), ...(coverage === undefined ? {} : { coverage }) }; validateSourceCoverageContext(document, invalid); return document }, 1, 200)
   distinct(sources.map((source) => source.source_id))
   for (const quote of quotes) { const source = sources.find((source) => source.source_id === quote.source_id); if (!source || source.content_kind !== quote.content_kind || Array.from(source.text).slice(quote.start, quote.end).join('') !== quote.quote) return invalid() }
   return { id: resultId, run_id: runId, task_kind: kind, run: { id: runId, task_kind: kind, mode, goal: text(run.goal, 4000, false), status: 'succeeded', created_at: date(run.created_at), updated_at: date(run.updated_at), result_id: nullableId(run.result_id), artifact_id: null, assessment_id: run.assessment_id === undefined ? null : nullableId(run.assessment_id), error_code: code(run.error_code), external_outcome_unknown: bool(run.external_outcome_unknown) }, payload: { ...parsed, finding: proposed, sources, quotes, field_selections: selections }, assessment: head }
