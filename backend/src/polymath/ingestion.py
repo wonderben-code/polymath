@@ -18,8 +18,10 @@ from sqlalchemy.orm import Session
 
 from polymath.access_models import BrowserSession, ResearchRunAccess
 from polymath.assessment_eligibility import (
+    EligibilityError,
     assessment_version_status,
     current_supported_condition,
+    require_current_supported,
     result_assessment_state,
 )
 from polymath.evidence import EvidenceError, SourceArtifact, _canonical, _document, _hash
@@ -479,12 +481,15 @@ class IngestionRepository:
                         EvidenceResult.status.in_(("bridge", "answer")),
                         current_supported_condition(),
                         ResearchRun.task_kind.in_(("research", "reassess_finding")),
-                        ResearchRun.status == "succeeded",
                         ResearchRunAccess.session_hash == owner_hash,
                     )
                 )
                 if source is None:
                     raise IngestionError("watch_not_found")
+                try:
+                    require_current_supported(session, owner_hash, source.id)
+                except EligibilityError:
+                    raise IngestionError("watch_not_found") from None
             now = _now(session)
             cursor = ProviderCursor(now - timedelta(days=7), now).to_dict()
             watch = LiteratureWatch(

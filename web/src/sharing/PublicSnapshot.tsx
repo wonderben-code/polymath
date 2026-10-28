@@ -5,7 +5,7 @@ import './sharing.css'
 export function sharingDate(value: string) { return new Date(value).toLocaleString() }
 
 export function SnapshotStatus({ status }: { status: string }) {
-  const label = status === 'current' ? 'Current model assessment' : status === 'superseded' ? 'Superseded snapshot' : status === 'unsupported' ? 'Unsupported by the latest model assessment' : status === 'revoked' ? 'Revoked' : 'Expired'
+  const label = status === 'current' ? 'Current model assessment' : status === 'superseded' ? 'Superseded snapshot' : status === 'unsupported' ? 'Unsupported by the latest model assessment' : status === 'needs_review' ? 'Needs review' : status === 'revoked' ? 'Revoked' : 'Expired'
   return <span className="sharing-status" data-state={status}>{label}</span>
 }
 

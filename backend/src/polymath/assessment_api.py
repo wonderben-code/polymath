@@ -20,6 +20,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from polymath.access_models import ResearchRunAccess
+from polymath.assessment_eligibility import completed_result_condition
 from polymath.assessment_models import AssessmentInputSource, AssessmentRequest, FindingAssessment
 from polymath.assessments import (
     AssessmentError,
@@ -195,6 +196,7 @@ def create_assessment_router(
 
     def head_summary(owner_hash: str, result_id: uuid.UUID) -> dict:
         state = store.head(owner_hash, result_id)
+        discovery_stage = None
         with Session(engine) as session:
             current = session.scalar(
                 select(EvidenceResult)
@@ -206,11 +208,34 @@ def create_assessment_router(
             )
             if current is None:
                 raise _missing()
+            from polymath.discovery_models import StageCommit
+            from polymath.discovery_store import _detail
+
+            committed = session.scalar(
+                select(StageCommit)
+                .join(EvidenceResult, EvidenceResult.id == StageCommit.result_id)
+                .join(ResearchRunAccess, ResearchRunAccess.run_id == StageCommit.run_id)
+                .where(
+                    StageCommit.result_id == result_id,
+                    StageCommit.run_id == EvidenceResult.run_id,
+                    StageCommit.content_sha256 == EvidenceResult.content_sha256,
+                    ResearchRunAccess.session_hash == owner_hash,
+                )
+            )
+            if committed is not None:
+                detail = _detail(session, committed)
+                discovery_stage = {
+                    "stage_id": str(committed.id),
+                    "ordinal": committed.ordinal,
+                    "depth": committed.depth,
+                    "status": detail["status"],
+                }
         return {
             **state,
             "requested_result_id": str(result_id),
             "current_run_id": str(current.run_id),
             "can_generate": state["is_current"] and state["is_supported"],
+            **({"discovery_stage": discovery_stage} if discovery_stage is not None else {}),
         }
 
     def available() -> bool:
@@ -389,7 +414,7 @@ def create_assessment_router(
                     .where(
                         EvidenceResult.id == result_id,
                         EvidenceResult.status.in_(("bridge", "answer")),
-                        ResearchRun.status == "succeeded",
+                        completed_result_condition(),
                         ResearchRunAccess.session_hash == owner_hash,
                     )
                 ).first()
@@ -407,6 +432,17 @@ def create_assessment_router(
                     if run.task_kind != "reassess_finding" or applied is None:
                         raise _missing()
                 run_id, public_run = run.id, _summary(run, session=session)
+                from polymath.discovery_models import StageCommit
+                from polymath.discovery_store import _detail
+
+                committed = session.scalar(
+                    select(StageCommit).where(
+                        StageCommit.result_id == result.id,
+                        StageCommit.run_id == run.id,
+                        StageCommit.content_sha256 == result.content_sha256,
+                    )
+                )
+                discovery_stage = _detail(session, committed) if committed is not None else None
             saved = EvidenceStore(engine).get_result(run_id, result_id)
             return {
                 "id": str(result_id),
@@ -415,6 +451,7 @@ def create_assessment_router(
                 "run": public_run,
                 "payload": saved.payload,
                 "assessment": head_summary(owner_hash, result_id),
+                **({"discovery_stage": discovery_stage} if discovery_stage is not None else {}),
             }
         except AssessmentError as error:
             raise _assessment_error(error) from None

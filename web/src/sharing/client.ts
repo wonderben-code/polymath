@@ -164,14 +164,14 @@ function preview(value: unknown): SharePreview {
 }
 export function parseShareRecord(value: unknown): ShareRecord {
   const item = object(value, ['public_id', 'source_result_id', 'projection_sha256', 'projection', 'created_at', 'expires_at', 'revoked_at', 'status', 'public_path', 'idempotency_key'])
-  const id = handle(item.public_id), created = date(item.created_at), expires = date(item.expires_at), revoked = nullable(item.revoked_at, date), status = member(item.status, ['current', 'superseded', 'unsupported', 'revoked', 'expired'])
+  const id = handle(item.public_id), created = date(item.created_at), expires = date(item.expires_at), revoked = nullable(item.revoked_at, date), status = member(item.status, ['current', 'superseded', 'unsupported', 'needs_review', 'revoked', 'expired'])
   if (item.public_path !== `/shared/${id}` || Date.parse(expires) <= Date.parse(created) || (status === 'revoked') !== (revoked !== null) || revoked !== null && Date.parse(revoked) < Date.parse(created)) return invalid()
   return { public_id: id, source_result_id: uuid(item.source_result_id), projection_sha256: hash(item.projection_sha256), projection: parsePublicProjection(item.projection), created_at: created, expires_at: expires, revoked_at: revoked, status, public_path: `/shared/${id}`, idempotency_key: uuid(item.idempotency_key) }
 }
 export function parsePublicFinding(value: unknown): PublicFinding {
   const item = object(value, ['public_id', 'projection_sha256', 'projection', 'created_at', 'expires_at', 'status']), created = date(item.created_at), expires = date(item.expires_at)
   if (Date.parse(expires) <= Date.parse(created)) return invalid()
-  return { public_id: handle(item.public_id), projection_sha256: hash(item.projection_sha256), projection: parsePublicProjection(item.projection), created_at: created, expires_at: expires, status: member(item.status, ['current', 'superseded', 'unsupported']) }
+  return { public_id: handle(item.public_id), projection_sha256: hash(item.projection_sha256), projection: parsePublicProjection(item.projection), created_at: created, expires_at: expires, status: member(item.status, ['current', 'superseded', 'unsupported', 'needs_review']) }
 }
 function libraryItem(value: unknown): PublicLibraryItem {
   const item = object(value, ['public_id', 'kind', 'mode', 'title', 'summary', 'fields', 'projection_sha256', 'created_at', 'expires_at', 'status']), kind = member(item.kind, ['bridge', 'answer']), researchMode = mode(item.mode), fields = distinct(list(item.fields, (value) => text(value, 200), 0, 6)), created = date(item.created_at), expires = date(item.expires_at)

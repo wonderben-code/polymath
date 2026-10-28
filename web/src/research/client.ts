@@ -1,3 +1,5 @@
+import { parseDiscoveryIntent } from './discoveryIntent'
+import type { DiscoveryIntent } from '../discovery/types'
 import { parseBibliography } from './bibliography'
 import { parseSourceCoverage, validateSourceCoverageContext } from './sourceCoverage'
 import { nativeAdmissionFailure, parseNativeRunControl, validNativeSubmission } from './nativeAdmission'
@@ -88,6 +90,8 @@ function kind(value: unknown): SourceDocument['content_kind'] {
 export function parseRun(value: unknown): OwnedRun {
   const run = object(value)
   const native = parseNativeRunControl(run.native_research, invalid)
+  const discovery = parseDiscoveryIntent(run.discovery_intent, invalid)
+  if (discovery && (run.mode !== 'surprise' || run.task_kind !== 'research')) return invalid()
   if (!['explore', 'ask', 'surprise'].includes(text(run.mode, 20))) return invalid()
   if (!/^[a-z_]{1,40}$/.test(text(run.status, 40))) return invalid()
   return {
@@ -97,6 +101,7 @@ export function parseRun(value: unknown): OwnedRun {
     external_outcome_unknown: boolean(run.external_outcome_unknown),
     ...(run.task_kind === undefined ? {} : { task_kind: requiredText(run.task_kind, 80) }),
     ...(native ? { native_research: native } : {}),
+    ...(discovery ? { discovery_intent: discovery } : {}),
   }
 }
 
@@ -346,10 +351,14 @@ export async function cancelResearchRun(runId: string, csrf: string, signal?: Ab
   return run.id === runId ? run : invalid()
 }
 
-export async function createResearchRun(mode: OwnedRun['mode'], goal: string, csrf: string, signal?: AbortSignal, parentResultIds: readonly string[] = [], native?: NativeSubmissionContext): Promise<OwnedRun> {
+export async function createResearchRun(mode: OwnedRun['mode'], goal: string, csrf: string, signal?: AbortSignal, parentResultIds: readonly string[] = [], native?: NativeSubmissionContext, discovery?: DiscoveryIntent): Promise<OwnedRun> {
   if (!['explore', 'ask', 'surprise'].includes(mode) || typeof goal !== 'string' || goal.length > 4000 || (!goal.trim() && mode !== 'surprise')) throw new ResearchApiError('invalid_request')
   if (parentResultIds.length && (mode !== 'explore' || parentResultIds.length < 2 || parentResultIds.length > 4 || parentResultIds.some((value) => typeof value !== 'string' || !UUID.test(value)) || new Set(parentResultIds.map((value) => value.toLowerCase())).size !== parentResultIds.length)) throw new ResearchApiError('invalid_request')
-  return parseRun(await request('/api/v1/runs', signal, { csrf, native, body: { mode, goal, ...(parentResultIds.length ? { parent_result_ids: parentResultIds } : {}), ...(native ? { expected_activation_sha256: native.expectedActivationSha256 } : {}) } }))
+  const intent = parseDiscoveryIntent(discovery, () => { throw new ResearchApiError('invalid_request') })
+  if (intent && (mode !== 'surprise' || parentResultIds.length)) throw new ResearchApiError('invalid_request')
+  const created = parseRun(await request('/api/v1/runs', signal, { csrf, native, body: { mode, goal, ...(parentResultIds.length ? { parent_result_ids: parentResultIds } : {}), ...(native ? { expected_activation_sha256: native.expectedActivationSha256 } : {}), ...(intent ? { discovery_intent: intent } : {}) } }))
+  if (intent ? !created.discovery_intent || created.discovery_intent.max_stages !== intent.max_stages || created.discovery_intent.max_depth !== intent.max_depth : created.discovery_intent !== undefined) return invalid()
+  return created
 }
 
 export async function resumeNativeResearchRun(runId: string, leaseToken: string, csrf: string, native: NativeSubmissionContext, signal?: AbortSignal): Promise<OwnedRun> {

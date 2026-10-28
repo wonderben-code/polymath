@@ -17,7 +17,11 @@ from sqlalchemy import Engine, func, or_, select
 from sqlalchemy.orm import Session
 
 from polymath.access_models import BrowserSession, ResearchRunAccess
-from polymath.assessment_eligibility import current_supported_condition
+from polymath.assessment_eligibility import (
+    EligibilityError,
+    current_supported_condition,
+    require_current_supported,
+)
 from polymath.evidence import _canonical, _document, _hash
 from polymath.evidence_models import EvidenceQuote, EvidenceResult, SourceRetrieval, SourceVersion
 from polymath.jobs import JobLease, _owned
@@ -84,7 +88,6 @@ def _eligible(run: ResearchRun, owner_hash: str):
         .join(ResearchRun, ResearchRun.id == EvidenceResult.run_id)
         .where(
             ResearchRunAccess.session_hash == owner_hash,
-            ResearchRun.status == "succeeded",
             ResearchRun.task_kind.in_(("research", "reassess_finding")),
             EvidenceResult.status.in_(("bridge", "answer")),
             current_supported_condition(),
@@ -162,6 +165,10 @@ class ResearchMemory:
                 .order_by(EvidenceResult.id)
             )
             for identifier, content_sha256 in versions:
+                try:
+                    require_current_supported(session, owner, identifier)
+                except EligibilityError:
+                    continue
                 digest.update(f":{identifier}:{content_sha256}".encode())
             return digest.hexdigest()
 
@@ -189,9 +196,16 @@ class ResearchMemory:
                 .order_by(EvidenceResult.created_at.desc(), EvidenceResult.id)
                 .limit(MAX_MEMORY_FINDINGS + 1)
             ).all()
+            supported = []
+            for row in records:
+                try:
+                    require_current_supported(session, owner, row.id)
+                except EligibilityError:
+                    continue
+                supported.append(row)
             return MemorySearchResults(
                 findings=tuple(
-                    _reference(row, _finding(row)) for row in records[:MAX_MEMORY_FINDINGS]
+                    _reference(row, _finding(row)) for row in supported[:MAX_MEMORY_FINDINGS]
                 ),
                 truncated=len(records) > MAX_MEMORY_FINDINGS,
             )
@@ -208,6 +222,10 @@ class ResearchMemory:
             )
             if row is None:
                 raise MemoryError("memory_finding_not_found")
+            try:
+                require_current_supported(session, owner, row.id)
+            except EligibilityError:
+                raise MemoryError("memory_finding_not_found") from None
             finding = _finding(row)
             rows = _quoted_sources(session, row)
             if len(rows) > MAX_MEMORY_SOURCES:
@@ -266,6 +284,11 @@ class ResearchMemory:
                 if owner is not None
                 else None
             )
+            if row is not None:
+                try:
+                    require_current_supported(session, owner, row.id)
+                except EligibilityError:
+                    raise MemoryError("memory_source_not_found") from None
             prior = session.get(ResearchMemoryRead, (run.id, result_uuid))
             if row is None or prior is None:
                 raise MemoryError("memory_source_not_found")

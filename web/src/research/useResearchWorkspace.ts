@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { DiscoveryIntent } from '../discovery/types'
 import {
   cancelResearchRun, createResearchRun, getResearchResult, getResearchRun,
   listResearchRuns, openResearchSession, parseActivity, ResearchApiError,
@@ -113,6 +114,8 @@ export function useResearchWorkspace(enabled: boolean, researchAvailable: boolea
   }, [clearPrivateState])
 
   const native = useNativeResearchContext({ enabled: phase === 'ready' && enabled, csrfToken: csrf, required: nativeRequired, available: researchAvailable, onBrowserExpired: () => invalidate('session_expired') })
+  const ladderProfile = native.activation?.discovery_ladder_profile?.profile
+  const discoveryIntent = useMemo<DiscoveryIntent | null>(() => ladderProfile ? { protocol: 'polymath-surprise-ladder-v1', max_stages: Math.min(3, ladderProfile.max_stages), max_depth: Math.min(2, ladderProfile.max_depth) } : null, [ladderProfile?.max_stages, ladderProfile?.max_depth])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -356,7 +359,7 @@ export function useResearchWorkspace(enabled: boolean, researchAvailable: boolea
     setSubmitting(true)
     setError('')
     try {
-      const response = await createResearchRun(mode, goal, csrf, controller.signal, parentResultIds, native.submission ?? undefined)
+      const response = await createResearchRun(mode, goal, csrf, controller.signal, parentResultIds, native.submission ?? undefined, mode === 'surprise' ? discoveryIntent ?? undefined : undefined)
       if (controller.signal.aborted || current !== generation.current) return
       const run = remember(response)
       setRuns((items) => updated(items, run))
@@ -372,7 +375,7 @@ export function useResearchWorkspace(enabled: boolean, researchAvailable: boolea
     } finally {
       if (mutation.current === controller) { mutation.current = null; setSubmitting(false) }
     }
-  }, [enabled, researchAvailable, phase, csrf, unconfirmedSubmission, invalidate, remember, native.canSubmit, native.submission, native.invalidate])
+  }, [enabled, researchAvailable, phase, csrf, unconfirmedSubmission, invalidate, remember, native.canSubmit, native.submission, native.invalidate, discoveryIntent])
 
   const investigateBridges = useCallback((parentResultIds: readonly string[]) => submit(
     'explore',
@@ -388,6 +391,6 @@ export function useResearchWorkspace(enabled: boolean, researchAvailable: boolea
     canCancel: !submitting && (!cancellingId || cancellingId === activeRun?.id),
     canSubmit: enabled && researchAvailable && native.canSubmit && !unconfirmedSubmission && phase === 'ready' && !!csrf && !submitting && !cancellingId,
     csrfToken: csrf, invalidateSession,
-    refresh, selectRun, loadMore, cancel, submit, investigateBridges, native,
+    refresh, selectRun, loadMore, cancel, submit, investigateBridges, native, discoveryIntent,
   }
 }

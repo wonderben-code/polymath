@@ -17,6 +17,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import Engine
 from starlette.exceptions import HTTPException
 
+from polymath.discovery_contracts import DiscoveryIntent
 from polymath.meta_probe_contracts import ProbeId, ProviderAccountAttestation
 from polymath.meta_readiness_contracts import ReadinessPolicy
 from polymath.meta_research_contracts import (
@@ -81,6 +82,7 @@ class PreviewResearch(BaseModel):
     canary_receipt_id: ProbeId
     review: NativeResearchReview
     provider_account_attestation: ProviderAccountAttestation
+    discovery: DiscoveryIntent | None = None
 
 
 class ActivateResearch(BaseModel):
@@ -166,6 +168,7 @@ def create_meta_research_router(
                 _uuid(body.canary_receipt_id),
                 body.review,
                 body.provider_account_attestation,
+                **({"discovery": body.discovery} if body.discovery is not None else {}),
             )
         )
 

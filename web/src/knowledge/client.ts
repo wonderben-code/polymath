@@ -8,6 +8,7 @@ export interface KnowledgeAssessment {
   root_result_id: string; current_result_id: string; state: 'supported' | 'unsupported'; revision: number
   last_assessment_id: string | null; is_current: boolean; is_supported: boolean; is_historical: boolean
 }
+export interface KnowledgeDiscoveryStage { stage_id: string; ordinal: number; depth: number; status: 'current_supported' | 'superseded' | 'unsupported' | 'needs_review' }
 type SourceAssessment = 'current_supported' | 'saved_snapshot' | 'unassessed' | 'unapplied_reassessment'
 
 export interface KnowledgeItem {
@@ -29,6 +30,7 @@ export interface KnowledgeItem {
   bibliography?: SourceBibliography
   url?: string
   read_scope?: 'full_text_excerpt'
+  discovery_stage?: KnowledgeDiscoveryStage
 }
 
 export interface KnowledgeNode {
@@ -50,13 +52,14 @@ export interface KnowledgeNode {
   bibliography?: SourceBibliography
   url?: string
   read_scope?: 'full_text_excerpt'
+  discovery_stage?: KnowledgeDiscoveryStage
 }
 
 export interface KnowledgeEdge {
   id: string
   source: string
   target: string
-  kind: 'maps_to' | 'supported_by' | 'selected_field' | 'investigated_from'
+  kind: 'maps_to' | 'supported_by' | 'selected_field' | 'investigated_from' | 'discovered_from' | 'revised_from'
 }
 
 export interface KnowledgeData {
@@ -130,13 +133,21 @@ function sourceNavigation(entry: Record<string, unknown>, source: boolean) {
   const sourceStatus = entry.assessment_status === undefined || entry.assessment_status === null ? null : text(entry.assessment_status, 40)
   if (sourceStatus !== null && (!source || !['current_supported', 'saved_snapshot', 'unassessed', 'unapplied_reassessment'].includes(sourceStatus))) throw new KnowledgeError('invalid_response')
   if (sourceStatus === 'current_supported' && !resultId || !source && resultId) throw new KnowledgeError('invalid_response')
+  let stage: KnowledgeDiscoveryStage | undefined
+  if (entry.discovery_stage !== undefined) {
+    const value = record(entry.discovery_stage)
+    if (source || entry.result_id === null || task !== 'research' || Object.keys(value).length !== 4 || !Number.isSafeInteger(value.ordinal) || (value.ordinal as number) < 0 || (value.ordinal as number) > 3 || !Number.isSafeInteger(value.depth) || (value.depth as number) < 1 || (value.depth as number) > 3 || !['current_supported', 'superseded', 'unsupported', 'needs_review'].includes(String(value.status))) return invalid()
+    stage = { stage_id: identity(value.stage_id)!, ordinal: value.ordinal as number, depth: value.depth as number, status: value.status as KnowledgeDiscoveryStage['status'] }
+  }
   let assessment: KnowledgeAssessment | null = null
   if (entry.assessment !== undefined && entry.assessment !== null) {
     const item = record(entry.assessment), current = identity(item.current_result_id)!, isCurrent = boolean(item.is_current), supported = boolean(item.is_supported), historical = boolean(item.is_historical)
-    if (source || item.state !== 'supported' && item.state !== 'unsupported' || !Number.isSafeInteger(item.revision) || (item.revision as number) < 0 || isCurrent !== (current === entry.result_id) || supported !== (isCurrent && item.state === 'supported') || historical !== (!isCurrent || item.state === 'unsupported')) throw new KnowledgeError('invalid_response')
+    if (source || item.state !== 'supported' && item.state !== 'unsupported' || !Number.isSafeInteger(item.revision) || (item.revision as number) < 0 || isCurrent !== (current === entry.result_id) || supported !== (isCurrent && item.state === 'supported' && stage?.status !== 'needs_review') || historical !== (!isCurrent || item.state === 'unsupported')) throw new KnowledgeError('invalid_response')
+    if (stage && stage.status !== (item.state === 'unsupported' ? 'unsupported' : !isCurrent ? 'superseded' : stage.status === 'needs_review' ? 'needs_review' : 'current_supported')) return invalid()
     assessment = { root_result_id: identity(item.root_result_id)!, current_result_id: current, state: item.state, revision: item.revision as number, last_assessment_id: identity(item.last_assessment_id, true), is_current: isCurrent, is_supported: supported, is_historical: historical }
     if (entry.history_url !== undefined && entry.history_url !== `/api/v1/assessments/heads/${assessment.root_result_id}/history`) throw new KnowledgeError('invalid_response')
   }
+  if (stage && !assessment) return invalid()
   const coverage = parseSourceCoverage(entry.coverage, invalid), bibliography = parseBibliography(entry.bibliography, invalid)
   const url = entry.url === undefined || entry.url === null ? undefined : text(entry.url, 2000)
   if (coverage) {
@@ -144,7 +155,7 @@ function sourceNavigation(entry: Record<string, unknown>, source: boolean) {
     if (!source || !url || !contentKind || entry.read_scope !== 'full_text_excerpt') return invalid()
     validateSourceCoverageContext({ source_id: text(entry.source_id, 200), url, bibliography, coverage, content_kind: contentKind }, invalid)
   } else if (entry.read_scope !== undefined && entry.read_scope !== null) return invalid()
-  return { task_kind: task, watch_id: watchId, source_version_id: versionId, assessment_status: sourceStatus as SourceAssessment | null, assessment_result_id: resultId, assessment, ...(coverage ? { coverage, read_scope: 'full_text_excerpt' as const } : {}), ...(bibliography ? { bibliography } : {}), ...(url ? { url } : {}) }
+  return { ...(stage ? { discovery_stage: stage } : {}), task_kind: task, watch_id: watchId, source_version_id: versionId, assessment_status: sourceStatus as SourceAssessment | null, assessment_result_id: resultId, assessment, ...(coverage ? { coverage, read_scope: 'full_text_excerpt' as const } : {}), ...(bibliography ? { bibliography } : {}), ...(url ? { url } : {}) }
 }
 
 async function response(path: string, signal: AbortSignal): Promise<unknown> {
@@ -199,11 +210,11 @@ export async function loadKnowledge(query: string, signal: AbortSignal): Promise
   const nodeIds = new Set(nodes.map((node) => node.id))
   const edges: KnowledgeEdge[] = collection(graph.edges, 500).map((item) => {
     const edge = record(item)
-    if (edge.kind !== 'maps_to' && edge.kind !== 'supported_by' && edge.kind !== 'selected_field' && edge.kind !== 'investigated_from') throw new KnowledgeError('invalid_response')
+    if (edge.kind !== 'maps_to' && edge.kind !== 'supported_by' && edge.kind !== 'selected_field' && edge.kind !== 'investigated_from' && edge.kind !== 'discovered_from' && edge.kind !== 'revised_from') throw new KnowledgeError('invalid_response')
     const source = text(edge.source, 300)
     const target = text(edge.target, 300)
     if (!nodeIds.has(source) || !nodeIds.has(target)) throw new KnowledgeError('invalid_response')
-    if (edge.kind === 'investigated_from' && (source === target || nodes.find((node) => node.id === source)?.kind !== 'finding' || nodes.find((node) => node.id === target)?.kind !== 'finding')) throw new KnowledgeError('invalid_response')
+    if (['investigated_from', 'discovered_from', 'revised_from'].includes(edge.kind as string) && (source === target || nodes.find((node) => node.id === source)?.kind !== 'finding' || nodes.find((node) => node.id === target)?.kind !== 'finding')) throw new KnowledgeError('invalid_response')
     return { id: text(edge.id, 650), source, target, kind: edge.kind }
   })
   unique(items)

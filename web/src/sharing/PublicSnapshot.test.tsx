@@ -60,11 +60,11 @@ describe('complete allowlisted public finding presentation', () => {
     expect(screen.queryByText(QUOTE_A, { selector: 'blockquote' })).toBeNull()
     expect(screen.getByRole('list', { name: 'Public saved citation excerpts' }).children).toHaveLength(2)
   })
-  it.each(['superseded', 'unsupported'] as const)('keeps %s shared content exact with an honest warning and no private successor navigation', async (status) => {
+  it.each(['superseded', 'unsupported', 'needs_review'] as const)('keeps %s shared content exact with an honest warning and no private successor navigation', async (status) => {
     const fetch = vi.fn(async () => Response.json(publicFinding({ status }))); vi.stubGlobal('fetch', fetch)
     render(<PublicFindingPage publicId={PUBLIC_ID} />)
     expect(await screen.findByRole('heading', { name: 'Public synthetic bridge' })).toBeVisible()
-    expect(screen.getByText(status === 'superseded' ? /A different finding is now current/ : /latest model assessment no longer supports this exact finding/)).toBeVisible()
+    expect(screen.getByText(status === 'superseded' ? /A different finding is now current/ : status === 'needs_review' ? /saved evidence for this snapshot needs review/ : /latest model assessment no longer supports this exact finding/)).toBeVisible()
     expect(screen.queryByRole('button', { name: /Write|Formalise|Investigate|Reassess/ })).toBeNull()
     expect(fetch).toHaveBeenCalledTimes(1)
     expect(screen.queryByText(/private-result-/)).toBeNull()

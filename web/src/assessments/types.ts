@@ -1,3 +1,4 @@
+import type { DiscoveryIntent, DiscoveryStage, DiscoveryStageMetadata } from '../discovery/types'
 import type { AnswerFinding, BridgeFinding, FieldSelection, MemoryReadReference, ResearchActivityEvent, ResearchResult, VerifiedQuote } from '../research/types'
 import type { SourceBibliography } from '../research/bibliography'
 import type { SourceCoverage } from '../research/sourceCoverage'
@@ -13,6 +14,7 @@ export interface AssessmentCapabilities {
 }
 
 export interface FindingHead {
+  discovery_stage?: DiscoveryStageMetadata
   requested_result_id: string
   root_result_id: string
   current_result_id: string
@@ -69,7 +71,7 @@ export interface FindingVersion {
     task_kind: 'research' | 'reassess_finding'
     mode: 'explore' | 'ask' | 'surprise'
     goal: string
-    status: 'succeeded'
+    status: AssessmentJobStatus
     created_at: string
     updated_at: string
     result_id: string | null
@@ -77,9 +79,12 @@ export interface FindingVersion {
     assessment_id: string | null
     error_code: string | null
     external_outcome_unknown: boolean
+    native_research?: NativeRunControl
+    discovery_intent?: DiscoveryIntent
   }
   payload: ResearchResult
   assessment: FindingHead
+  discovery_stage?: DiscoveryStage
 }
 
 // A revision is an immutable assessment; only an applied revision changes the head.

@@ -19,6 +19,7 @@ from polymath.assessment_models import (
     FindingAssessment,
     FindingHead,
 )
+from polymath.discovery_models import DiscoveryIntent, StageCommit
 from polymath.evidence_models import EvidenceQuote, EvidenceResult
 from polymath.models import ResearchRun
 
@@ -27,8 +28,57 @@ class EligibilityError(ValueError):
     """Static private failure, with no foreign finding existence disclosure."""
 
 
+def completed_result_condition(result=EvidenceResult):
+    """Completed scientific records, including exact independently committed stages.
+
+    This is a historical/read predicate. Fresh use additionally requires current
+    supported-head and stage structural checks. A succeeded ladder run cannot
+    make an uncommitted positive row eligible.
+    """
+    ladder = exists(
+        select(DiscoveryIntent.run_id)
+        .where(DiscoveryIntent.run_id == result.run_id)
+        .correlate(result)
+    )
+    stage = exists(
+        select(StageCommit.id)
+        .where(
+            StageCommit.result_id == result.id,
+            StageCommit.run_id == result.run_id,
+            StageCommit.content_sha256 == result.content_sha256,
+        )
+        .correlate(result)
+    )
+    completed = exists(
+        select(ResearchRun.id)
+        .where(
+            ResearchRun.id == result.run_id,
+            or_(
+                and_(
+                    ResearchRun.task_kind == "research",
+                    or_(
+                        and_(ResearchRun.status == "succeeded", ~ladder),
+                        and_(ladder, stage),
+                    ),
+                ),
+                and_(
+                    ResearchRun.task_kind == "reassess_finding", ResearchRun.status == "succeeded"
+                ),
+            ),
+        )
+        .correlate(result)
+    )
+    return and_(result.status.in_(("bridge", "answer")), completed)
+
+
+def _stage_current_supported(session, result):
+    from polymath.discovery_store import stage_current_supported
+
+    return stage_current_supported(session, result)
+
+
 def current_supported_condition(result=EvidenceResult):
-    """SQL predicate including completed run and applied current-head membership."""
+    """SQL candidate predicate; require_current_supported adds stage integrity."""
     head_current = exists(
         select(FindingHead.root_result_id)
         .where(
@@ -59,7 +109,6 @@ def current_supported_condition(result=EvidenceResult):
         select(ResearchRun.id)
         .where(
             ResearchRun.id == result.run_id,
-            ResearchRun.status == "succeeded",
             or_(
                 and_(ResearchRun.task_kind == "research", or_(no_root_head, head_current)),
                 and_(ResearchRun.task_kind == "reassess_finding", applied_candidate),
@@ -67,7 +116,7 @@ def current_supported_condition(result=EvidenceResult):
         )
         .correlate(result)
     )
-    return and_(result.status.in_(("bridge", "answer")), eligible_run)
+    return and_(completed_result_condition(result), eligible_run)
 
 
 def _arguments(owner_or_result, result_id):
@@ -121,6 +170,8 @@ def result_assessment_state(session: Session, owner_or_result, result_id=None) -
         )
         is not None
     )
+    if eligible:
+        eligible = _stage_current_supported(session, result)
     current = result.id == current_id
     return {
         "root_result_id": str(root_id),
@@ -143,14 +194,11 @@ def require_current_supported(session: Session, owner_or_result, result_id=None)
     result = _result(session, owner, result_id)
     if _hash(_canonical(result.payload)) != result.content_sha256:
         raise EligibilityError("finding_not_available")
-    if (
-        session.scalar(
-            select(EvidenceResult.id).where(
-                EvidenceResult.id == result_id, current_supported_condition()
-            )
+    if session.scalar(
+        select(EvidenceResult.id).where(
+            EvidenceResult.id == result_id, current_supported_condition()
         )
-        is None
-    ):
+    ) is None or not _stage_current_supported(session, result):
         raise EligibilityError("finding_not_available")
 
 

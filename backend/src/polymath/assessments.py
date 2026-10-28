@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 from polymath.access_models import BrowserSession, ResearchRunAccess
 from polymath.assessment_eligibility import (
     EligibilityError,
+    completed_result_condition,
     result_assessment_state,
 )
 from polymath.assessment_models import (
@@ -89,7 +90,7 @@ def _owned_result(session: Session, owner: str, result_id) -> EvidenceResult:
         .where(
             EvidenceResult.id == _id(result_id),
             EvidenceResult.status.in_(("bridge", "answer")),
-            ResearchRun.status == "succeeded",
+            completed_result_condition(),
             ResearchRun.task_kind.in_(("research", "reassess_finding")),
             ResearchRunAccess.session_hash == owner,
             BrowserSession.expires_at > func.clock_timestamp(),

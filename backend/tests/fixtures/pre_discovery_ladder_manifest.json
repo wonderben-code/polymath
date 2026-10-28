@@ -1,0 +1,213 @@
+{
+  "controller_sha256": {
+    "formalise": "4d54a08ef5446d11a649cea00fecde6fb1b8450c5f2d71070a34b4c9c8ac7a28",
+    "reassess_finding": "d51caa176d0bf82eac3e0a36f59e131f90f07ed4dab1a9cba8a0c0314bf961ba",
+    "research": "1d596707f24f6786cefba5faf7b4eb6dbacee7a945727bac0be5b6e7bf118a56",
+    "write_paper": "8f172bf33e8af22f9fab39afe87ab483932e24954961a350c92c6c15f1e1c9d0",
+    "write_summary": "1677478e453671ca7db26ac84b89d752366c3454a47f07b246a1d88e75cbe78e"
+  },
+  "intent": {
+    "goal": "Synthetic pre-ladder compatibility goal",
+    "id": "33333333-3333-4333-8333-333333333333",
+    "mode": "surprise",
+    "task_kind": "research"
+  },
+  "intent_sha256": "d5b36a04ada8b69381471c2449b7f2f2b3f7a50544a2c256ee7f06801da17cc9",
+  "manifest": {
+    "account_id": "fixture-account",
+    "audience": "operator_browser",
+    "canary": {
+      "account_id": "fixture-account",
+      "credential_binding_sha256": "d6a55e09f2d6bca3bd10d43b03d44c2b672f167d22cc36932b628b604c43c4e6",
+      "endpoint": "https://api.meta.ai/v1/chat/completions",
+      "model_id": "fixture-attested-model",
+      "probe_protocol": "polymath-meta-probe-v1",
+      "receipt_id": "22222222-2222-4222-8222-222222222222",
+      "receipt_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "status": "passed"
+    },
+    "clear_kill_switch": true,
+    "credential_binding_sha256": "d6a55e09f2d6bca3bd10d43b03d44c2b672f167d22cc36932b628b604c43c4e6",
+    "endpoint": "https://api.meta.ai/v1/chat/completions",
+    "model_id": "fixture-attested-model",
+    "native_control_epoch": 0,
+    "proposal": {
+      "account": {
+        "account_id": "fixture-account",
+        "daily_cap_microdollars": 25000000,
+        "hard_cap_microdollars": 150000000,
+        "max_in_flight": 1,
+        "run_cap_microdollars": 5000000
+      },
+      "application_limits": {
+        "max_context_characters": 90000,
+        "max_model_calls": 12,
+        "max_output_tokens": 4096,
+        "request_timeout_seconds": 45.0
+      },
+      "billable_bounds": {
+        "evidence": [
+          {
+            "content_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "url": "https://example.org/bounds"
+          }
+        ],
+        "input_tokens_absolute": 300000,
+        "output_tokens_absolute": 4096
+      },
+      "currency": "USD",
+      "endpoint": "https://api.meta.ai/v1/chat/completions",
+      "execution_available": false,
+      "model_id": "fixture-attested-model",
+      "native_status": "not_run",
+      "observed_at": "2026-10-28T11:59:00Z",
+      "pricing": {
+        "evidence": [
+          {
+            "content_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "url": "https://example.org/pricing"
+          }
+        ],
+        "input_microdollars_per_million": 1000000,
+        "output_microdollars_per_million": 2000000
+      },
+      "protocol": "polymath-meta-readiness-v1",
+      "usage_contract": "prompt_completion_inclusive_v1",
+      "usage_evidence": [
+        {
+          "content_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "url": "https://example.org/protocol-and-inclusive-usage"
+        }
+      ],
+      "valid_until": "2026-10-28T13:00:00Z"
+    },
+    "proposal_sha256": "25e754dd43167328eb8cdfda83e0989c10343514420f49089d4b8a1645cf54f8",
+    "protocol": "polymath-meta-research-activation-v1",
+    "provider_account_attestation": {
+      "available_credit_microdollars": 150000000,
+      "currency": "USD",
+      "evidence": [
+        {
+          "content_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+          "url": "https://example.org/synthetic-compat"
+        }
+      ],
+      "model_id": "fixture-attested-model",
+      "observed_at": "2026-10-28T12:00:00Z",
+      "provider_billing_account_id": "synthetic-compat-account",
+      "provider_hard_cap_microdollars": 150000000,
+      "remaining_provider_allowance_microdollars": 150000000,
+      "usage_contract": "prompt_completion_inclusive_v1",
+      "valid_until": "2026-10-28T12:20:00Z"
+    },
+    "readiness_id": "11111111-1111-4111-8111-111111111111",
+    "review": {
+      "evidence": [
+        {
+          "content_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+          "url": "https://example.org/synthetic-compat"
+        }
+      ],
+      "funding_cap_confirmed": true,
+      "model_wire_usage_confirmed": true,
+      "observed_at": "2026-10-28T12:00:00Z",
+      "pricing_bounds_confirmed": true,
+      "valid_until": "2026-10-28T12:20:00Z"
+    },
+    "task_profiles": [
+      {
+        "profile": {
+          "controller_protocol": "polymath-meta-research-controller-v1",
+          "controller_sha256": "1d596707f24f6786cefba5faf7b4eb6dbacee7a945727bac0be5b6e7bf118a56",
+          "max_actions": 16,
+          "max_context_characters": 90000,
+          "max_model_calls": 12,
+          "max_output_tokens": 4096,
+          "max_repairs": 2,
+          "max_sources": 200,
+          "model_timeout_seconds": 75.0,
+          "request_protocol": "polymath-meta-research-request-v1",
+          "request_timeout_seconds": 45.0,
+          "task_kind": "research",
+          "tool_timeout_seconds": 20.0
+        },
+        "profile_sha256": "bd5e67f239b6877812e9b24dc0212f45b8f4d1b46f5524db294516632102db88"
+      },
+      {
+        "profile": {
+          "controller_protocol": "polymath-meta-artifact-controller-v1",
+          "controller_sha256": "4d54a08ef5446d11a649cea00fecde6fb1b8450c5f2d71070a34b4c9c8ac7a28",
+          "max_actions": 12,
+          "max_context_characters": 90000,
+          "max_model_calls": 12,
+          "max_output_tokens": 4096,
+          "max_repairs": 2,
+          "max_sources": 200,
+          "model_timeout_seconds": 75.0,
+          "request_protocol": "polymath-meta-research-request-v1",
+          "request_timeout_seconds": 45.0,
+          "task_kind": "formalise",
+          "tool_timeout_seconds": 5.0
+        },
+        "profile_sha256": "a983a2ae0fccfea9baa0bf1384c7af9453d6d736f440e1b4ade57011a4805821"
+      },
+      {
+        "profile": {
+          "controller_protocol": "polymath-meta-artifact-controller-v1",
+          "controller_sha256": "1677478e453671ca7db26ac84b89d752366c3454a47f07b246a1d88e75cbe78e",
+          "max_actions": 12,
+          "max_context_characters": 90000,
+          "max_model_calls": 12,
+          "max_output_tokens": 4096,
+          "max_repairs": 2,
+          "max_sources": 200,
+          "model_timeout_seconds": 75.0,
+          "request_protocol": "polymath-meta-research-request-v1",
+          "request_timeout_seconds": 45.0,
+          "task_kind": "write_summary",
+          "tool_timeout_seconds": 5.0
+        },
+        "profile_sha256": "2bc18a4141f4cf1b69c8780b5177df0d84166816a3bed535113d63cb851c6254"
+      },
+      {
+        "profile": {
+          "controller_protocol": "polymath-meta-artifact-controller-v1",
+          "controller_sha256": "8f172bf33e8af22f9fab39afe87ab483932e24954961a350c92c6c15f1e1c9d0",
+          "max_actions": 12,
+          "max_context_characters": 90000,
+          "max_model_calls": 12,
+          "max_output_tokens": 4096,
+          "max_repairs": 2,
+          "max_sources": 200,
+          "model_timeout_seconds": 75.0,
+          "request_protocol": "polymath-meta-research-request-v1",
+          "request_timeout_seconds": 45.0,
+          "task_kind": "write_paper",
+          "tool_timeout_seconds": 5.0
+        },
+        "profile_sha256": "f6b23f6b498931ea07d788883bc38857390195e36cedf2faa2b37e19d887c79b"
+      },
+      {
+        "profile": {
+          "controller_protocol": "polymath-meta-assessment-controller-v1",
+          "controller_sha256": "d51caa176d0bf82eac3e0a36f59e131f90f07ed4dab1a9cba8a0c0314bf961ba",
+          "max_actions": 12,
+          "max_context_characters": 90000,
+          "max_model_calls": 12,
+          "max_output_tokens": 4096,
+          "max_repairs": 2,
+          "max_sources": 200,
+          "model_timeout_seconds": 75.0,
+          "request_protocol": "polymath-meta-research-request-v1",
+          "request_timeout_seconds": 45.0,
+          "task_kind": "reassess_finding",
+          "tool_timeout_seconds": 20.0
+        },
+        "profile_sha256": "ec03e849666b76718357f0be5b565cdad86c009cd17e67b21dda35308acbc79d"
+      }
+    ],
+    "valid_until": "2026-10-28T12:05:00Z"
+  },
+  "manifest_sha256": "4525d3cf05d8963440b4d8d7100a4950b9d0653fe2a65e8a5edfc73e46cea001",
+  "revision": "9e32751"
+}

@@ -6,6 +6,7 @@ from polymath import (  # noqa: F401
     artifact_models,
     assessment_models,
     budget_models,
+    discovery_models,
     evidence_models,
     full_text_models,
     ingestion_models,

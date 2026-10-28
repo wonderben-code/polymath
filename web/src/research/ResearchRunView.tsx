@@ -212,12 +212,12 @@ function Bridge({ finding }: { finding: BridgeFinding }) {
   )
 }
 
-function Evidence({ result }: { result: ResearchResult }) {
+function Evidence({ result, primaryPaperGroups }: { result: ResearchResult; primaryPaperGroups?: { paper_id: string; source_ids: string[] }[] }) {
   const sources = new Map(result.sources.map((source) => [source.source_id, source]))
-  const groups = groupSourceVersions(result.sources), hasExcerpts = result.sources.some((source) => source.coverage)
+  const groups = primaryPaperGroups ? primaryPaperGroups.map((group) => ({ identity: group.paper_id, versions: group.source_ids.flatMap((sourceId) => { const source = sources.get(sourceId); return source ? [source] : [] }) })) : groupSourceVersions(result.sources), hasExcerpts = result.sources.some((source) => source.coverage)
   return (
     <section className="research-evidence" aria-labelledby="research-evidence-title">
-      <div className="research-section-heading"><div><span className="eyebrow accent">CHECK THE SOURCES</span><h3 id="research-evidence-title">Evidence you can inspect</h3></div><span className="research-count">{hasExcerpts ? `${result.sources.length} saved source versions · ${groups.length} paper ${groups.length === 1 ? 'identity' : 'identities'}` : `${result.sources.length} saved ${result.sources.length === 1 ? 'source' : 'sources'}`}</span></div>
+      <div className="research-section-heading"><div><span className="eyebrow accent">CHECK THE SOURCES</span><h3 id="research-evidence-title">Evidence you can inspect</h3></div><span className="research-count">{hasExcerpts || primaryPaperGroups ? `${result.sources.length} saved source versions · ${groups.length} paper ${groups.length === 1 ? 'identity' : 'identities'}` : `${result.sources.length} saved ${result.sources.length === 1 ? 'source' : 'sources'}`}</span></div>
       <p className="research-scope-note">Quotation matching checks the saved text. It does not establish whether a scientific interpretation or connection is correct.</p>{hasExcerpts && <p className="source-paper-count">Excerpts and versions from the same arXiv paper share one paper identity. Saved windows do not establish that the whole paper was read or provide independent corroboration.</p>}
       {result.finding?.outcome !== 'answer' && result.quotes.length > 0 && <div className="research-quotes">{result.quotes.map((quote, index) => {
         const source = sources.get(quote.source_id)
@@ -229,18 +229,23 @@ function Evidence({ result }: { result: ResearchResult }) {
   )
 }
 
-export function ResearchRunView({ run, events, result, connection, onCancel, cancelling = false, onOpenRun, findingVersion }: ResearchRunViewProps) {
+/** The normal scientific finding and original-evidence reader, without run totals. */
+export function ResearchFindingView({ result, onOpenRun, mode = result.mode, primaryPaperGroups }: { result: ResearchResult; onOpenRun?: (id: string) => void; mode?: ResearchResult['mode']; primaryPaperGroups?: { paper_id: string; source_ids: string[] }[] }) {
+  return <>{mode === 'surprise' && <SelectedFields selections={result.field_selections ?? []} />}<Outcome result={result} /><ResearchMemory result={result} onOpenRun={onOpenRun} /><Evidence result={result} primaryPaperGroups={primaryPaperGroups} /></>
+}
+
+export function ResearchRunView({ run, events, result, connection, onCancel, cancelling = false, onOpenRun, findingVersion, hideOutcome = false, primaryPaperGroups }: ResearchRunViewProps) {
   const state = states[run.status] ?? { label: 'Status unavailable', description: 'The investigation status could not be identified. Recorded material remains below.' }
   const activity = orderedEvents(events)
-  const canCancel = onCancel && ['queued', 'running', 'waiting_retry'].includes(run.status)
+  const canCancel = onCancel && ['queued', 'running', 'waiting_retry', 'interrupted'].includes(run.status)
   return (
     <section className="research-run-view" aria-labelledby="research-run-title">
       <header className="research-run-heading"><div><span className="eyebrow accent">{run.task_kind === 'reassess_finding' ? 'EVIDENCE REASSESSMENT' : modeNames[run.mode].toUpperCase()} / RESEARCH RECORD</span><h2 id="research-run-title">{run.goal || 'An open discovery'}</h2></div><span className={`research-run-state state-${run.status}`} role="status">{state.label}</span></header>
       <div className="research-run-summary"><p>{state.description}</p>{canCancel && <button type="button" className="research-cancel" onClick={onCancel} disabled={cancelling}>{cancelling ? 'Requesting cancellation…' : 'Cancel investigation'}</button>}</div>
       {findingVersion && <FindingVersionNotice {...findingVersion} />}
-      <div className="research-run-layout">
+      <div className={`research-run-layout${hideOutcome ? ' research-run-layout-activity-only' : ''}`}>
         <section className="research-activity" aria-labelledby="research-activity-title"><div className="research-section-heading"><h3 id="research-activity-title">Research activity</h3><span className={`research-connection connection-${connection}`} aria-live="polite">{connectionNames[connection]}</span></div>{activity.length ? <ol className="research-timeline" aria-label="Recorded research activity" aria-live="polite" aria-relevant="additions">{activity.map((event, index) => <li key={event.sequence}><span className="research-event-number" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span><p>{event.summary}</p></li>)}</ol> : <p className="research-empty">No recorded activity yet.</p>}</section>
-        <section className="research-results" aria-labelledby="research-outcome-title"><h3 className="research-sr-only" id="research-outcome-title">Research outcome</h3>{result ? <>{run.mode === 'surprise' && <SelectedFields selections={result.field_selections ?? []} />}<Outcome result={result} /><ResearchMemory result={result} onOpenRun={onOpenRun} /><Evidence result={result} /></> : <PendingOutcome status={run.status} />}</section>
+        {!hideOutcome && <section className="research-results" aria-labelledby="research-outcome-title"><h3 className="research-sr-only" id="research-outcome-title">Research outcome</h3>{result ? <ResearchFindingView result={result} onOpenRun={onOpenRun} mode={run.mode} primaryPaperGroups={primaryPaperGroups} /> : <PendingOutcome status={run.status} />}</section>}
       </div>
     </section>
   )

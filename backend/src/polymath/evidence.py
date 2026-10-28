@@ -73,6 +73,14 @@ class StoredResult:
         return f"result:{self.id}"
 
 
+@dataclass(frozen=True)
+class _StageValidation:
+    """Private exact context proof minted only by the atomic discovery store."""
+
+    run_id: uuid.UUID
+    memory_reads: tuple[tuple[str, str, str], ...]
+
+
 def _canonical(value: dict) -> str:
     try:
         encoded = json.dumps(
@@ -291,6 +299,12 @@ class EvidenceStore:
             return tuple(_artifact(*row) for row in rows)
 
     def save_result(self, lease: JobLease, result: ResearchResult) -> StoredResult:
+        with Session(self.engine) as session, session.begin():
+            return self._save_result_in_session(session, lease, result)
+
+    def _save_result_in_session(
+        self, session: Session, lease: JobLease, result: ResearchResult, *, _stage_validation=None
+    ) -> StoredResult:
         if not isinstance(result, ResearchResult):
             raise EvidenceError("invalid_research_result")
         try:
@@ -298,107 +312,133 @@ class EvidenceStore:
         except (ValueError, TypeError, ValidationError):
             raise EvidenceError("invalid_research_result") from None
         self._validate_result_shape(result)
-        with Session(self.engine) as session, session.begin():
-            run = _owned(session, lease)
-            if run.task_kind not in ("research", "reassess_finding"):
-                raise EvidenceError("research_result_wrong_task_kind")
-            if run.task_kind == "reassess_finding":
-                from polymath.assessment_models import AssessmentRequest
+        run = _owned(session, lease)
+        if run.task_kind not in ("research", "reassess_finding"):
+            raise EvidenceError("research_result_wrong_task_kind")
+        if run.task_kind == "reassess_finding":
+            from polymath.assessment_models import AssessmentRequest
 
-                request = session.get(AssessmentRequest, run.id)
-                if (
-                    request is None
-                    or result.status not in ("bridge", "answer")
-                    or [item.model_dump(mode="json") for item in result.field_selections]
-                    != request.basis.get("field_selections", [])
-                ):
-                    raise EvidenceError("invalid_reassessment_candidate")
-            self._validate_memory_reads(session, run, result)
-            if result.mode != run.mode:
-                raise EvidenceError("result_mode_mismatch")
-            if isinstance(result.finding, AnswerFinding) and (
-                " ".join(result.finding.question.split()).casefold()
-                != " ".join(run.goal.split()).casefold()
+            request = session.get(AssessmentRequest, run.id)
+            if (
+                request is None
+                or result.status not in ("bridge", "answer")
+                or [item.model_dump(mode="json") for item in result.field_selections]
+                != request.basis.get("field_selections", [])
             ):
-                raise EvidenceError("answer_question_mismatch")
-            source_map = {}
-            refs = []
-            for document in result.sources:
-                document = _validate_document(document)
-                metadata_hash = _hash(_canonical(_metadata(document)))
-                row = session.execute(
-                    _bound_sources(session, lease.run_id).where(
-                        SourceVersion.source_id == document.source_id,
-                        SourceVersion.content_sha256 == document.content_sha256,
-                        SourceVersion.content_kind == document.content_kind,
-                        SourceRetrieval.metadata_sha256 == metadata_hash,
-                    )
-                ).first()
-                if row is None:
-                    raise EvidenceError("source_not_observed")
-                version, retrieval = row
-                if document.source_id in source_map:
-                    raise EvidenceError("ambiguous_source_version")
-                source_map[document.source_id] = (version, retrieval)
-                refs.append({"version_id": str(version.id), "retrieval_id": str(retrieval.id)})
-            from polymath.full_text import owned_identity_context
-            from polymath.literature.identity import paper_aliases, validate_selected_paper_versions
+                raise EvidenceError("invalid_reassessment_candidate")
+        from polymath.discovery_models import DiscoveryIntent
 
-            identity_refs = tuple(
-                _document(*row) for row in session.execute(_bound_sources(session, run.id)).all()
-            ) + owned_identity_context(session, run.id)
-            distinct_context = {}
-            for reference in identity_refs:
-                distinct_context.setdefault(paper_aliases(reference), reference)
-                if len(distinct_context) > 256:
-                    raise EvidenceError("source_identity_context_limit")
-            alias_context = tuple(distinct_context.values())
-            quote_rows = self._validate_quotes(result, source_map, alias_context=alias_context)
-            cited_ids = {quote.source_id for quote in result.quotes}
-            try:
-                validate_selected_paper_versions(
-                    tuple(doc for doc in result.sources if doc.source_id in cited_ids),
-                    context=alias_context,
+        ladder = session.get(DiscoveryIntent, run.id)
+        if (
+            ladder is not None
+            and result.status in ("bridge", "answer")
+            and (
+                type(_stage_validation) is not _StageValidation
+                or _stage_validation.run_id != run.id
+            )
+        ):
+            raise EvidenceError("discovery_stage_commit_required")
+        if _stage_validation is not None:
+            if (
+                type(_stage_validation) is not _StageValidation
+                or _stage_validation.run_id != run.id
+                or ladder is None
+            ):
+                raise EvidenceError("invalid_stage_validation")
+            declared = {
+                (item.result_id, item.run_id, item.content_sha256) for item in result.memory_reads
+            }
+            if declared != set(_stage_validation.memory_reads) or len(declared) != len(
+                result.memory_reads
+            ):
+                raise EvidenceError("stage_memory_read_provenance_mismatch")
+        else:
+            self._validate_memory_reads(session, run, result)
+        if result.mode != run.mode:
+            raise EvidenceError("result_mode_mismatch")
+        if isinstance(result.finding, AnswerFinding) and (
+            " ".join(result.finding.question.split()).casefold()
+            != " ".join(run.goal.split()).casefold()
+        ):
+            raise EvidenceError("answer_question_mismatch")
+        source_map = {}
+        refs = []
+        for document in result.sources:
+            document = _validate_document(document)
+            metadata_hash = _hash(_canonical(_metadata(document)))
+            row = session.execute(
+                _bound_sources(session, lease.run_id).where(
+                    SourceVersion.source_id == document.source_id,
+                    SourceVersion.content_sha256 == document.content_sha256,
+                    SourceVersion.content_kind == document.content_kind,
+                    SourceRetrieval.metadata_sha256 == metadata_hash,
                 )
-            except ValueError:
-                raise EvidenceError("selected_paper_version_conflict") from None
-            self._validate_parent_evidence(session, run, result, quote_rows)
-            payload = result.model_dump(mode="json")
-            payload["sources"] = []
-            envelope = {"result": payload, "source_artifacts": refs}
-            serialized = _canonical(envelope)
-            if len(serialized.encode("utf-8")) > MAX_RESULT_BYTES:
-                raise EvidenceError("result_artifact_too_large")
-            digest = _hash(serialized)
-            prior = session.scalar(
-                select(EvidenceResult).where(
-                    EvidenceResult.run_id == lease.run_id, EvidenceResult.content_sha256 == digest
+            ).first()
+            if row is None:
+                raise EvidenceError("source_not_observed")
+            version, retrieval = row
+            if document.source_id in source_map:
+                raise EvidenceError("ambiguous_source_version")
+            source_map[document.source_id] = (version, retrieval)
+            refs.append({"version_id": str(version.id), "retrieval_id": str(retrieval.id)})
+        from polymath.full_text import owned_identity_context
+        from polymath.literature.identity import paper_aliases, validate_selected_paper_versions
+
+        identity_refs = tuple(
+            _document(*row) for row in session.execute(_bound_sources(session, run.id)).all()
+        ) + owned_identity_context(session, run.id)
+        distinct_context = {}
+        for reference in identity_refs:
+            distinct_context.setdefault(paper_aliases(reference), reference)
+            if len(distinct_context) > 256:
+                raise EvidenceError("source_identity_context_limit")
+        alias_context = tuple(distinct_context.values())
+        quote_rows = self._validate_quotes(result, source_map, alias_context=alias_context)
+        cited_ids = {quote.source_id for quote in result.quotes}
+        try:
+            validate_selected_paper_versions(
+                tuple(doc for doc in result.sources if doc.source_id in cited_ids),
+                context=alias_context,
+            )
+        except ValueError:
+            raise EvidenceError("selected_paper_version_conflict") from None
+        self._validate_parent_evidence(session, run, result, quote_rows)
+        payload = result.model_dump(mode="json")
+        payload["sources"] = []
+        envelope = {"result": payload, "source_artifacts": refs}
+        serialized = _canonical(envelope)
+        if len(serialized.encode("utf-8")) > MAX_RESULT_BYTES:
+            raise EvidenceError("result_artifact_too_large")
+        digest = _hash(serialized)
+        prior = session.scalar(
+            select(EvidenceResult).where(
+                EvidenceResult.run_id == lease.run_id, EvidenceResult.content_sha256 == digest
+            )
+        )
+        if prior is not None:
+            return self._stored_result(session, prior)
+        stored = EvidenceResult(
+            run_id=lease.run_id, content_sha256=digest, status=result.status, payload=envelope
+        )
+        session.add(stored)
+        session.flush()
+        for ordinal, (quote, version, retrieval) in enumerate(quote_rows):
+            session.add(
+                EvidenceQuote(
+                    result_id=stored.id,
+                    ordinal=ordinal,
+                    run_id=lease.run_id,
+                    version_id=version.id,
+                    retrieval_id=retrieval.id,
+                    side=quote.side,
+                    claim_id=quote.claim_id,
+                    quote=quote.quote,
+                    supports=quote.supports,
+                    start_offset=quote.start,
+                    end_offset=quote.end,
                 )
             )
-            if prior is not None:
-                return self._stored_result(session, prior)
-            stored = EvidenceResult(
-                run_id=lease.run_id, content_sha256=digest, status=result.status, payload=envelope
-            )
-            session.add(stored)
-            session.flush()
-            for ordinal, (quote, version, retrieval) in enumerate(quote_rows):
-                session.add(
-                    EvidenceQuote(
-                        result_id=stored.id,
-                        ordinal=ordinal,
-                        run_id=lease.run_id,
-                        version_id=version.id,
-                        retrieval_id=retrieval.id,
-                        side=quote.side,
-                        claim_id=quote.claim_id,
-                        quote=quote.quote,
-                        supports=quote.supports,
-                        start_offset=quote.start,
-                        end_offset=quote.end,
-                    )
-                )
-            return self._stored_result(session, stored)
+        return self._stored_result(session, stored)
 
     @staticmethod
     def _validate_memory_reads(session: Session, run, result: ResearchResult) -> None:
@@ -435,6 +475,15 @@ class EvidenceStore:
 
             parent_query = parent_query.where(current_supported_condition())
         parents = session.execute(parent_query).all()
+        if run.task_kind == "research" and result.status in ("bridge", "answer"):
+            from polymath.assessment_eligibility import EligibilityError, require_current_supported
+
+            try:
+                for parent, parent_owner in parents:
+                    if parent_owner == owner:
+                        require_current_supported(session, parent.id)
+            except EligibilityError:
+                raise EvidenceError("memory_read_provenance_mismatch") from None
         bound = {
             (str(parent.id), str(parent.run_id), parent.content_sha256)
             for parent, parent_owner in parents
@@ -456,6 +505,7 @@ class EvidenceStore:
         quoted paper supports the proposed inference or increase its certainty.
         """
         from polymath.access_models import ResearchRunAccess
+        from polymath.assessment_eligibility import completed_result_condition
         from polymath.lineage_models import ResearchRunParent
         from polymath.models import ResearchRun
 
@@ -487,7 +537,7 @@ class EvidenceStore:
             .where(
                 EvidenceResult.id.in_(identifiers),
                 ResearchRunAccess.session_hash == owner,
-                ResearchRun.status == "succeeded",
+                completed_result_condition(),
                 EvidenceResult.run_id != run.id,
                 EvidenceResult.created_at < run.created_at,
                 EvidenceResult.status == "bridge",
@@ -498,6 +548,14 @@ class EvidenceStore:
 
             parent_query = parent_query.where(current_supported_condition())
         actual = session.scalars(parent_query).all()
+        if run.task_kind == "research" and result.status in ("bridge", "answer"):
+            from polymath.assessment_eligibility import EligibilityError, require_current_supported
+
+            try:
+                for parent in actual:
+                    require_current_supported(session, parent.id)
+            except EligibilityError:
+                raise EvidenceError("invalid_parent_basis") from None
         actual_keys = {(str(row.id), str(row.run_id), row.content_sha256) for row in actual}
         if owner is None or actual_keys != selected_keys:
             raise EvidenceError("invalid_parent_basis")

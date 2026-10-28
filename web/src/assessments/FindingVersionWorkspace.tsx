@@ -1,3 +1,4 @@
+import { StageProvenanceNotice } from '../discovery/StageProvenanceNotice'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AssessmentError, getFindingVersion } from './client'
 import type { FindingVersion } from './types'
@@ -40,13 +41,17 @@ export function FindingVersionWorkspace({ resultId, enabled, csrfToken, canGener
     })
     return () => { active = false; controller.abort() }
   }, [resultId, enabled, csrfToken, refresh, expire])
+  const stageCurrent = !version?.discovery_stage || version.discovery_stage.status === 'current_supported'
+  const stageRunActive = !!version?.discovery_stage && ['queued', 'running', 'waiting_retry', 'cancel_requested', 'interrupted'].includes(version.run.status)
   return <section className="finding-version-workspace" aria-label="Exact saved finding version">
-    <div className="assessment-row"><p className="assessment-note">An exact saved finding version, with its original evidence and current assessment status.</p><button type="button" className="text-button" onClick={onClose}>Close finding version</button></div>
+    <div className="assessment-row"><p className="assessment-note">An exact saved finding version, with its original evidence and current assessment status.</p><div className="discovery-actions"><button type="button" className="text-button" disabled={!enabled || blocked.current} onClick={() => setRefresh((previous) => previous + 1)}>Reload saved finding status</button><button type="button" className="text-button" onClick={onClose}>Close finding version</button></div></div>
     {phase === 'loading' && <p role="status">Loading the exact saved finding and source versions…</p>}
     {phase === 'error' && <div role="alert" className="assessment-warning"><p>{head.phase === 'expired' ? 'The browser session expired or changed. Private finding text and source versions have been cleared.' : 'This finding version is unavailable or could not be verified in this browser session. Unapplied candidates do not become current findings.'}</p><button type="button" disabled={blocked.current} onClick={() => setRefresh((previous) => previous + 1)}>Reload finding version</button></div>}
-    {version && <><ResearchRunView run={version.run} result={version.payload} events={version.payload.events} connection="closed" onOpenRun={onOpenRun} findingVersion={{ head: head.head, phase: head.phase, pollPaused: head.pollPaused, onRefresh: head.refresh, onOpenFinding }} />
-      {(version.payload.finding?.outcome === 'bridge' || version.payload.finding?.outcome === 'answer') && <ArtifactWorkspace key={version.id} sourceResultId={version.id} sourceKind={version.payload.finding.outcome} csrfToken={csrfToken} enabled={enabled} canGenerate={canGenerate && head.canGenerate} sourceCurrent={head.canGenerate} onSessionExpired={expire} onBusyChange={onBusyChange} />}
-      {(version.payload.finding?.outcome === 'bridge' || version.payload.finding?.outcome === 'answer') && <ShareWorkspace key={`share:${version.id}`} sourceResultId={version.id} enabled={enabled} csrfToken={csrfToken} sourceCurrent={head.canGenerate} refreshToken={refreshToken} onSessionExpired={expire} />}
+    {version && <>{version.discovery_stage && <StageProvenanceNotice detail={version.discovery_stage} runStatus={version.run.status} onOpenRun={onOpenRun} />}<ResearchRunView run={version.run} primaryPaperGroups={version.discovery_stage?.primary_paper_groups} result={version.payload} events={version.payload.events} connection="closed" onOpenRun={onOpenRun} findingVersion={{ head: head.head, phase: head.phase, pollPaused: head.pollPaused, onRefresh: head.refresh, onOpenFinding }} />
+      {stageRunActive && <p className="discovery-warning">The containing discovery run still holds the one-active-task quota. Open it to finish, continue or stop before starting another model task.</p>}
+      {version.discovery_stage && <p className="discovery-note">This approval supplies the exact stage finding and its original quoted evidence to writing and formalisation. Additional parent-ancestry and stage-assessment context requires a separately reviewed generation extension.</p>}
+      {(version.payload.finding?.outcome === 'bridge' || version.payload.finding?.outcome === 'answer') && <ArtifactWorkspace key={version.id} sourceResultId={version.id} sourceKind={version.payload.finding.outcome} csrfToken={csrfToken} enabled={enabled} canGenerate={canGenerate && head.canGenerate && stageCurrent && !stageRunActive} sourceCurrent={head.canGenerate && stageCurrent} onSessionExpired={expire} onBusyChange={onBusyChange} />}
+      {(version.payload.finding?.outcome === 'bridge' || version.payload.finding?.outcome === 'answer') && <ShareWorkspace key={`share:${version.id}`} sourceResultId={version.id} enabled={enabled} csrfToken={csrfToken} sourceCurrent={head.canGenerate && stageCurrent} refreshToken={refreshToken} onSessionExpired={expire} />}
     </>}
   </section>
 }

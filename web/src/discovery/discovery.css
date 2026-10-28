@@ -1,0 +1,49 @@
+.discovery-workspace { margin: 36px 0; min-width: 0; }
+.discovery-heading, .discovery-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; }
+.discovery-heading h2 { font: 400 31px/1.25 Georgia, 'Times New Roman', serif; margin: 12px 0; }
+.discovery-heading p { max-width: 760px; }
+.discovery-workspace p, .discovery-workspace li, .discovery-workspace dt, .discovery-workspace dd { font-size: 12px; line-height: 1.85; }
+.discovery-note { color: #677263; font-size: 11px !important; }
+.discovery-warning { border-left: 3px solid #9b8e52; background: #f0eddd; padding: 15px 18px; }
+.discovery-totals { padding: 26px; margin: 25px 0 30px; background: #e9eee2; border: 1px solid #c4cfb9; }
+.discovery-row h3 { margin: 0; font: 400 25px/1.3 Georgia, 'Times New Roman', serif; }
+.discovery-state, .discovery-selected-final { font-size: 10px; color: #3e5c39; border: 1px solid #b6c6ac; padding: 5px 9px; }
+.discovery-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; margin: 22px 0; }
+.discovery-metrics dt { font-size: 10px; color: #586850; }
+.discovery-metrics dd { margin: 5px 0 0; font-weight: 500; overflow-wrap: anywhere; }
+.discovery-metrics dd > span { display: block; font-size: 10px; font-weight: 400; }
+.discovery-stop, .discovery-preference { border-top: 1px solid #c4cfb9; padding-top: 14px; }
+.discovery-count { font: 400 25px/1.4 Georgia, 'Times New Roman', serif; }
+.discovery-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; align-items: start; }
+.discovery-stage { min-width: 0; background: #fbfaf5; border: 1px solid #c9cebf; padding: 25px; overflow-wrap: anywhere; }
+.discovery-stage-inspected { border-color: #819779; box-shadow: inset 3px 0 #819779; }
+.discovery-stage h3 { font: 400 27px/1.3 Georgia, 'Times New Roman', serif; margin: 15px 0; }
+.discovery-stage h5 { font-size: 12px; margin: 20px 0 8px; }
+.discovery-stage .discovery-selected-final { display: inline-block; margin-top: 12px; }
+.discovery-status { color: #6c735d; }
+.discovery-assessment { border-top: 1px solid var(--line); margin-top: 20px; padding-top: 18px; }
+.discovery-score { display: flex; align-items: center; gap: 16px; }
+.discovery-score > strong { font: 400 36px/1.2 Georgia, 'Times New Roman', serif; }
+.discovery-score > strong > span { font: 400 13px/1.2 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+.discovery-score > div { display: grid; gap: 3px; font-size: 10px; color: #66735e; }
+.discovery-category { text-transform: capitalize; color: #35553d; }
+.discovery-parents, .discovery-primary { margin-top: 22px; border-top: 1px solid var(--line); padding-top: 17px; }
+.discovery-parents > ol, .discovery-primary > ol { padding-left: 20px; }
+.discovery-parents li { padding-bottom: 14px; }
+.discovery-parents li > span { display: block; color: #65715f; }
+.discovery-source { margin: 14px 0 20px; }
+.discovery-source blockquote { margin: 15px 0; padding-left: 15px; border-left: 2px solid #bec8b2; font: 400 16px/1.7 Georgia, 'Times New Roman', serif; }
+.discovery-mono { font: 10px/1.8 monospace !important; overflow-wrap: anywhere; }
+.discovery-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 20px; }
+.discovery-workspace button { border: 1px solid #a8b69e; padding: 9px 13px; background: #f5f7ef; color: var(--ink); font-size: 11px; }
+.discovery-workspace button:disabled { opacity: .5; }
+.discovery-workspace summary { cursor: pointer; font-size: 11px; line-height: 1.8; }
+.discovery-reader { margin-top: 34px; border: 1px solid #c3ccba; background: #fbfaf5; }
+.discovery-reader-heading { padding: 26px; }
+.discovery-reader-heading h3 { font: 400 28px/1.3 Georgia, 'Times New Roman', serif; margin: 12px 0; }
+.discovery-reader > .finding-version-notice, .discovery-reader > .discovery-warning { margin: 0 26px 23px; }
+.discovery-evidence.research-results { border-left: 0; border-top: 1px solid var(--line); }
+.discovery-reader > .artifact-workspace, .discovery-reader > .sharing-workspace { margin: 25px; }
+.surprise-discovery-scope { font-size: 11px; line-height: 1.85; background: #eef1e5; padding: 14px; margin: 0 34px 23px; }
+@media (max-width: 900px) { .discovery-cards { grid-template-columns: minmax(0, 1fr); } .discovery-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 600px) { .discovery-heading, .discovery-row { flex-direction: column; gap: 15px; } .discovery-totals, .discovery-stage, .discovery-reader-heading { padding: 20px; } .discovery-reader > .artifact-workspace, .discovery-reader > .sharing-workspace { margin: 20px; } .surprise-discovery-scope { margin-right: 21px; margin-left: 21px; } .discovery-stage h3 { font-size: 25px; } }

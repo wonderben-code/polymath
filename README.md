@@ -33,6 +33,8 @@ Created 27 October 2026. Every push to `main` is Bitcoin-timestamped through Ope
 | [docs/META_READINESS.md](docs/META_READINESS.md) | Operator-attested model/billing proposals, conservative cost quotes, budget inspection and safe disable |
 | [docs/META_VERIFICATION.md](docs/META_VERIFICATION.md) | Exact one-call Meta approval, shared budget, observation receipts and free recovery |
 | [docs/META_RESEARCH.md](docs/META_RESEARCH.md) | Native Meta activation, all-task worker composition, per-run limits and exact recovery |
+| [docs/DISCOVERY_LADDER.md](docs/DISCOVERY_LADDER.md) | Model-directed multi-bridge Surprise runs, exact parent evidence, partial discoveries and recovery |
+| [docs/PUBLIC_RESEARCH_ACCESS.md](docs/PUBLIC_RESEARCH_ACCESS.md) | Next-milestone design for controlled visitor access, explicit owner funding and shared-ledger quotas; not enabled |
 | [docs/HACKATHON.md](docs/HACKATHON.md) | Dates, judging, setup checklist, IP notes |
 | [CLAUDE.md](CLAUDE.md) | Instructions for any coding agent picking this up |
 
@@ -54,6 +56,7 @@ The implementation baseline is recorded in `docs/ARCHITECTURE.md`. The target is
 - [x] E1–E3: Ask and Surprise Me implementation, verified through synthetic worker/browser journeys
 - [ ] E4: live Meta/source evaluation and scientific quality review
 - [x] F3–F5 implementation: higher-level research, scheduled collection and cited reassessment
+- [x] F6/C3 implementation: automatic Surprise discovery ladders, public hypothesis decisions and model-assessed novelty/confidence; local verification
 - [x] Shared public reading: exact owner previews, cited snapshots, library/map, expiry and revocation
 - [ ] F live gates: native scientific evaluation, authorized public-memory reuse and deployment
 - [x] G1–G2: Formalise and Write implementation with bounded checks and exact source-backed exports
@@ -72,3 +75,5 @@ Apache 2.0. See [LICENSE](LICENSE).
 A separate, disabled one-call Meta verification lane now uses the actual adapter with exact human approval and the shared ledger. Its immutable receipt records protocol behavior and reported usage; it grants no research activation and proves no pricing, funding or scientific claim. All verification checks so far use mock HTTP. No paid Meta call has run.
 
 The native research path now connects every existing task to the real Meta adapter through exact approval, original per-run limits, one shared ledger and recorded usage before action validation. The first audience is the approving operator’s browser; controlled public research access remains pending. Ordinary product screens share that current approval context. All checks still use mock Meta/provider HTTP, and live research remains disabled.
+
+Surprise can now opt into a discovery ladder: Meta decides whether to save more bridges, select earlier discoveries as premises, investigate a higher connection or stop. Every stage keeps exact original quotations, objections, model-assessed novelty and explicitly uncalibrated confidence. Saved stages remain readable after cancellation or limits; only an explicit model decision selects a final stage. The whole run shares one approved budget and call allowance. This is implemented locally with synthetic verification, not a claim of live scientific discovery.

@@ -30,6 +30,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from polymath.access_models import BrowserSession, ResearchRunAccess
+from polymath.discovery_contracts import DiscoveryIntent
 from polymath.jobs import JobNotFound, JobRepository, _event
 from polymath.lineage import LineageError, bind_parents, validate_parent_ids
 from polymath.meta_research_errors import META_RESEARCH_ERROR_STATUSES, MetaResearchError
@@ -80,6 +81,7 @@ class CreateRun(BaseModel):
     goal: str = Field(max_length=4000)
     parent_result_ids: list[str] = Field(default_factory=list, max_length=4)
     expected_activation_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    discovery_intent: DiscoveryIntent | None = None
 
     @model_validator(mode="after")
     def validate_goal(self) -> CreateRun:
@@ -89,6 +91,8 @@ class CreateRun(BaseModel):
         if any(ord(character) < 32 and character not in "\n\t\r" for character in self.goal):
             raise ValueError("Unsupported characters in research goal")
         validate_parent_ids(self.parent_result_ids, self.mode)
+        if self.discovery_intent is not None and self.mode != "surprise":
+            raise ValueError("A discovery ladder requires Surprise mode")
         return self
 
 
@@ -198,8 +202,12 @@ def _summary(run: ResearchRun, *, session: Session | None = None) -> dict:
         "external_outcome_unknown": run.external_request_in_flight,
     }
     if session is not None:
+        from polymath.discovery_admission import load_discovery_intent
         from polymath.meta_research import native_run_controls, native_run_outcome_unknown
 
+        intent = load_discovery_intent(session, run)
+        if intent is not None:
+            result["discovery_intent"] = intent.model_dump(mode="json")
         controls = native_run_controls(session, run)
         if controls is not None:
             result["native_research"] = controls
@@ -325,6 +333,11 @@ def create_run_router(
                 session.add(run)
                 session.flush()
                 session.add(ResearchRunAccess(run_id=run.id, session_hash=owner.token_hash))
+                if body.discovery_intent is not None:
+                    from polymath.discovery_admission import bind_discovery_intent
+
+                    session.flush()
+                    bind_discovery_intent(session, run, body.discovery_intent)
                 bind_parents(session, run, owner.token_hash, body.parent_result_ids)
                 if admission is not None:
                     from polymath.meta_research import native_run_input_sha256

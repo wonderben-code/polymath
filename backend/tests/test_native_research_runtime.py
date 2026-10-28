@@ -234,3 +234,28 @@ def test_actual_free_cli_configuration_does_not_load_stale_authority_environment
 def test_new_settings_remain_default_off():
     value = Settings(_env_file=None, environment="test")
     assert value.paid_meta_research_enabled is False
+
+
+def test_optional_native_ladder_uses_its_pinned_twenty_action_profile_only():
+    from polymath.discovery_contracts import DiscoveryIntent
+    from polymath.meta_research_contracts import derive_discovery_ladder_profile
+    from polymath.research.discovery import DiscoveryLimits
+
+    proposal = MetaReadinessProposal.model_validate(proposal_data())
+    binding = derive_discovery_ladder_profile(proposal, DiscoveryIntent())
+    value = SimpleNamespace(
+        account_id=proposal.account.account_id,
+        proposal=proposal,
+        profile=binding.profile,
+        activation_sha256="a" * 64,
+        profile_sha256=binding.profile_sha256,
+        input_sha256="c" * 64,
+    )
+    runtime_profile = original_runtime_profile(value)
+    assert isinstance(runtime_profile.limits, DiscoveryLimits)
+    assert runtime_profile.limits.max_actions == 20
+    assert runtime_profile.limits.max_model_calls == proposal.application_limits.max_model_calls
+    assert runtime_profile.limits.model_timeout_seconds == 75
+    assert ResearchLimits().max_actions == 12
+    with pytest.raises(ValueError):
+        ResearchLimits(max_actions=20)

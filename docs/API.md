@@ -39,7 +39,7 @@ errors. Shared pages and endpoints also send `Referrer-Policy: no-referrer`,
 | `GET /health` | Process health; no database or model call |
 | `GET /readiness` | Database connectivity and exact migration-head readiness |
 | `GET /capabilities` | `research_available`, `meta_configured`, `reason`; a configured key is not execution authority |
-| `POST /runs` | `{mode, goal, parent_result_ids?}`; owner+CSRF; returns queued run summary with HTTP201 |
+| `POST /runs` | `{mode, goal, parent_result_ids?, discovery_intent?}`; owner+CSRF; returns queued run summary with HTTP201 |
 | `GET /runs?limit=20&before=<run UUID>` | Owned research history; limit1–50; `{runs, next_cursor}` |
 | `GET /runs/{run UUID}` | Owned status summary; no checkpoint, lease token or raw model state |
 | `GET /runs/{run UUID}/events` | Owned persisted activity stream; see replay below |
@@ -72,6 +72,36 @@ limitations and exact verified quotations. An Ask result preserves the original
 question and individually cited Known/Postulated/Speculative claims, derivations
 and caveats. Those labels are model assessments. Source IDs, hashes and Unicode
 offsets establish saved quote integrity, not scientific truth or a formal proof.
+
+Surprise may explicitly opt into `discovery_intent`:
+`{protocol:"polymath-surprise-ladder-v1", max_stages:3, max_depth:2}`.
+The bounds are1–4 stages and1–3 local depth; native admission additionally
+requires a freshly approved matching ladder profile. The immutable initial
+intent is returned only when present. Other modes reject it. Omitting it keeps
+the ordinary protocol and response shape. The model can stop below either
+ceiling; no new allowance is created per stage.
+
+| Owned ladder read | Contract |
+|---|---|
+| `GET /runs/{run UUID}/discovery` | Whole-run stage references, explicit final selection, actual stop state, cumulative usage and accounted/held costs |
+| `GET /runs/{run UUID}/discovery/stages` | Bounded committed-stage details, including partial/cancelled/interrupted runs |
+| `GET /runs/{run UUID}/discovery/stages/{stage UUID}` | Exact stage receipt, normal saved result, parent edges, current provenance status and primary-paper groups |
+
+These reads require the existing owner cookie and make no model/source calls.
+A committed stage uses an ordinary finding result UUID. The owned finding
+version reader adds `discovery_stage` with its exact full stage detail; its
+head response adds a minimal stage binding/status only for a genuine committed
+stage. Knowledge findings carry that same minimal binding and separate
+`discovered_from`/`revised_from` ancestry edges. An uncommitted positive row
+cannot become eligible through a later containing-run success.
+
+Only an explicit model finish selects the final result. Partial stages remain
+available through their owned stage/finding readers even when the ordinary
+final-result route has no selection. Stage usage is an immutable commit-time
+prefix; the ladder summary contains whole-run totals. `needs_review` preserves
+saved content but denies fresh parent selection, generation and sharing.
+Stage ceilings, local graph depth, integrity checks and uncalibrated confidence
+scores do not establish scientific truth. See [DISCOVERY_LADDER.md](DISCOVERY_LADDER.md).
 
 Full-text coverage identifies an exact versioned arXiv extraction and saved
 window. Offsets are Unicode codepoints, zero-based, with an exclusive end; they
@@ -240,3 +270,36 @@ routes use separate contracts in [DEVELOPMENT.md](DEVELOPMENT.md),
 Ordinary API access cannot authorize a publisher or bypass a worker's budget.
 
 Native Meta research activation and the operator-browser admission/resume contract are in [META_RESEARCH.md](META_RESEARCH.md). Production capabilities include `native_research_required`; a configured path does not grant spending. This first audience requires the owning operator context and both CSRFs, with `expected_activation_sha256` on research/artifact/reassessment submissions. The existing standalone client remains verified against the trusted synthetic path; its deployed/public native journey is still pending with D2.
+
+## Standalone discovery ladder commands
+
+Explicit ladder creation uses the same bounded research admission:
+
+```bash
+python3 scripts/polymath-client.py --base-url "$POLYMATH_ORIGIN" --cookie-jar .polymath-client/owner.cookies runs create --mode surprise --discovery-ladder --max-stages 3 --max-depth 2
+python3 scripts/polymath-client.py --base-url "$POLYMATH_ORIGIN" --cookie-jar .polymath-client/owner.cookies discovery show '<run-uuid>'
+python3 scripts/polymath-client.py --base-url "$POLYMATH_ORIGIN" --cookie-jar .polymath-client/owner.cookies discovery stages '<run-uuid>'
+python3 scripts/polymath-client.py --base-url "$POLYMATH_ORIGIN" --cookie-jar .polymath-client/owner.cookies discovery stage '<run-uuid>' '<stage-uuid>'
+```
+
+`--discovery-ladder` is valid only for Surprise. Its default ceilings are three
+stages and depth two; the client accepts at most four stages and depth three.
+Meta chooses how far to investigate within the single run's approved limits.
+Omitting the flag preserves the original request body and research protocol.
+
+The three discovery reading commands require the existing owner cookie. They
+perform only bounded GET requests and never initialize a session or spend
+credits. `show` preserves whole-run usage/accounting independently of the final
+selection; a cancelled or interrupted run can have saved stages and no selected
+final stage. Exact stage reads retain the current `needs_review`, superseded or
+unsupported status alongside the original immutable result. Receipt/run/stage
+identifiers, hash formats, ancestry bindings and selected-stage membership are
+validated by the client. Scientific support remains a model judgement subject
+to the server's saved-evidence checks.
+
+Creation is verified here through real loopback HTTP and PostgreSQL with
+synthetic intelligence. The standalone client does not yet implement the current
+operator-browser native activation credentials. These flags cannot authorize a
+production Meta call; public native admission/client integration remains D2
+work. Owner reads of already saved stages require no new paid authorization.
+See [DISCOVERY_LADDER.md](DISCOVERY_LADDER.md) for stage provenance and recovery.

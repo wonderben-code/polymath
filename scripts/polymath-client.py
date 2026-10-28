@@ -58,6 +58,9 @@ SAFE_ERRORS = {
     "sharing_unavailable",
     "sharing_storage_unavailable",
     "sharing_invalid_request",
+    "discovery_not_found",
+    "discovery_storage_unavailable",
+    "invalid_discovery_request",
 }
 SECRET_FIELDS = {
     "csrf_token",
@@ -157,6 +160,189 @@ def _query(value):
         value.encode("utf-8")
     except UnicodeError:
         raise ClientError("invalid_arguments") from None
+    return value
+
+
+def _discovery_intent(value):
+    if (
+        not isinstance(value, dict)
+        or set(value) != {"protocol", "max_stages", "max_depth"}
+        or value["protocol"] != "polymath-surprise-ladder-v1"
+    ):
+        raise ClientError("invalid_arguments")
+    return {
+        "protocol": value["protocol"],
+        "max_stages": _integer(value["max_stages"], 1, 4),
+        "max_depth": _integer(value["max_depth"], 1, 3),
+    }
+
+
+def _discovery_reference(value):
+    if not isinstance(value, dict) or set(value) != {"result_id", "run_id", "content_sha256"}:
+        raise ValueError
+    canonical_uuid(value["result_id"])
+    canonical_uuid(value["run_id"])
+    if not isinstance(value["content_sha256"], str) or not DIGEST.fullmatch(
+        value["content_sha256"]
+    ):
+        raise ValueError
+    return value
+
+
+def _discovery_receipt(value, run_id):
+    if not isinstance(value, dict) or set(value) != {
+        "stage_id",
+        "run_id",
+        "ordinal",
+        "result_id",
+        "result_sha256",
+        "depth",
+        "assessment",
+        "parent_refs",
+        "action_ordinal",
+        "model_request_id",
+    }:
+        raise ValueError
+    canonical_uuid(value["stage_id"])
+    canonical_uuid(value["result_id"])
+    if (
+        value["run_id"] != run_id
+        or not isinstance(value["result_sha256"], str)
+        or not DIGEST.fullmatch(value["result_sha256"])
+        or not isinstance(value["model_request_id"], str)
+        or not re.fullmatch(r"model-[0-9]{4}", value["model_request_id"])
+    ):
+        raise ValueError
+    _integer(value["ordinal"], 0, 3)
+    _integer(value["depth"], 1, 3)
+    _integer(value["action_ordinal"], 1, 20)
+    parents = value["parent_refs"]
+    if not isinstance(parents, list) or len(parents) not in (0, 2, 3, 4):
+        raise ValueError
+    for parent in parents:
+        _discovery_reference(parent)
+    if (
+        len({parent["result_id"] for parent in parents}) != len(parents)
+        or any(parent["result_id"] == value["result_id"] for parent in parents)
+        or not parents
+        and value["depth"] != 1
+    ):
+        raise ValueError
+    assessment = value["assessment"]
+    if not isinstance(assessment, dict) or set(assessment) != {
+        "novelty",
+        "novelty_rationale",
+        "confidence",
+        "confidence_score",
+        "confidence_scope",
+        "confidence_rationale",
+        "limitations",
+    }:
+        raise ValueError
+    if (
+        assessment["novelty"]
+        not in ("known", "partly_known", "not_found_in_bounded_search", "uncertain")
+        or assessment["confidence"] not in ("tentative", "moderate", "strong")
+        or assessment["confidence_scope"] != "uncalibrated_model_judgement"
+        or not isinstance(assessment["limitations"], list)
+        or not 1 <= len(assessment["limitations"]) <= 8
+    ):
+        raise ValueError
+    _integer(assessment["confidence_score"], 0, 100)
+    for text, maximum in [
+        (assessment["novelty_rationale"], 2000),
+        (assessment["confidence_rationale"], 2000),
+        *((item, 1000) for item in assessment["limitations"]),
+    ]:
+        if not isinstance(text, str) or not text.strip() or len(text) > maximum:
+            raise ValueError
+    return value
+
+
+def _discovery_receipts(values, run_id, intent=None):
+    intent = intent or {"max_stages": 4, "max_depth": 3}
+    if not isinstance(values, list) or len(values) > intent["max_stages"]:
+        raise ValueError
+    observed, stage_ids = {}, set()
+    prior = None
+    for ordinal, value in enumerate(values):
+        _discovery_receipt(value, run_id)
+        if (
+            value["ordinal"] != ordinal
+            or value["depth"] > intent["max_depth"]
+            or value["stage_id"] in stage_ids
+            or value["result_id"] in observed
+            or prior
+            and (
+                value["action_ordinal"] <= prior["action_ordinal"]
+                or value["model_request_id"] <= prior["model_request_id"]
+            )
+        ):
+            raise ValueError
+        depth = 1
+        for parent in value["parent_refs"]:
+            if parent["run_id"] == run_id:
+                original = observed.get(parent["result_id"])
+                if original is None or original["result_sha256"] != parent["content_sha256"]:
+                    raise ValueError
+                depth = max(depth, original["depth"] + 1)
+        if value["depth"] != depth:
+            raise ValueError
+        observed[value["result_id"]] = value
+        stage_ids.add(value["stage_id"])
+        prior = value
+    return values
+
+
+def _discovery_detail(value, run_id, stage_id=None):
+    if not isinstance(value, dict) or set(value) != {
+        "stage",
+        "result",
+        "parent_edges",
+        "primary_paper_groups",
+        "status",
+    }:
+        raise ValueError
+    receipt = _discovery_receipt(value["stage"], run_id)
+    if stage_id is not None and receipt["stage_id"] != stage_id:
+        raise ValueError
+    result, edges = value["result"], value["parent_edges"]
+    if (
+        value["status"] not in ("current_supported", "superseded", "unsupported", "needs_review")
+        or not isinstance(result, dict)
+        or result.get("mode") != "surprise"
+        or result.get("status") != "bridge"
+        or not isinstance(result.get("finding"), dict)
+        or result["finding"].get("outcome") != "bridge"
+        or not isinstance(edges, list)
+        or len(edges) > 5
+    ):
+        raise ValueError
+    support = []
+    revision = False
+    for ordinal, edge in enumerate(edges):
+        if not isinstance(edge, dict) or set(edge) != {"kind", "ordinal", "reference", "stage_id"}:
+            raise ValueError
+        reference = _discovery_reference(edge["reference"])
+        if (
+            type(edge["ordinal"]) is not int
+            or edge["ordinal"] != ordinal
+            or reference["result_id"] == receipt["result_id"]
+            or (reference["run_id"] == run_id) != (edge["stage_id"] is not None)
+        ):
+            raise ValueError
+        if edge["stage_id"] is not None:
+            canonical_uuid(edge["stage_id"])
+            if edge["stage_id"] == receipt["stage_id"]:
+                raise ValueError
+        if edge["kind"] == "support" and not revision:
+            support.append(reference)
+        elif edge["kind"] == "revision" and not revision:
+            revision = True
+        else:
+            raise ValueError
+    if support != receipt["parent_refs"]:
+        raise ValueError
     return value
 
 
@@ -716,7 +902,122 @@ class PolymathClient:
     def get_result(self, run_id):
         return self._private_json("/api/v1/runs/" + canonical_uuid(run_id) + "/result")
 
-    def create_run(self, mode, goal="", parent_result_ids=()):
+    def get_discovery(self, run_id):
+        identifier = canonical_uuid(run_id)
+        value = self._private_json("/api/v1/runs/" + identifier + "/discovery")
+        try:
+            if (
+                set(value)
+                != {
+                    "run_id",
+                    "run_status",
+                    "discovery_intent",
+                    "stages",
+                    "selected_final_stage",
+                    "stop_reason",
+                    "total_usage",
+                    "accounting",
+                }
+                or value["run_id"] != identifier
+            ):
+                raise ValueError
+            intent = _discovery_intent(value["discovery_intent"])
+            stages = _discovery_receipts(value["stages"], identifier, intent)
+            if (
+                value["run_status"]
+                not in (
+                    "queued",
+                    "running",
+                    "waiting_retry",
+                    "cancel_requested",
+                    "cancelled",
+                    "succeeded",
+                    "failed",
+                    "interrupted",
+                )
+                or value["selected_final_stage"] is not None
+                and value["selected_final_stage"] not in stages
+                or value["stop_reason"] is not None
+                and (
+                    not isinstance(value["stop_reason"], str)
+                    or not value["stop_reason"].strip()
+                    or len(value["stop_reason"]) > 2000
+                )
+            ):
+                raise ValueError
+            usage, accounting = value["total_usage"], value["accounting"]
+            if (
+                not isinstance(usage, dict)
+                or set(usage)
+                != {
+                    "model_calls",
+                    "input_tokens_reported",
+                    "output_tokens_reported",
+                    "calls_without_usage",
+                }
+                or not isinstance(accounting, dict)
+                or set(accounting)
+                != {
+                    "counted_spend_microdollars",
+                    "open_hold_microdollars",
+                    "unknown_hold_microdollars",
+                }
+            ):
+                raise ValueError
+            calls = _integer(usage["model_calls"], len(stages), 20)
+            _integer(usage["calls_without_usage"], 0, calls)
+            for number in [
+                usage["input_tokens_reported"],
+                usage["output_tokens_reported"],
+                *accounting.values(),
+            ]:
+                if not isinstance(number, str) or not re.fullmatch(
+                    r"(?:0|[1-9][0-9]{0,999})", number
+                ):
+                    raise ValueError
+            if int(accounting["unknown_hold_microdollars"]) > int(
+                accounting["open_hold_microdollars"]
+            ):
+                raise ValueError
+            return value
+        except (ValueError, TypeError, KeyError, AttributeError, ClientError):
+            raise ClientError("invalid_discovery_response") from None
+
+    def list_discovery_stages(self, run_id):
+        identifier = canonical_uuid(run_id)
+        value = self._private_json("/api/v1/runs/" + identifier + "/discovery/stages")
+        try:
+            if set(value) != {"run_id", "stages"} or value["run_id"] != identifier:
+                raise ValueError
+            details = value["stages"]
+            if not isinstance(details, list) or len(details) > 4:
+                raise ValueError
+            receipts = [_discovery_detail(item, identifier)["stage"] for item in details]
+            _discovery_receipts(receipts, identifier)
+            observed = {item["result_id"]: item for item in receipts}
+            for detail in details:
+                for edge in detail["parent_edges"]:
+                    if edge["stage_id"] is not None:
+                        parent = observed.get(edge["reference"]["result_id"])
+                        if parent is None or (
+                            parent["stage_id"] != edge["stage_id"]
+                            or parent["result_sha256"] != edge["reference"]["content_sha256"]
+                            or parent["ordinal"] >= detail["stage"]["ordinal"]
+                        ):
+                            raise ValueError
+            return value
+        except (ValueError, TypeError, KeyError, AttributeError, ClientError):
+            raise ClientError("invalid_discovery_response") from None
+
+    def get_discovery_stage(self, run_id, stage_id):
+        identifier, stage = canonical_uuid(run_id), canonical_uuid(stage_id)
+        value = self._private_json("/api/v1/runs/" + identifier + "/discovery/stages/" + stage)
+        try:
+            return _discovery_detail(value, identifier, stage)
+        except (ValueError, TypeError, KeyError, AttributeError, ClientError):
+            raise ClientError("invalid_discovery_response") from None
+
+    def create_run(self, mode, goal="", parent_result_ids=(), *, discovery_intent=None):
         if (
             mode not in ("explore", "ask", "surprise")
             or not isinstance(goal, str)
@@ -736,11 +1037,12 @@ class PolymathClient:
             parents and (mode != "explore" or len(parents) < 2)
         ):
             raise ClientError("invalid_arguments")
-        return self._write(
-            "/api/v1/runs",
-            {"mode": mode, "goal": goal, "parent_result_ids": parents},
-            allow_new=True,
-        )
+        body = {"mode": mode, "goal": goal, "parent_result_ids": parents}
+        if discovery_intent is not None:
+            if mode != "surprise":
+                raise ClientError("invalid_arguments")
+            body["discovery_intent"] = _discovery_intent(discovery_intent)
+        return self._write("/api/v1/runs", body, allow_new=True)
 
     def cancel_run(self, run_id):
         return self._write("/api/v1/runs/" + canonical_uuid(run_id) + "/cancel")
@@ -933,6 +1235,15 @@ def parser():
     goal.add_argument("--goal", default="")
     goal.add_argument("--goal-file")
     create.add_argument("--parent-result", action="append", default=[])
+    create.add_argument("--discovery-ladder", action="store_true")
+    create.add_argument("--max-stages", type=int)
+    create.add_argument("--max-depth", type=int)
+    discovery = commands.add_parser("discovery").add_subparsers(dest="action", required=True)
+    for action in ("show", "stages"):
+        discovery.add_parser(action).add_argument("run_id")
+    stage = discovery.add_parser("stage")
+    stage.add_argument("run_id")
+    stage.add_argument("stage_id")
     artifacts = commands.add_parser("artifacts").add_subparsers(dest="action", required=True)
     artifacts.add_parser("show").add_argument("artifact_id")
     export = artifacts.add_parser("export")
@@ -970,6 +1281,13 @@ def main(argv=None):
                 )
                 if args.action == "export" and args.output == "-":
                     return 0
+            elif args.command == "discovery":
+                if args.action == "show":
+                    value = client.get_discovery(args.run_id)
+                elif args.action == "stages":
+                    value = client.list_discovery_stages(args.run_id)
+                else:
+                    value = client.get_discovery_stage(args.run_id, args.stage_id)
             elif args.action == "list":
                 value = client.list_runs(args.limit, args.before)
             elif args.action == "show":
@@ -989,6 +1307,19 @@ def main(argv=None):
                     print(json.dumps(event, ensure_ascii=False))
                 return 0
             else:
+                intent = None
+                if args.discovery_ladder:
+                    if args.mode != "surprise":
+                        raise ClientError("invalid_arguments")
+                    intent = _discovery_intent(
+                        {
+                            "protocol": "polymath-surprise-ladder-v1",
+                            "max_stages": 3 if args.max_stages is None else args.max_stages,
+                            "max_depth": 2 if args.max_depth is None else args.max_depth,
+                        }
+                    )
+                elif args.max_stages is not None or args.max_depth is not None:
+                    raise ClientError("invalid_arguments")
                 goal = args.goal
                 if args.goal_file:
                     try:
@@ -1002,7 +1333,12 @@ def main(argv=None):
                         goal = raw.decode("utf-8")
                     except (OSError, ValueError):
                         raise ClientError("invalid_goal_file") from None
-                value = client.create_run(args.mode, goal, args.parent_result)
+                value = client.create_run(
+                    args.mode,
+                    goal,
+                    args.parent_result,
+                    **({"discovery_intent": intent} if intent is not None else {}),
+                )
             print(json.dumps(value, ensure_ascii=False, indent=2))
             return 0
     except ClientError as error:

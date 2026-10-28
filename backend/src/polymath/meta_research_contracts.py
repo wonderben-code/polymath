@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import TYPE_CHECKING, Annotated, Literal
 
-from pydantic import Field, SecretStr, field_validator, model_validator
+from pydantic import Field, SecretStr, field_validator, model_serializer, model_validator
 
 from polymath.meta_probe_contracts import (
     MetaObservation,
@@ -328,7 +328,10 @@ def minimum_controller_context_characters(task_kind: TaskKind) -> int:
 
 
 def task_profile_sha256(profile: NativeTaskProfile) -> str:
-    profile = NativeTaskProfile.model_validate_json(profile.model_dump_json())
+    kind = (
+        NativeDiscoveryProfile if isinstance(profile, NativeDiscoveryProfile) else NativeTaskProfile
+    )
+    profile = kind.model_validate_json(profile.model_dump_json())
     return _sha(profile.model_dump(mode="json"))
 
 
@@ -341,6 +344,87 @@ class NativeTaskProfileBinding(_ReadinessModel):
         if self.profile_sha256 != task_profile_sha256(self.profile):
             raise ValueError("native task profile hash mismatch")
         return self
+
+
+class NativeDiscoveryProfile(_ReadinessModel):
+    task_kind: Literal["research"] = "research"
+    discovery_protocol: Literal["polymath-surprise-ladder-v1"] = "polymath-surprise-ladder-v1"
+    controller_protocol: Annotated[str, Field(pattern=r"^[a-z0-9-]{1,80}$")]
+    controller_sha256: Digest
+    request_protocol: Literal["polymath-meta-research-request-v1"] = REQUEST_PROTOCOL
+    max_model_calls: Annotated[int, Field(ge=1, le=20)]
+    max_actions: Literal[20] = 20
+    max_repairs: Literal[2] = 2
+    max_output_tokens: Annotated[int, Field(ge=16, le=4096)]
+    max_context_characters: Annotated[int, Field(ge=1000, le=90000)]
+    request_timeout_seconds: Annotated[float, Field(ge=0.001, le=60)]
+    model_timeout_seconds: Annotated[float, Field(ge=30.001, le=90)]
+    tool_timeout_seconds: Literal[20.0] = 20.0
+    max_sources: Literal[200] = 200
+    max_stages: Annotated[int, Field(ge=1, le=4)]
+    max_depth: Annotated[int, Field(ge=1, le=3)]
+
+    @model_validator(mode="after")
+    def reviewed_deadline(self):
+        if self.model_timeout_seconds != self.request_timeout_seconds + 30.0:
+            raise ValueError("discovery native deadline differs from its reviewed allowance")
+        return self
+
+
+class NativeDiscoveryProfileBinding(_ReadinessModel):
+    profile: NativeDiscoveryProfile
+    profile_sha256: Digest
+
+    @model_validator(mode="after")
+    def exact_profile(self):
+        if self.profile_sha256 != task_profile_sha256(self.profile):
+            raise ValueError("native discovery profile hash mismatch")
+        return self
+
+
+def discovery_controller_sha256() -> str:
+    from polymath.discovery_contracts import DISCOVERY_ACTION_ADAPTER, DISCOVERY_PROTOCOL
+    from polymath.research.discovery import DISCOVERY_SYSTEM_PROMPT, PRIOR_WORK_IDENTITY_PROTOCOL
+
+    return _sha(
+        {
+            "orchestration_protocol": "polymath-discovery-controller-orchestration-v2",
+            "discovery_protocol": DISCOVERY_PROTOCOL,
+            "prior_work_identity_protocol": PRIOR_WORK_IDENTITY_PROTOCOL,
+            "system_prompt": DISCOVERY_SYSTEM_PROMPT,
+            "action_schema": DISCOVERY_ACTION_ADAPTER.json_schema(),
+        }
+    )
+
+
+def derive_discovery_ladder_profile(
+    proposal: MetaReadinessProposal, discovery
+) -> NativeDiscoveryProfileBinding:
+    from polymath.discovery_contracts import DiscoveryIntent
+    from polymath.research.discovery import discovery_initial_messages
+
+    proposal = MetaReadinessProposal.model_validate_json(proposal.model_dump_json())
+    intent = DiscoveryIntent.model_validate_json(discovery.model_dump_json())
+    limits = proposal.application_limits
+    if (
+        sum(len(message["content"]) for message in discovery_initial_messages("", intent, False))
+        > limits.max_context_characters
+    ):
+        raise ValueError("reviewed context cannot fit the fixed discovery prompt/schema")
+    profile = NativeDiscoveryProfile(
+        controller_protocol="polymath-meta-discovery-controller-v1",
+        controller_sha256=discovery_controller_sha256(),
+        max_model_calls=min(limits.max_model_calls, 20),
+        max_output_tokens=limits.max_output_tokens,
+        max_context_characters=limits.max_context_characters,
+        request_timeout_seconds=limits.request_timeout_seconds,
+        model_timeout_seconds=limits.request_timeout_seconds + 30.0,
+        max_stages=intent.max_stages,
+        max_depth=intent.max_depth,
+    )
+    return NativeDiscoveryProfileBinding(
+        profile=profile, profile_sha256=task_profile_sha256(profile)
+    )
 
 
 def derive_task_profiles(proposal: MetaReadinessProposal) -> tuple[NativeTaskProfileBinding, ...]:
@@ -439,7 +523,15 @@ class MetaResearchManifest(_ReadinessModel):
     task_profiles: Annotated[
         tuple[NativeTaskProfileBinding, ...], Field(min_length=5, max_length=5)
     ]
+    discovery_ladder_profile: NativeDiscoveryProfileBinding | None = None
     valid_until: datetime
+
+    @model_serializer(mode="wrap")
+    def preserve_absent_discovery(self, handler):
+        value = handler(self)
+        if self.discovery_ladder_profile is None:
+            value.pop("discovery_ladder_profile", None)
+        return value
 
     @field_validator("valid_until", mode="before")
     @classmethod
@@ -474,7 +566,10 @@ class MetaResearchManifest(_ReadinessModel):
             raise ValueError("native research activation identity/profile binding mismatch")
         if tuple(binding.profile.task_kind for binding in self.task_profiles) != TASK_KINDS:
             raise ValueError("native research requires each scientific task profile in order")
-        for binding in self.task_profiles:
+        all_profiles = self.task_profiles + (
+            (self.discovery_ladder_profile,) if self.discovery_ladder_profile is not None else ()
+        )
+        for binding in all_profiles:
             profile = binding.profile
             if (
                 profile.max_model_calls > proposal.application_limits.max_model_calls
@@ -513,6 +608,7 @@ def build_research_manifest(
     review: NativeResearchReview,
     provider_account_attestation: ProviderAccountAttestation,
     valid_until: datetime,
+    discovery=None,
 ) -> MetaResearchManifest:
     if (
         not policy.configured
@@ -532,6 +628,9 @@ def build_research_manifest(
         provider_account_attestation=provider_account_attestation,
         native_control_epoch=native_control_epoch,
         task_profiles=derive_task_profiles(proposal),
+        discovery_ladder_profile=derive_discovery_ladder_profile(proposal, discovery)
+        if discovery is not None
+        else None,
         valid_until=valid_until,
     )
 
@@ -555,8 +654,25 @@ def research_manifest_sha256(manifest: MetaResearchManifest) -> str:
     return hashlib.sha256(canonical_research_manifest_json(manifest).encode()).hexdigest()
 
 
-def profile_for_task(manifest: MetaResearchManifest, task_kind: TaskKind) -> NativeTaskProfile:
+def profile_for_task(
+    manifest: MetaResearchManifest, task_kind: TaskKind, *, discovery=None
+) -> NativeTaskProfile | NativeDiscoveryProfile:
     validate_research_manifest(manifest)
+    if discovery is not None:
+        from polymath.discovery_contracts import DiscoveryIntent
+
+        intent = DiscoveryIntent.model_validate_json(discovery.model_dump_json())
+        binding = manifest.discovery_ladder_profile
+        if (
+            task_kind != "research"
+            or binding is None
+            or (
+                intent.max_stages > binding.profile.max_stages
+                or intent.max_depth > binding.profile.max_depth
+            )
+        ):
+            raise ValueError("native discovery intent exceeds its explicit approved profile")
+        return binding.profile
     for binding in manifest.task_profiles:
         if binding.profile.task_kind == task_kind:
             return binding.profile

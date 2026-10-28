@@ -1,3 +1,4 @@
+import type { DiscoveryIntent } from '../discovery/types'
 export interface MetaResearchCapabilities {
   activation_available: boolean
   inspection_available: boolean
@@ -45,6 +46,16 @@ export interface NativeTaskProfile {
   max_sources: 200
 }
 export interface NativeTaskProfileBinding { profile_sha256: string; profile: NativeTaskProfile }
+export interface NativeDiscoveryProfile extends Omit<NativeTaskProfile, 'task_kind' | 'max_actions' | 'tool_timeout_seconds'> {
+  task_kind: 'research'
+  discovery_protocol: 'polymath-surprise-ladder-v1'
+  max_actions: 20
+  tool_timeout_seconds: 20
+  max_stages: number
+  max_depth: number
+}
+export interface NativeDiscoveryProfileBinding { profile_sha256: string; profile: NativeDiscoveryProfile }
+
 export interface MetaResearchManifest {
   protocol: 'polymath-meta-research-activation-v1'
   audience: 'operator_browser'
@@ -61,6 +72,7 @@ export interface MetaResearchManifest {
   native_control_epoch: number
   clear_kill_switch: true
   task_profiles: NativeTaskProfileBinding[]
+  discovery_ladder_profile?: NativeDiscoveryProfileBinding
   valid_until: string
 }
 export interface MetaResearchPreview { manifest: MetaResearchManifest; manifest_sha256: string; research_execution_available: false }
@@ -81,9 +93,10 @@ export interface EligibleActivation {
   audience: 'operator_browser'
   expires_at: string
   profiles: NativeTaskProfile[]
+  discovery_ladder_profile?: NativeDiscoveryProfileBinding
   research_execution_available: true
 }
 export interface CurrentResearchActivation { activation: EligibleActivation | null; reason: 'meta_research_activation_required' | 'meta_research_authority_expired' | 'meta_research_unavailable' | 'meta_research_prior_unresolved' | null }
 export interface ResearchActivationHistory { activations: MetaResearchActivation[]; next_cursor: string | null }
-export interface ResearchActivationPreviewRequest { readiness_id: string; canary_receipt_id: string; review: NativeResearchReview; provider_account_attestation: ProviderAccountAttestation }
+export interface ResearchActivationPreviewRequest { readiness_id: string; canary_receipt_id: string; review: NativeResearchReview; provider_account_attestation: ProviderAccountAttestation; discovery?: DiscoveryIntent }
 export interface ActivateResearchRequest { manifest: MetaResearchManifest; expected_manifest_sha256: string }

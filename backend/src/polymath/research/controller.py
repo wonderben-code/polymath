@@ -52,6 +52,7 @@ from polymath.research.models import (
 )
 
 if TYPE_CHECKING:
+    from polymath.discovery_contracts import DiscoveryIntent, DiscoveryOutcome, DiscoverySink
     from polymath.full_text_contracts import FullTextIndex
 
 
@@ -490,12 +491,14 @@ class ResearchController:
         *,
         on_event: Callable[[ResearchEvent], Awaitable[None]] | None = None,
         memory: MemoryTools | None = None,
+        discovery_sink: DiscoverySink | None = None,
     ) -> None:
         self.model = model
         self.tools = tools
         self.limits = limits or ResearchLimits()
         self.on_event = on_event
         self.memory = memory
+        self.discovery_sink = discovery_sink
 
     async def investigate(
         self,
@@ -503,7 +506,38 @@ class ResearchController:
         *,
         mode: ResearchMode = "explore",
         parent_result_ids: tuple[str, ...] = (),
-    ) -> ResearchResult:
+        discovery: DiscoveryIntent | None = None,
+    ) -> ResearchResult | DiscoveryOutcome:
+        from polymath.discovery_contracts import (
+            DISCOVERY_ACTION_ADAPTER,
+            DiscoveryConcludeAction,
+            DiscoveryFinishPacket,
+            DiscoveryIntent,
+            DiscoveryOutcome,
+            DiscoveryRejection,
+            FinishSavedAction,
+            ReadStageAction,
+            ReadStageSourceAction,
+            RecordBridgeAction,
+            RecordNoteAction,
+            SelectParentsAction,
+            StageCommitPacket,
+            StageCommitReceipt,
+            StageParentFinding,
+        )
+        from polymath.research.discovery import (
+            DiscoveryState,
+            cited_prior_work_matches,
+            discovery_initial_messages,
+            discovery_search_identity_refs,
+        )
+
+        ladder = None
+        if discovery is not None:
+            discovery = DiscoveryIntent.model_validate_json(discovery.model_dump_json())
+            if mode != "surprise" or parent_result_ids or self.discovery_sink is None:
+                raise ValueError("Discovery requires Surprise mode and its explicit stage sink")
+            ladder = DiscoveryState(discovery, self.discovery_sink)
         if not isinstance(mode, str) or mode not in MODE_INSTRUCTIONS:
             raise ValueError("Unsupported research mode")
         if (
@@ -548,6 +582,8 @@ class ResearchController:
                 ),
             },
         ]
+        if ladder is not None:
+            messages = discovery_initial_messages(goal, discovery, self.memory is not None)
         discovered: dict[str, SourceReference] = {}
         full_text_availability: dict[str, FullTextAvailability] = {}
         opened: dict[str, FullTextIndex] = {}
@@ -568,7 +604,7 @@ class ResearchController:
         def observation(value: dict) -> None:
             messages.append({"role": "user", "content": json.dumps({"observation": value})})
 
-        def result(
+        def research_result(
             status: str,
             *,
             finding: BridgeFinding | AnswerFinding | InsufficientFinding | None = None,
@@ -580,7 +616,9 @@ class ResearchController:
                 mode=mode,
                 finding=finding,
                 field_selections=tuple(selections),
-                memory_reads=tuple(
+                memory_reads=tuple(parent.reference for parent in ladder.parents.values())
+                if ladder is not None
+                else tuple(
                     MemoryReadReference(
                         result_id=item.reference.result_id,
                         run_id=item.reference.run_id,
@@ -598,6 +636,102 @@ class ResearchController:
                     calls_without_usage=unknown_usage,
                 ),
                 error_code=error_code,
+            )
+
+        def result(status: str, **values):
+            current = research_result(status, **values)
+            if ladder is None:
+                return current
+            return DiscoveryOutcome(
+                status=status,
+                stages=tuple(ladder.stages),
+                result=current,
+                events=current.events,
+                usage=current.usage,
+                error_code=current.error_code,
+                reason=current.finding.reason
+                if isinstance(current.finding, InsufficientFinding)
+                else None,
+            )
+
+        async def commit_bridge(finding, assessment, revision_of=None):
+            if ladder is None or ladder.context is None:
+                raise ValueError("discovery_context_missing")
+            if len(ladder.stages) >= ladder.intent.max_stages:
+                raise ValueError("discovery_stage_limit")
+            # Historical commits must be reconstructed from observations already
+            # replayed, never later durable locators. The store dedupes that exact
+            # packet first and applies the full current closure to fresh writes.
+            identity = _complete_identity_context(
+                sources.values(), opened.values(), ladder.identity_observations.values()
+            )
+            _verify_surprise_fields(finding, tuple(selections))
+            quotes = _verify_evidence(finding, sources, purposes, alias_context=identity)
+            if assessment.novelty in ("known", "partly_known") and not cited_prior_work_matches(
+                quotes,
+                sources,
+                tuple(
+                    reference
+                    for reference in ladder.identity_observations.values()
+                    if reference.source_id in ladder.prior_work_sources
+                ),
+                alias_context=identity,
+            ):
+                raise ValueError("discovery_prior_work_quote_missing")
+            depth = ladder.validate_quotes(quotes)
+            current = research_result("bridge", finding=finding, quotes=quotes)
+            current = current.model_copy(
+                update={
+                    "memory_reads": tuple(parent.reference for parent in ladder.parents.values())
+                }
+            )
+            packet = StageCommitPacket(
+                context=ladder.context,
+                model_request_id=f"model-{calls:04d}",
+                action_ordinal=actions,
+                result=current,
+                assessment=assessment,
+                revision_of=revision_of,
+            )
+            # The sink owns the durable transaction and control-stop semantics.
+            # Never turn ambiguous commit/lease/cancellation into a paid repair.
+            try:
+                receipt = await ladder.sink.commit(packet)
+                if not isinstance(receipt, StageCommitReceipt):
+                    raise RuntimeError("discovery_commit_receipt_invalid")
+                receipt = StageCommitReceipt.model_validate_json(receipt.model_dump_json())
+                ladder.accept_commit(packet, receipt, depth)
+            except DiscoveryRejection:
+                raise
+            except ValueError:
+                raise RuntimeError("discovery_commit_interrupted") from None
+            purposes.clear()
+            selections.clear()
+            memory_findings.clear()
+            observation({"kind": "stage_committed", **receipt.model_dump(mode="json")})
+            await event(
+                "stage_committed", f"Saved discovery stage {receipt.ordinal + 1}: {finding.title}"
+            )
+            return receipt
+
+        async def finish_saved(receipt, reason):
+            await ladder.sink.finish(
+                DiscoveryFinishPacket(
+                    model_request_id=f"model-{calls:04d}",
+                    action_ordinal=actions,
+                    stage=receipt.reference,
+                    reason=reason,
+                )
+            )
+            await event("discovery_finished", reason)
+            current = research_result("limit_reached")
+            return DiscoveryOutcome(
+                status="completed",
+                selected_stage=receipt,
+                stages=tuple(ladder.stages),
+                events=tuple(events),
+                usage=current.usage,
+                reason=reason,
             )
 
         async def reject(code: str) -> bool:
@@ -644,23 +778,203 @@ class ResearchController:
                 return result("failed", error_code="model_invalid_response")
             messages.append({"role": "assistant", "content": reply.content})
             try:
-                action = ACTION_ADAPTER.validate_json(reply.content)
+                action = (
+                    DISCOVERY_ACTION_ADAPTER if ladder is not None else ACTION_ADAPTER
+                ).validate_json(reply.content)
             except ValidationError:
                 if await reject("invalid_action_schema"):
                     return result("failed", error_code="repair_limit")
                 continue
             actions += 1
-            if isinstance(action, SelectFieldsAction):
+            if ladder is not None and isinstance(action, RecordNoteAction):
+                if ladder.context is None:
+                    if await reject("discovery_context_missing"):
+                        return result("failed", error_code="repair_limit")
+                    continue
+                prior = ladder.notes.get(action.hypothesis_id)
+                if (
+                    (prior is None and action.state != "proposed")
+                    or (prior is not None and action.state == "proposed")
+                    or (prior is None and len(ladder.notes) >= 8)
+                ):
+                    if await reject("discovery_note_transition_invalid"):
+                        return result("failed", error_code="repair_limit")
+                    continue
+                ladder.notes[action.hypothesis_id] = action.state
+                observation({"kind": "research_note", **action.model_dump(mode="json")})
+                await event("research_note", f"{action.state}: {action.summary} {action.reason}")
+            elif ladder is not None and isinstance(action, SelectParentsAction):
+                known = {stage.result_id: stage.reference for stage in ladder.stages}
+                known.update(
+                    {
+                        key: MemoryReadReference(
+                            result_id=value.result_id,
+                            run_id=value.run_id,
+                            content_sha256=value.content_sha256,
+                        )
+                        for key, value in memory_discovered.items()
+                        if value.outcome == "bridge"
+                    }
+                )
+                if any(known.get(parent.result_id) != parent for parent in action.parents):
+                    if await reject("discovery_parent_not_discovered"):
+                        return result("failed", error_code="repair_limit")
+                    continue
+                selection = FieldSelection(fields=action.fields, rationale=action.rationale)
+                try:
+                    context = await ladder.begin(
+                        selection, action.parents, f"model-{calls:04d}", actions
+                    )
+                except DiscoveryRejection as exc:
+                    if await reject(exc.code):
+                        return result("failed", error_code="repair_limit")
+                    continue
+                purposes.clear()
+                selections[:] = [selection]
+                memory_findings.clear()
+                observation({"kind": "stage_context", **context.model_dump(mode="json")})
+                await event(
+                    "parents_selected",
+                    f"Selected {len(action.parents)} bridge premises. {action.rationale}",
+                )
+            elif ladder is not None and isinstance(action, ReadStageAction):
+                allowed = {stage.result_id for stage in ladder.stages} | {
+                    key
+                    for key, reference in memory_discovered.items()
+                    if reference.outcome == "bridge"
+                }
+                if ladder.context is None or action.result_id not in allowed:
+                    if await reject("discovery_parent_not_discovered"):
+                        return result("failed", error_code="repair_limit")
+                    continue
+                try:
+                    saved = await ladder.sink.read_parent(action.result_id, ladder.context.ordinal)
+                except DiscoveryRejection as exc:
+                    if await reject(exc.code):
+                        return result("failed", error_code="repair_limit")
+                    continue
+                if not isinstance(saved, StageParentFinding):
+                    raise RuntimeError("discovery_parent_response_invalid")
+                saved = StageParentFinding.model_validate_json(saved.model_dump_json())
+                try:
+                    ladder.accept_parent(saved, action.result_id)
+                    ladder.remember_identity(source.source for source in saved.sources)
+                except ValueError as exc:
+                    if await reject(str(exc)):
+                        return result("failed", error_code="repair_limit")
+                    continue
+                observation({"kind": "stage_parent", **saved.model_dump(mode="json")})
+                await event("stage_parent_read", f"Read bridge premise: {saved.finding.title}")
+            elif ladder is not None and isinstance(action, ReadStageSourceAction):
+                parent = ladder.parents.get(action.result_id)
+                if (
+                    ladder.context is None
+                    or parent is None
+                    or not any(
+                        source.retrieval_id == action.retrieval_id for source in parent.sources
+                    )
+                ):
+                    if await reject("discovery_parent_source_not_observed"):
+                        return result("failed", error_code="repair_limit")
+                    continue
+                try:
+                    document = await ladder.sink.read_parent_source(
+                        action.result_id, action.retrieval_id, ladder.context.ordinal
+                    )
+                except DiscoveryRejection as exc:
+                    if await reject(exc.code):
+                        return result("failed", error_code="repair_limit")
+                    continue
+                if not isinstance(document, SourceDocument):
+                    raise RuntimeError("discovery_parent_source_invalid")
+                document = SourceDocument.model_validate_json(document.model_dump_json())
+                try:
+                    ladder.accept_source(action.result_id, action.retrieval_id, document)
+                    ladder.remember_identity((document,))
+                    document = _retain_source(sources, document)
+                except ValueError as exc:
+                    if await reject(str(exc)):
+                        return result("failed", error_code="repair_limit")
+                    continue
+                observation(
+                    {
+                        "kind": "source_text",
+                        "parent_result_id": action.result_id,
+                        "retrieval_id": action.retrieval_id,
+                        **document.model_dump(mode="json"),
+                        "content_sha256": document.content_sha256,
+                    }
+                )
+                await event(
+                    "stage_source_read",
+                    f"Revisited original {document.content_kind}: {document.title}",
+                )
+            elif ladder is not None and isinstance(action, FinishSavedAction):
+                receipt = ladder.known_stage(action.stage.result_id)
+                if receipt is None or receipt.reference != action.stage:
+                    if await reject("discovery_finish_stage_not_observed"):
+                        return result("failed", error_code="repair_limit")
+                    continue
+                try:
+                    return await finish_saved(receipt, action.reason)
+                except DiscoveryRejection as exc:
+                    if await reject(exc.code):
+                        return result("failed", error_code="repair_limit")
+                    continue
+            elif ladder is not None and isinstance(
+                action, (RecordBridgeAction, DiscoveryConcludeAction)
+            ):
+                if isinstance(action, DiscoveryConcludeAction) and isinstance(
+                    action.conclusion, InsufficientFinding
+                ):
+                    await event("concluded", "Stopped because further evidence is insufficient.")
+                    return result("insufficient_evidence", finding=action.conclusion)
+                finding = (
+                    action.finding if isinstance(action, RecordBridgeAction) else action.conclusion
+                )
+                # Only locally rejected evidence is repairable. Persistence
+                # interruptions must propagate through the control-stop path.
+                try:
+                    receipt = await commit_bridge(
+                        finding,
+                        action.assessment,
+                        action.revision_of if isinstance(action, RecordBridgeAction) else None,
+                    )
+                except ValueError as exc:
+                    if await reject(str(exc)):
+                        return result("failed", error_code="repair_limit")
+                    continue
+                if isinstance(action, DiscoveryConcludeAction):
+                    try:
+                        return await finish_saved(
+                            receipt, "Finished with the explicitly selected bridge."
+                        )
+                    except DiscoveryRejection as exc:
+                        if await reject(exc.code):
+                            return result("failed", error_code="repair_limit")
+                        continue
+            elif isinstance(action, SelectFieldsAction):
                 if mode != "surprise":
                     if await reject("field_selection_wrong_mode"):
                         return result("failed", error_code="repair_limit")
                     continue
-                if len(selections) >= 3:
+                if len(selections) >= 3 and ladder is None:
                     if await reject("field_selection_limit"):
                         return result("failed", error_code="repair_limit")
                     continue
                 selection = FieldSelection(fields=action.fields, rationale=action.rationale)
-                selections.append(selection)
+                if ladder is not None:
+                    try:
+                        context = await ladder.begin(selection, (), f"model-{calls:04d}", actions)
+                    except DiscoveryRejection as exc:
+                        if await reject(exc.code):
+                            return result("failed", error_code="repair_limit")
+                        continue
+                    selections[:] = [selection]
+                    memory_findings.clear()
+                    observation({"kind": "stage_context", **context.model_dump(mode="json")})
+                else:
+                    selections.append(selection)
                 purposes.clear()
                 observation({"kind": "fields_selected", **selection.model_dump(mode="json")})
                 await event(
@@ -847,9 +1161,14 @@ class ResearchController:
                     if len(candidates) > 200:
                         raise ValueError("discovery_limit")
                     retained = _retain_full_text_availability(full_text_availability, available)
+                    if ladder is not None:
+                        ladder.remember_identity(discovery_search_identity_refs(matches, available))
                     discovered = candidates
                     full_text_availability = retained
-                    purposes.add(action.purpose)
+                    if ladder is None or matches or len(failures) < 2:
+                        purposes.add(action.purpose)
+                        if ladder is not None and action.purpose == "prior_work":
+                            ladder.prior_work_sources.update(item.source_id for item in matches)
                     observation(
                         {
                             "kind": "search_results",
@@ -893,6 +1212,8 @@ class ResearchController:
                     prior = opened.get(index.snapshot_id)
                     if prior is not None and prior != index:
                         raise ValueError("full_text_index_mismatch")
+                    if ladder is not None:
+                        ladder.remember_identity(_complete_identity_context((), (index,), ()))
                     opened[index.snapshot_id] = index
                     observation({"kind": "full_text_index", **index.model_dump(mode="json")})
                     await event(
@@ -921,6 +1242,8 @@ class ResearchController:
                         action.start,
                         action.end,
                     )
+                    if ladder is not None:
+                        ladder.remember_identity((document,))
                     document = _retain_source(sources, document)
                     observation(
                         {
@@ -959,6 +1282,8 @@ class ResearchController:
                         or document.coverage != discovered[action.source_id].coverage
                     ):
                         raise ValueError("source_identity_mismatch")
+                    if ladder is not None:
+                        ladder.remember_identity((document,))
                     document = _retain_source(sources, document)
                     observation(
                         {

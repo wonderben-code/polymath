@@ -122,6 +122,16 @@ The evidence service stores immutable source versions and separate retrieval met
 
 Ask stores claim IDs on quote records. Known/Postulated/Speculative are model classifications, not guaranteed truth; postulated claims require explicit derivation and distinct source URLs, speculative claims require caveats, and every claim needs exact source quotations. Ask must answer the submitted question. Surprise bridges must use the latest recorded field selection. The migration to answer evidence preserves historical findings and refuses an incompatible downgrade when answer artifacts exist rather than deleting them.
 
+Optional Surprise discovery ladders use the same research worker and Meta adapter.
+An immutable `discovery_intent` selects the separate ladder action/profile; its
+absence preserves the historical protocol and hashes. Schema0022 adds atomic
+stage/context/observation/parent records around normal immutable findings and
+quotes. Owned stage/summary reads expose partial discoveries and whole-run totals;
+only an explicit model finish selects the normal final-result pointer. The
+activation must explicitly include the ladder profile. No new run, stage or
+reload replenishes its shared limits. See [DISCOVERY_LADDER.md](DISCOVERY_LADDER.md)
+and the standalone commands in [API.md](API.md).
+
 The map/search is private to the current browser session. Shared source versions never reveal another session's finding or retrieval metadata. Source bodies are excluded from graph/search payloads. Edges describe recorded mappings, selected directions, or persisted quote associations; they do not establish scientific correctness. Views are capped, disclose truncation, and link back to actual owned investigations. Select 2–4 bridge findings to investigate a shared structure. The same Explore job receives separate structured parent IDs, never saved prose concatenated into the goal. Parent selection is immutable, session-owned, and restricted to completed bridges older than the new job. The model must read each selected finding and quote its original source version before a positive higher-level result can be saved. A curved `investigated_from` edge records this research basis; `supported_by` still points directly to original sources. Parents are included in filtered graph views within the same bounded node/edge limits. Scheduled source collection and explicit reassessment are described below.
 
 For a higher-level API request, add `"parent_result_ids": ["<first-result-uuid>", "<second-result-uuid>"]` to an Explore mode/goal body. The array accepts 2–4 distinct canonical UUID strings. Invalid/missing/foreign/uncompleted/answer selections cannot enqueue a job; CSRF, availability and quota rules still apply. Four disjoint parents require eleven actions. The default action ceiling is twelve, while the twelve-model-call cap and budget controls remain unchanged. Large contexts or failed repairs may stop honestly at their existing limits.

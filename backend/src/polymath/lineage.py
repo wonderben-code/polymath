@@ -8,7 +8,11 @@ from sqlalchemy import Engine, func, select
 from sqlalchemy.orm import Session
 
 from polymath.access_models import BrowserSession, ResearchRunAccess
-from polymath.assessment_eligibility import current_supported_condition
+from polymath.assessment_eligibility import (
+    EligibilityError,
+    current_supported_condition,
+    require_current_supported,
+)
 from polymath.evidence_models import EvidenceResult
 from polymath.jobs import JobLease, _owned
 from polymath.lineage_models import ResearchRunParent
@@ -67,7 +71,6 @@ def _parent(session: Session, run: ResearchRun, owner_hash: str, result_id: uuid
             EvidenceResult.status == "bridge",
             current_supported_condition(),
             ResearchRun.task_kind.in_(("research", "reassess_finding")),
-            ResearchRun.status == "succeeded",
         )
     )
 
@@ -94,6 +97,10 @@ def bind_parents(
         parent = _parent(session, run, owner_hash, identifier)
         if parent is None:
             raise LineageError("research_basis_not_found")
+        try:
+            require_current_supported(session, owner_hash, parent.id)
+        except EligibilityError:
+            raise LineageError("research_basis_not_found") from None
         parents.append(parent)
     refs = []
     for ordinal, parent in enumerate(parents):
@@ -141,6 +148,10 @@ def get_parent_refs(engine: Engine, lease: JobLease) -> tuple[MemoryReadReferenc
                 or parent.content_sha256 != row.content_sha256
             ):
                 raise LineageError("research_basis_not_found")
+            try:
+                require_current_supported(session, owner_hash, parent.id)
+            except EligibilityError:
+                raise LineageError("research_basis_not_found") from None
             refs.append(
                 MemoryReadReference(
                     result_id=str(parent.id),

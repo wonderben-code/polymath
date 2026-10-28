@@ -197,7 +197,7 @@ describe('owner grants and session-free public reads', () => {
     expect(fetch.mock.calls.some(([path]) => path.includes('/session'))).toBe(false)
   })
   it('never exposes owner metadata through public DTOs and preserves honest historical direct-page badges', () => {
-    for (const status of ['current', 'superseded', 'unsupported'] as const) expect(parsePublicFinding(publicFinding({ status })).status).toBe(status)
+    for (const status of ['current', 'superseded', 'unsupported', 'needs_review'] as const) expect(parsePublicFinding(publicFinding({ status })).status).toBe(status)
     expect(() => parsePublicFinding(shareRecord())).toThrow('invalid_response')
     expect(() => parsePublicFinding({ ...publicFinding(), status: 'revoked' })).toThrow('invalid_response')
     expect(() => parseShareRecord({ ...shareRecord(), public_path: `https://evil.example/shared/${PUBLIC_ID}` })).toThrow('invalid_response')

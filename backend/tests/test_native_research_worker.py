@@ -213,6 +213,7 @@ def enqueue_native(
     formalisation_id=None,
     watch_id=None,
     source_version_ids=(),
+    discovery_intent=None,
 ):
     with Session(native.engine) as session, session.begin():
         admission = native.store.begin_admission(session, native.request, native.activation_sha256)
@@ -223,6 +224,10 @@ def enqueue_native(
         session.flush()
         session.add(ResearchRunAccess(run_id=run.id, session_hash=native.owner_hash))
         session.flush()
+        if discovery_intent is not None:
+            from polymath.discovery_admission import bind_discovery_intent
+
+            bind_discovery_intent(session, run, discovery_intent)
         if parents:
             bind_parents(session, run, native.owner_hash, list(map(str, parents)))
         if kind in {"formalise", "write_summary", "write_paper"}:

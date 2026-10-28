@@ -65,3 +65,6 @@
 .knowledge-bridge-actions p { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.8; }
 .knowledge-bridge-actions button { flex: 0 0 auto; border: 1px solid #9bb09a; border-radius: 3px; padding: 11px 15px; background: #eaf0e5; color: var(--ink); font-size: 11px; }
 .knowledge-bridge-actions button:disabled { color: #788472; background: #efefe7; }
+
+.knowledge-edge.edge-discovered_from { stroke: #708f6f; stroke-width: 1.7; stroke-dasharray: 6 4; }
+.knowledge-edge.edge-revised_from { stroke: #9b886a; stroke-width: 1.7; stroke-dasharray: 2 4; }

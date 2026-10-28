@@ -12,7 +12,7 @@ import json
 import uuid
 from collections.abc import Callable
 from contextlib import suppress
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import Engine
@@ -784,6 +784,112 @@ class _RecordedChecks:
         return result
 
 
+def _discovery_store(engine: Engine):
+    from polymath.discovery_store import DiscoveryStore
+
+    return DiscoveryStore(engine)
+
+
+class _RecordedDiscoverySink:
+    """Run-fenced stage receipts; only this replay's acknowledgements are visible.
+
+    Stage/checkpoint writes are one store transaction. A lost response stops the
+    controller, preserving the committed receipt for deterministic explicit replay.
+    """
+
+    def __init__(self, context: _RunContext, store, model):
+        self.context, self.store, self.model = context, store, model
+        self.current_context = None
+        self.visible_stage_ids: list[str] = []
+
+    async def _call(self, name: str, *args, repairable: bool = True, **kwargs):
+        from polymath.discovery_contracts import DiscoveryRejection
+        from polymath.discovery_store import StageValidationError
+
+        try:
+            return await asyncio.to_thread(
+                getattr(self.store, name), self.context.lease, *args, **kwargs
+            )
+        except StageValidationError as error:
+            if repairable:
+                raise DiscoveryRejection(error.code) from None
+            raise ExecutionStopped("discovery_journal_not_saved") from None
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            raise ExecutionStopped("discovery_store_interrupted") from None
+
+    async def begin_context(self, context) -> None:
+        await self._call("begin_context", context)
+        self.current_context = context
+
+    async def read_parent(self, result_id: str, context_ordinal: int):
+        return await self._call(
+            "read_parent",
+            result_id,
+            context_ordinal,
+            visible_stage_ids=tuple(self.visible_stage_ids),
+            model_request_id=f"model-{self.model.step:04d}",
+        )
+
+    async def read_parent_source(
+        self, result_id: str, retrieval_id: str, context_ordinal: int
+    ) -> SourceDocument:
+        return await self._call(
+            "read_parent_source",
+            result_id,
+            retrieval_id,
+            context_ordinal,
+            visible_stage_ids=tuple(self.visible_stage_ids),
+            model_request_id=f"model-{self.model.step:04d}",
+        )
+
+    async def commit(self, packet):
+        from polymath.discovery_contracts import StageCommitReceipt
+
+        receipt = await self._call("commit", packet)
+        try:
+            if not isinstance(receipt, StageCommitReceipt):
+                raise ValueError
+            receipt = StageCommitReceipt.model_validate_json(receipt.model_dump_json())
+        except Exception:
+            raise ExecutionStopped("discovery_commit_receipt_invalid") from None
+        if receipt.stage_id not in self.visible_stage_ids:
+            self.visible_stage_ids.append(receipt.stage_id)
+        return receipt
+
+    async def finish(self, packet) -> None:
+        await self._call("finish", packet)
+
+    async def record_search(self, query: str, purpose: str, results: SearchResults) -> None:
+        if self.current_context is None or not 1 <= self.model.step <= 20:
+            raise ExecutionStopped("discovery_context_missing")
+        await self._call(
+            "record_search",
+            self.current_context.ordinal,
+            f"model-{self.model.step:04d}",
+            query,
+            purpose,
+            results,
+            repairable=False,
+        )
+
+
+class _RecordedDiscoveryTools:
+    """One ordinary recorded-tool instance and counter across every stage."""
+
+    def __init__(self, tools: _RecordedTools, sink: _RecordedDiscoverySink):
+        self.tools, self.sink = tools, sink
+
+    def __getattr__(self, name):
+        return getattr(self.tools, name)
+
+    async def search(self, query: str, purpose: str) -> SearchResults:
+        result = await self.tools.search(query, purpose)
+        await self.sink.record_search(query, purpose, result)
+        return result
+
+
 class ResearchWorker:
     def __init__(
         self,
@@ -803,6 +909,7 @@ class ResearchWorker:
         ]
         | None = None,
         native_only: bool = False,
+        discovery_store_factory: Callable[[Engine], Any] | None = None,
     ):
         if type(execution_enabled) is not bool:
             raise ValueError("execution_enabled must be a bool")
@@ -821,6 +928,7 @@ class ResearchWorker:
         self.runtime_profile_resolver = runtime_profile_resolver
         self.recorded_model_factory = recorded_model_factory
         self.native_only = native_only
+        self.discovery_store_factory = discovery_store_factory or _discovery_store
         self.jobs, self.budget = JobRepository(engine), BudgetService(engine)
 
     async def run_until_stopped(
@@ -932,6 +1040,8 @@ class ResearchWorker:
                 raise ExecutionStopped("ownership_lost") from None
 
         pulse = asyncio.create_task(heartbeat())
+        discovery_store = None
+        discovery_intent = None
 
         async def stop_heartbeat() -> None:
             closing.set()
@@ -941,6 +1051,18 @@ class ResearchWorker:
 
         try:
             snapshot = await context.checkpoint()
+            discovery_store = self.discovery_store_factory(self.engine)
+            discovery_intent = await asyncio.to_thread(discovery_store.load_intent, lease)
+            if discovery_intent is not None:
+                from polymath.research.discovery import DiscoveryLimits
+
+                if snapshot.task_kind != "research" or snapshot.mode != "surprise":
+                    raise ExecutionStopped("discovery_intent_mismatch")
+                if not isinstance(limits, DiscoveryLimits):
+                    if profile.protocol_binding is not None:
+                        raise ExecutionStopped("discovery_profile_missing")
+                    limits = DiscoveryLimits(**asdict(limits))
+                    profile = replace(profile, limits=limits)
             parents = await asyncio.to_thread(get_parent_refs, self.engine, lease)
             basis: ArtifactBasis | None = None
             assessment_basis: AssessmentBasis | None = None
@@ -976,6 +1098,8 @@ class ResearchWorker:
             }
             if profile.protocol_binding is not None:
                 fingerprint_input["native_run_binding"] = profile.protocol_binding
+            if discovery_intent is not None:
+                fingerprint_input["discovery_intent"] = discovery_intent.model_dump(mode="json")
             fingerprint = _digest(fingerprint_input)
             existing = snapshot.checkpoint.get("worker_protocol")
             if existing is not None and existing != fingerprint:
@@ -1070,22 +1194,45 @@ class ResearchWorker:
                     evidence_refs=[saved_artifact.artifact_ref],
                 )
                 return WorkerOutcome(status, str(lease.run_id), artifact_id=str(saved_artifact.id))
+            recorded_tools = _RecordedTools(context, self.tools_factory(snapshot))
+            discovery_sink = (
+                _RecordedDiscoverySink(context, discovery_store, model)
+                if discovery_intent is not None
+                else None
+            )
             controller = ResearchController(
                 model,
-                _RecordedTools(context, self.tools_factory(snapshot)),
+                _RecordedDiscoveryTools(recorded_tools, discovery_sink)
+                if discovery_sink is not None
+                else recorded_tools,
                 limits,
                 on_event=public_event,
                 memory=_RecordedMemory(context, ResearchMemory(self.engine, lease)),
+                **({"discovery_sink": discovery_sink} if discovery_sink is not None else {}),
             )
             result = await controller.investigate(
                 snapshot.goal,
                 mode=snapshot.mode,
                 parent_result_ids=tuple(parent.result_id for parent in parents),
+                **({"discovery": discovery_intent} if discovery_intent is not None else {}),
             )
             await context.check_owner()
             current = await asyncio.to_thread(self.jobs.get, lease.run_id)
             if current.external_request_in_flight:
                 raise ExecutionStopped("external_outcome_unknown")
+            if discovery_intent is not None:
+                from polymath.discovery_contracts import DiscoveryOutcome
+
+                if not isinstance(result, DiscoveryOutcome):
+                    raise ExecutionStopped("discovery_outcome_invalid")
+                await stop_heartbeat()
+                await asyncio.to_thread(discovery_store.record_stop, lease, result)
+                finished = await asyncio.to_thread(self.jobs.get, lease.run_id)
+                return WorkerOutcome(
+                    finished.status,
+                    str(lease.run_id),
+                    result_id=(finished.outcome or {}).get("result_id"),
+                )
             saved = await asyncio.to_thread(context.evidence.save_result, lease, result)
             status = "failed" if result.status == "failed" else "succeeded"
             await stop_heartbeat()
@@ -1101,8 +1248,16 @@ class ResearchWorker:
                 evidence_refs=[saved.artifact_ref],
             )
             return WorkerOutcome(status, str(lease.run_id), str(saved.id))
-        except (ExecutionStopped, asyncio.CancelledError):
+        except (ExecutionStopped, asyncio.CancelledError) as error:
             await stop_heartbeat()
+            if discovery_intent is not None:
+                reason = (
+                    "ownership_lost"
+                    if lost.is_set()
+                    else (str(error) if isinstance(error, ExecutionStopped) else "worker_cancelled")
+                )
+                with suppress(Exception):
+                    await asyncio.to_thread(discovery_store.record_interruption, lease, reason)
             await self._stop(lease)
             if not lost.is_set() and asyncio.current_task().cancelling():
                 raise asyncio.CancelledError from None
@@ -1111,6 +1266,11 @@ class ResearchWorker:
             )
         except Exception:
             await stop_heartbeat()
+            if discovery_intent is not None:
+                with suppress(Exception):
+                    await asyncio.to_thread(
+                        discovery_store.record_interruption, lease, "worker_interrupted"
+                    )
             await self._stop(lease)
             return WorkerOutcome(
                 (await asyncio.to_thread(self.jobs.get, lease.run_id)).status, str(lease.run_id)

@@ -32,6 +32,7 @@ from polymath.meta_readiness_contracts import ReadinessPolicy, quote_proposal
 from polymath.meta_research import MetaResearchStore, NativeResearchInput
 from polymath.meta_research_contracts import (
     MetaResearchRequest,
+    NativeDiscoveryProfile,
     NativeResearchPolicy,
     assess_meta_usage,
     build_meta_research_request,
@@ -144,7 +145,12 @@ def original_runtime_profile(value: NativeResearchInput) -> WorkerRuntimeProfile
     # Only the selected task's limits are used by its controller. The complete
     # effective profile is pinned in the native fingerprint below; the other
     # dataclasses retain stable, validated values without inventing rate facts.
-    research_limits = NativeResearchLimits(**common)
+    if isinstance(profile, NativeDiscoveryProfile):
+        from polymath.research.discovery import DiscoveryLimits
+
+        research_limits = DiscoveryLimits(**common)
+    else:
+        research_limits = NativeResearchLimits(**common)
     artifact_limits = NativeArtifactLimits(
         **(
             common

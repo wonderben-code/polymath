@@ -1,5 +1,5 @@
 export type SharingMode = 'explore' | 'ask' | 'surprise'
-export type PublicFindingStatus = 'current' | 'superseded' | 'unsupported'
+export type PublicFindingStatus = 'current' | 'superseded' | 'unsupported' | 'needs_review'
 export type ShareStatus = PublicFindingStatus | 'revoked' | 'expired'
 export interface PublicCoverage {
   snapshot_sha256: string

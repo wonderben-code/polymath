@@ -13,6 +13,17 @@ Formalise, Write summary/paper and finding reassessment must all use the existin
 is no second scientific controller, scripted answer generator, fallback model or
 alternate provider.
 
+An explicit optional `discovery_ladder_profile` extends activation for bounded
+multi-stage Surprise research. It binds its own prompt/action/orchestration
+hashes, shared call/action limits and stage/depth ceilings. Preview accepts
+`discovery` with the exact intent configuration. The field is omitted completely
+when absent; the original five task-profile and legacy manifest hashes remain
+unchanged. Ordinary research never silently selects the ladder profile. An
+opted-in run pins it from its immutable initial `discovery_intent`, and a fresh
+approval is required; generated stages cannot change the original input hash.
+One ladder uses the same existing run, worker and global spending ledger.
+See [DISCOVERY_LADDER.md](DISCOVERY_LADDER.md) for exact stage/replay semantics.
+
 Public-session access remains part of the full product scope. It requires the
 separate D2 access/abuse controls before admission can spend this account. This
 first activation must not be described as public paid-research readiness. Free
@@ -315,3 +326,9 @@ unknown holds; exact old-profile replay after activation changes; all-task
 limits; no native/legacy claim crossover; one shared ledger; immutable exact
 input/price/usage bindings; safe stop/revoke; and disabled defaults. No live paid
 call is needed or authorized to perform that work.
+
+Before changing roles, credentials or server policy in a deployment, disable the
+account or revoke its activation to advance the database epoch, verify the stop, stop old
+worker processes, then reload configuration. Rearming requires a fresh explicit
+approval. Per-process configuration comparisons cannot instantly revoke another
+process that still has old settings; the persisted epoch fences all workers.

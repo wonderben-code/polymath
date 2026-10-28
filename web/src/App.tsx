@@ -1,3 +1,4 @@
+import { DiscoveryWorkspace } from './discovery/DiscoveryWorkspace'
 import { NativeResumeControl } from './research/NativeResumeControl'
 import { useCallback, useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
@@ -79,6 +80,7 @@ export function App() {
   const [artifactBusy, setArtifactBusy] = useState(false)
   const [assessmentBusy, setAssessmentBusy] = useState(false)
   const [assessmentRefresh, setAssessmentRefresh] = useState(0)
+  const [discoveryRefresh, setDiscoveryRefresh] = useState(0)
   const [selectedFindingId, setSelectedFindingId] = useState<string | null>(null)
   const content = copy[mode]
   const workspace = useResearchWorkspace(
@@ -88,6 +90,7 @@ export function App() {
   )
   const findingResultId = workspace.activeRun?.status === 'succeeded' && (workspace.result?.finding?.outcome === 'bridge' || workspace.result?.finding?.outcome === 'answer') ? workspace.activeRun.result_id : null
   const findingHead = useFindingHead({ resultId: findingResultId, enabled: workspace.phase === 'ready' && selectedFindingId === null, onSessionExpired: workspace.invalidateSession, refreshToken: assessmentRefresh })
+  const discoveryChanged = useCallback(() => setDiscoveryRefresh((previous) => previous + 1), [])
   const assessmentChanged = useCallback(() => setAssessmentRefresh((previous) => previous + 1), [])
   const openFinding = useCallback((id: string) => { if (/^[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}$/.test(id)) setSelectedFindingId(id) }, [])
   const openRun = useCallback((id: string) => { setSelectedFindingId(null); workspace.selectRun(id) }, [workspace.selectRun])
@@ -173,6 +176,7 @@ export function App() {
                 <p>{content.description}</p>
               </div>
 
+              {mode === 'surprise' && <p className="surprise-discovery-scope">{workspace.discoveryIntent ? `This approved discovery run can save up to ${workspace.discoveryIntent.max_stages} evidence-backed bridges, with local depth up to ${workspace.discoveryIntent.max_depth}. Meta chooses whether to explore, deepen, connect saved stages, or stop. All stages share one run’s limits; the ceilings do not promise a discovery.` : workspace.native.required ? 'The current approval covers the original Surprise investigation. A discovery ladder requires a freshly reviewed optional activation extension.' : 'The research model chooses the fields and whether the evidence supports a connection.'}</p>}
               <form onSubmit={handleSubmit}>
                 <label htmlFor="research-prompt">{content.label}</label>
                 <div className="prompt-box">
@@ -248,14 +252,15 @@ export function App() {
 
           {workspace.selectedId && !workspace.activeRun && <p className="history-note" role="status">Loading the saved investigation…</p>}
           {workspace.detailError && <div className="research-detail-error" role="alert"><p>{workspace.detailError}</p>{workspace.selectedId && <button type="button" className="text-button" onClick={() => workspace.selectRun(workspace.selectedId!)}>Reload investigation</button>}</div>}
-          {!selectedFindingId && workspace.activeRun && <ResearchRunView run={workspace.activeRun} events={workspace.events} result={workspace.result} connection={workspace.connection} onCancel={workspace.canCancel ? () => void workspace.cancel() : undefined} cancelling={workspace.cancelling} onOpenRun={openRun} findingVersion={findingResultId ? { head: findingHead.head, phase: findingHead.phase, pollPaused: findingHead.pollPaused, onRefresh: findingHead.refresh, onOpenFinding: openFinding } : undefined} />}
+          {!selectedFindingId && workspace.activeRun && <ResearchRunView hideOutcome={!!workspace.activeRun.discovery_intent} run={workspace.activeRun} events={workspace.events} result={workspace.result} connection={workspace.connection} onCancel={workspace.canCancel ? () => void workspace.cancel() : undefined} cancelling={workspace.cancelling} onOpenRun={openRun} findingVersion={findingResultId ? { head: findingHead.head, phase: findingHead.phase, pollPaused: findingHead.pollPaused, onRefresh: findingHead.refresh, onOpenFinding: openFinding } : undefined} />}
 
+          {!selectedFindingId && workspace.activeRun?.discovery_intent && <DiscoveryWorkspace key={`discovery:${workspace.activeRun.id}`} run={workspace.activeRun} events={workspace.events} finalResult={workspace.result} enabled={workspace.phase === 'ready'} csrfToken={workspace.csrfToken} canGenerate={workspace.canSubmit && !assessmentBusy} onSessionExpired={workspace.invalidateSession} onOpenFinding={openFinding} onOpenRun={openRun} onBusyChange={setArtifactBusy} onStagesChanged={discoveryChanged} />}
           {!selectedFindingId && workspace.activeRun && <NativeResumeControl run={workspace.activeRun} csrfToken={workspace.csrfToken} onResumed={workspace.refresh} onSessionExpired={workspace.invalidateSession} />}
-          {!selectedFindingId && workspace.phase === 'ready' && workspace.activeRun?.status === 'succeeded' && workspace.activeRun.result_id && workspace.result?.finding && (workspace.result.finding.outcome === 'bridge' || workspace.result.finding.outcome === 'answer') && <ArtifactWorkspace key={workspace.activeRun.result_id} sourceResultId={workspace.activeRun.result_id} sourceKind={workspace.result.finding.outcome} csrfToken={workspace.csrfToken} enabled={workspace.phase === 'ready'} canGenerate={workspace.canSubmit && findingHead.canGenerate && !assessmentBusy} sourceCurrent={findingHead.canGenerate} onSessionExpired={workspace.invalidateSession} onBusyChange={setArtifactBusy} />}
-          {!selectedFindingId && findingResultId && <ShareWorkspace key={`share:${findingResultId}`} sourceResultId={findingResultId} enabled={workspace.phase === 'ready'} csrfToken={workspace.csrfToken} sourceCurrent={findingHead.canGenerate} refreshToken={assessmentRefresh} onSessionExpired={workspace.invalidateSession} />}
+          {!selectedFindingId && !workspace.activeRun?.discovery_intent && workspace.phase === 'ready' && workspace.activeRun?.status === 'succeeded' && workspace.activeRun.result_id && workspace.result?.finding && (workspace.result.finding.outcome === 'bridge' || workspace.result.finding.outcome === 'answer') && <ArtifactWorkspace key={workspace.activeRun.result_id} sourceResultId={workspace.activeRun.result_id} sourceKind={workspace.result.finding.outcome} csrfToken={workspace.csrfToken} enabled={workspace.phase === 'ready'} canGenerate={workspace.canSubmit && findingHead.canGenerate && !assessmentBusy} sourceCurrent={findingHead.canGenerate} onSessionExpired={workspace.invalidateSession} onBusyChange={setArtifactBusy} />}
+          {!selectedFindingId && !workspace.activeRun?.discovery_intent && findingResultId && <ShareWorkspace key={`share:${findingResultId}`} sourceResultId={findingResultId} enabled={workspace.phase === 'ready'} csrfToken={workspace.csrfToken} sourceCurrent={findingHead.canGenerate} refreshToken={assessmentRefresh} onSessionExpired={workspace.invalidateSession} />}
           {selectedFindingId && <FindingVersionWorkspace key={selectedFindingId} resultId={selectedFindingId} enabled={workspace.phase === 'ready'} csrfToken={workspace.csrfToken} canGenerate={workspace.canSubmit && !assessmentBusy} refreshToken={assessmentRefresh} onSessionExpired={workspace.invalidateSession} onOpenFinding={openFinding} onOpenRun={openRun} onBusyChange={setArtifactBusy} onClose={() => setSelectedFindingId(null)} />}
 
-          <KnowledgeBrowser enabled={workspace.phase === 'ready'} onOpenRun={openRun} onOpenFinding={openFinding} refreshToken={`${workspace.activeRun?.result_id ?? ''}:${assessmentRefresh}`} canInvestigate={workspace.canSubmit && !artifactBusy && !assessmentBusy} investigating={workspace.submitting} onInvestigateBridges={workspace.investigateBridges} csrfToken={workspace.csrfToken} onSessionExpired={workspace.invalidateSession} onAssessmentApplied={assessmentChanged} onAssessmentBusyChange={setAssessmentBusy} />
+          <KnowledgeBrowser enabled={workspace.phase === 'ready'} onOpenRun={openRun} onOpenFinding={openFinding} refreshToken={`${workspace.activeRun?.result_id ?? ''}:${assessmentRefresh}:${discoveryRefresh}`} canInvestigate={workspace.canSubmit && !artifactBusy && !assessmentBusy} investigating={workspace.submitting} onInvestigateBridges={workspace.investigateBridges} csrfToken={workspace.csrfToken} onSessionExpired={workspace.invalidateSession} onAssessmentApplied={assessmentChanged} onAssessmentBusyChange={setAssessmentBusy} />
 
           <section className="approach-section" id="approach" aria-labelledby="approach-title">
             <div className="approach-heading"><span className="eyebrow">HOW WE INVESTIGATE</span><h2 id="approach-title">Follow the evidence.<br /> <em>Keep the questions open.</em></h2></div>

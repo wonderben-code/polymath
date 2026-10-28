@@ -2,6 +2,7 @@ import type { SourceBibliography } from './bibliography'
 import type { SourceCoverage } from './sourceCoverage'
 import type { FindingVersionNoticeProps } from '../assessments/FindingVersionNotice'
 import type { NativeRunControl } from './nativeAdmission'
+import type { DiscoveryIntent } from '../discovery/types'
 
 export interface ResearchRunSummary {
   id: string
@@ -10,6 +11,7 @@ export interface ResearchRunSummary {
   status: string
   task_kind?: string
   native_research?: NativeRunControl
+  discovery_intent?: DiscoveryIntent
 }
 
 export interface ResearchActivityEvent {
@@ -129,4 +131,6 @@ export interface ResearchRunViewProps {
   cancelling?: boolean
   onOpenRun?: (id: string) => void
   findingVersion?: FindingVersionNoticeProps
+  hideOutcome?: boolean
+  primaryPaperGroups?: { paper_id: string; source_ids: string[] }[]
 }

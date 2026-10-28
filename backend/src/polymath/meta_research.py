@@ -20,6 +20,7 @@ from polymath.artifact_models import ArtifactRequest
 from polymath.assessment_models import AssessmentInputSource, AssessmentRequest
 from polymath.budget import BudgetService
 from polymath.budget_models import BudgetAccount, BudgetReservation, BudgetRunLimit
+from polymath.discovery_admission import load_discovery_intent
 from polymath.dispatch import _call_key
 from polymath.evidence import _canonical, _hash
 from polymath.jobs import _clear_lease, _event, _owned
@@ -91,6 +92,9 @@ def native_run_input_sha256(session, run):
             for p in parents
         ],
     }
+    discovery = load_discovery_intent(session, run)
+    if discovery is not None:
+        value["discovery_intent"] = discovery.model_dump(mode="json")
     if artifact is not None:
         value["artifact"] = {
             "kind": artifact.kind,
@@ -380,7 +384,8 @@ def _original_input(session, run_id, *, check_input=False):
         raise MetaResearchError("meta_research_not_found")
     approval, row, manifest, proposal = _activation(session, binding.approval_id)
     run = session.get(ResearchRun, run_id)
-    profile = profile_for_task(manifest, binding.task_kind)
+    discovery = load_discovery_intent(session, run)
+    profile = profile_for_task(manifest, binding.task_kind, discovery=discovery)
     owner = session.get(ResearchRunAccess, run_id)
     if (
         binding.manifest_id != row.id
@@ -477,10 +482,25 @@ class MetaResearchStore:
             or now >= manifest.provider_account_attestation.valid_until
         ):
             raise MetaResearchError("meta_research_authority_expired")
-        from polymath.meta_research_contracts import derive_task_profiles
+        from polymath.meta_research_contracts import (
+            derive_discovery_ladder_profile,
+            derive_task_profiles,
+        )
 
         if manifest.task_profiles != derive_task_profiles(proposal):
             raise MetaResearchError("meta_research_authority_expired")
+        if manifest.discovery_ladder_profile is not None:
+            from polymath.discovery_contracts import DiscoveryIntent
+
+            extension = manifest.discovery_ladder_profile
+            if extension != derive_discovery_ladder_profile(
+                proposal,
+                DiscoveryIntent(
+                    max_stages=extension.profile.max_stages,
+                    max_depth=extension.profile.max_depth,
+                ),
+            ):
+                raise MetaResearchError("meta_research_authority_expired")
         caps = proposal.account
         if (
             account.id != caps.account_id
@@ -585,7 +605,14 @@ class MetaResearchStore:
         return operator
 
     def preview(
-        self, request, readiness_id, canary_receipt_id, review, provider_account_attestation
+        self,
+        request,
+        readiness_id,
+        canary_receipt_id,
+        review,
+        provider_account_attestation,
+        *,
+        discovery=None,
     ):
         from polymath.meta_probe_contracts import ProviderAccountAttestation
         from polymath.meta_readiness_contracts import MetaReadinessProposal
@@ -628,6 +655,7 @@ class MetaResearchStore:
                     review=review,
                     provider_account_attestation=attestation,
                     valid_until=expiry,
+                    discovery=discovery,
                 )
             except ValueError:
                 raise MetaResearchError("meta_research_invalid_request") from None
@@ -803,17 +831,19 @@ class MetaResearchStore:
             self._authorize(session, request, write=False)
             if not record["eligible_for_current_browser"]:
                 return {"activation": None, "reason": "meta_research_authority_expired"}
-            return {
-                "activation": {
-                    "id": record["id"],
-                    "manifest_sha256": record["manifest_sha256"],
-                    "audience": "operator_browser",
-                    "expires_at": record["approval"]["expires_at"],
-                    "profiles": [x["profile"] for x in record["manifest"]["task_profiles"]],
-                    "research_execution_available": True,
-                },
-                "reason": None,
+            projection = {
+                "id": record["id"],
+                "manifest_sha256": record["manifest_sha256"],
+                "audience": "operator_browser",
+                "expires_at": record["approval"]["expires_at"],
+                "profiles": [x["profile"] for x in record["manifest"]["task_profiles"]],
+                "research_execution_available": True,
             }
+            if manifest.discovery_ladder_profile is not None:
+                projection["discovery_ladder_profile"] = (
+                    manifest.discovery_ladder_profile.model_dump(mode="json")
+                )
+            return {"activation": projection, "reason": None}
 
     def list_activations(self, request, *, limit=20, before=None):
         if type(limit) is not int or not 1 <= limit <= 21:
@@ -916,7 +946,11 @@ class MetaResearchStore:
         )
         from polymath.meta_research_contracts import profile_for_task, task_profile_sha256
 
-        profile = profile_for_task(manifest, run.task_kind)
+        discovery = load_discovery_intent(session, run)
+        try:
+            profile = profile_for_task(manifest, run.task_kind, discovery=discovery)
+        except ValueError:
+            raise MetaResearchError("meta_research_activation_required") from None
         owner = session.get(ResearchRunAccess, run.id)
         if owner is None or owner.session_hash != admission.browser_session_hash:
             raise MetaResearchError("meta_research_activation_required")

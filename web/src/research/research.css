@@ -111,3 +111,5 @@
 .research-memory-list dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 12px; }
 .research-memory-list dt { font-weight: 600; }
 .research-memory-list dd { margin: 0; overflow-wrap: anywhere; }
+
+.research-run-layout.research-run-layout-activity-only { grid-template-columns: minmax(0, 1fr); }

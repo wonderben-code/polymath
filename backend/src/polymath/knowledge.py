@@ -19,9 +19,11 @@ from sqlalchemy.orm import Session, aliased
 
 from polymath.access_models import ResearchRunAccess
 from polymath.assessment_eligibility import (
+    completed_result_condition,
     current_supported_condition,
     result_assessment_state,
 )
+from polymath.discovery_models import StageCommit, StageParent
 from polymath.evidence_models import (
     EvidenceQuote,
     EvidenceResult,
@@ -90,6 +92,27 @@ def _finding_item(row: EvidenceResult, session: Session, owner_hash: str) -> dic
     if title is None:
         return None
     assessment = result_assessment_state(session, owner_hash, row.id)
+    stage = session.scalar(
+        select(StageCommit).where(
+            StageCommit.result_id == row.id,
+            StageCommit.run_id == row.run_id,
+            StageCommit.content_sha256 == row.content_sha256,
+        )
+    )
+    stage_metadata = None
+    if stage is not None:
+        stage_metadata = {
+            "stage_id": str(stage.id),
+            "ordinal": stage.ordinal,
+            "depth": stage.depth,
+            "status": "unsupported"
+            if assessment["state"] == "unsupported"
+            else (
+                "superseded"
+                if not assessment["is_current"]
+                else ("current_supported" if assessment["is_supported"] else "needs_review")
+            ),
+        }
     return {
         "id": f"finding:{row.id}",
         "type": "finding",
@@ -101,6 +124,7 @@ def _finding_item(row: EvidenceResult, session: Session, owner_hash: str) -> dic
         "summary": (summary or "Saved research finding")[:240],
         "task_kind": session.get(ResearchRun, row.run_id).task_kind,
         "assessment": assessment,
+        **({"discovery_stage": stage_metadata} if stage_metadata is not None else {}),
         "history_url": f"/api/v1/assessments/heads/{assessment['root_result_id']}/history",
     }
 
@@ -116,7 +140,6 @@ def _sources(owner_hash: str, query: str = ""):
             EvidenceQuote.retrieval_id == SourceRetrieval.id,
             EvidenceQuote.version_id == SourceVersion.id,
             current_supported_condition(assessed),
-            ResearchRun.status == "succeeded",
         )
         .correlate(RunEvidenceSource, ResearchRun, SourceRetrieval, SourceVersion)
         .limit(1)
@@ -229,7 +252,7 @@ def _findings(owner_hash: str, query: str = "", *, current_only: bool = True):
         .where(
             ResearchRunAccess.session_hash == owner_hash,
             EvidenceResult.status.in_(POSITIVE_STATUSES),
-            ResearchRun.status == "succeeded",
+            completed_result_condition(),
             ResearchRun.task_kind.in_(("research", "reassess_finding")),
         )
     )
@@ -264,7 +287,14 @@ def _coverage_metadata(row) -> dict:
     }
 
 
-def _source_item(row) -> dict:
+def _source_item(row, session: Session, owner_hash: str) -> dict:
+    # SQL narrows candidates; a committed stage also has current structural
+    # checks over the run's complete observed bibliographic identity closure.
+    # Keep the citation pointer as provenance even when it needs review.
+    supported = (
+        row.assessment_result_id is not None
+        and result_assessment_state(session, owner_hash, row.assessment_result_id)["is_supported"]
+    )
     return {
         "id": f"source:{row.id}",
         "type": "source",
@@ -281,7 +311,7 @@ def _source_item(row) -> dict:
         ),
         "assessment_status": (
             "current_supported"
-            if row.assessment_result_id is not None
+            if supported
             else "unassessed"
             if row.task_kind == "ingest_literature"
             else "unapplied_reassessment"
@@ -360,6 +390,31 @@ def _graph(session: Session, owner_hash: str, query: str) -> dict:
             truncated = True
         for child_run_id, parent in parents[: MAX_CANDIDATES * 4]:
             parent_findings.setdefault(child_run_id, []).append(parent)
+    stage_parents: dict[uuid.UUID, list[tuple[str, EvidenceResult]]] = {}
+    if ids:
+        parent_result = aliased(EvidenceResult)
+        parent_access = aliased(ResearchRunAccess)
+        links = session.execute(
+            select(StageCommit.result_id, StageParent.kind, parent_result)
+            .join(StageParent, StageParent.stage_id == StageCommit.id)
+            .join(parent_result, parent_result.id == StageParent.parent_result_id)
+            .join(parent_access, parent_access.run_id == parent_result.run_id)
+            .where(
+                StageCommit.result_id.in_(ids),
+                parent_access.session_hash == owner_hash,
+                parent_result.run_id == StageParent.parent_run_id,
+                parent_result.content_sha256 == StageParent.parent_sha256,
+                parent_result.status == "bridge",
+            )
+            .order_by(StageCommit.result_id, StageParent.ordinal)
+            .limit(MAX_CANDIDATES * 5 + 1)
+        ).all()
+        if len(links) > MAX_CANDIDATES * 5:
+            truncated = True
+        for child_id, kind, parent in links[: MAX_CANDIDATES * 5]:
+            stage_parents.setdefault(child_id, []).append(
+                ("revised_from" if kind == "revision" else "discovered_from", parent)
+            )
     quoted: dict[uuid.UUID, list] = {}
     if ids:
         # Result ownership was checked above. Composite FKs bind each quoted
@@ -402,6 +457,7 @@ def _graph(session: Session, owner_hash: str, query: str) -> dict:
             "finding_outcome": finding["outcome"],
             "task_kind": item["task_kind"],
             "assessment": item["assessment"],
+            **({"discovery_stage": item["discovery_stage"]} if "discovery_stage" in item else {}),
             "history_url": item["history_url"],
         }
         proposed_nodes = {node["id"]: node}
@@ -409,7 +465,9 @@ def _graph(session: Session, owner_hash: str, query: str) -> dict:
 
         # Parent links record the selected research basis, never independent
         # scientific support. The child still has its own direct quote links.
-        for parent in parent_findings.get(row.run_id, []):
+        parent_links = [("investigated_from", p) for p in parent_findings.get(row.run_id, [])]
+        parent_links.extend(stage_parents.get(row.id, []))
+        for edge_kind, parent in parent_links:
             parent_item = _finding_item(parent, session, owner_hash)
             if parent_item is None:
                 continue
@@ -425,14 +483,19 @@ def _graph(session: Session, owner_hash: str, query: str) -> dict:
                 "finding_outcome": "bridge",
                 "task_kind": parent_item["task_kind"],
                 "assessment": parent_item["assessment"],
+                **(
+                    {"discovery_stage": parent_item["discovery_stage"]}
+                    if "discovery_stage" in parent_item
+                    else {}
+                ),
                 "history_url": parent_item["history_url"],
             }
-            edge_id = f"investigated_from:{node['id']}:{parent_id}"
+            edge_id = f"{edge_kind}:{node['id']}:{parent_id}"
             proposed_edges[edge_id] = {
                 "id": edge_id,
                 "source": node["id"],
                 "target": parent_id,
-                "kind": "investigated_from",
+                "kind": edge_kind,
             }
 
         if finding["outcome"] == "bridge":
@@ -462,7 +525,9 @@ def _graph(session: Session, owner_hash: str, query: str) -> dict:
                 "content_kind": source.content_kind,
                 "task_kind": item["task_kind"],
                 "assessment_result_id": str(row.id),
-                "assessment_status": "current_supported",
+                "assessment_status": (
+                    "current_supported" if item["assessment"]["is_supported"] else "saved_snapshot"
+                ),
                 **_coverage_metadata(source),
             }
             edge_id = f"supported_by:{node['id']}:{source_node_id}"
@@ -501,7 +566,7 @@ def _graph(session: Session, owner_hash: str, query: str) -> dict:
                 "assessment_result_id": (
                     str(row.assessment_result_id) if row.assessment_result_id else None
                 ),
-                "assessment_status": _source_item(row)["assessment_status"],
+                "assessment_status": _source_item(row, session, owner_hash)["assessment_status"],
                 **_coverage_metadata(row),
             }
     return {
@@ -539,7 +604,7 @@ def create_knowledge_router(engine: Engine) -> APIRouter:
                 findings = session.scalars(
                     _findings(owner.token_hash, query).limit(limit + 1)
                 ).all()
-                items = [_source_item(row) for row in sources]
+                items = [_source_item(row, session, owner.token_hash) for row in sources]
                 items.extend(
                     item
                     for row in findings

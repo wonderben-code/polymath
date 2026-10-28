@@ -19,6 +19,7 @@ from polymath.assessment_api import create_assessment_router
 from polymath.budget_admin_api import create_budget_admin_router
 from polymath.config import Settings, get_settings
 from polymath.database import build_engine
+from polymath.discovery_api import create_discovery_router
 from polymath.ingestion_api import create_ingestion_router
 from polymath.knowledge import create_knowledge_router
 from polymath.meta_probe_api import create_meta_probe_router
@@ -141,6 +142,7 @@ def create_app(
             native_store=native_store,
         )
     )
+    application.include_router(create_discovery_router(application.state.engine))
     application.include_router(create_knowledge_router(application.state.engine))
     application.include_router(
         create_budget_admin_router(

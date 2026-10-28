@@ -167,10 +167,14 @@ def _index(link: RunFullTextIndex, snapshot: FullTextSnapshot) -> FullTextIndex:
     )
 
 
-def owned_identity_context(session: Session, run_id: uuid.UUID) -> tuple[SourceReference, ...]:
+def owned_identity_context(
+    session: Session, run_id: uuid.UUID, *, identity_limit: int = MAX_IDENTITY_CONTEXT
+) -> tuple[SourceReference, ...]:
     """Frozen identity metadata only; never source reads or body/range authority."""
     from polymath.literature.identity import paper_aliases
 
+    if type(identity_limit) is not int or not 1 <= identity_limit <= 4096:
+        raise ValueError("invalid_identity_context_limit")
     refs = []
     rows = session.execute(
         select(RunFullTextIndex, FullTextSnapshot)
@@ -236,7 +240,7 @@ def owned_identity_context(session: Session, run_id: uuid.UUID) -> tuple[SourceR
     for reference in refs:
         aliases = paper_aliases(reference)
         distinct.setdefault(aliases, reference)
-        if len(distinct) > MAX_IDENTITY_CONTEXT:
+        if len(distinct) > identity_limit:
             raise FullTextError("full_text_identity_context_limit")
     return tuple(distinct.values())
 

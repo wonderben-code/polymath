@@ -1,3 +1,6 @@
+import { parseDiscoveryStage } from '../discovery/client'
+import { parseDiscoveryIntent } from '../research/discoveryIntent'
+import type { DiscoveryStage, DiscoveryStageMetadata } from '../discovery/types'
 import { parseBibliography } from '../research/bibliography'
 import { nativeAdmissionFailure, parseNativeRunControl, validNativeSubmission } from '../research/nativeAdmission'
 import type { NativeSubmissionContext } from '../research/nativeAdmission'
@@ -162,9 +165,17 @@ export function parseFindingHead(value: unknown): FindingHead {
   const item = object(value), requested = id(item.requested_result_id), root = id(item.root_result_id), current = id(item.current_result_id)
   const state = member(item.state, ['supported', 'unsupported']), revision = integer(item.revision), assessment = nullableId(item.last_assessment_id)
   const isCurrent = bool(item.is_current), supported = bool(item.is_supported), historical = bool(item.is_historical), canGenerate = bool(item.can_generate)
-  if (isCurrent !== (requested === current) || supported !== (isCurrent && state === 'supported') || historical !== (!isCurrent || state === 'unsupported') || canGenerate !== (isCurrent && supported)) return invalid()
+  let stage: DiscoveryStageMetadata | undefined
+  if (item.discovery_stage !== undefined) {
+    const proof = object(item.discovery_stage)
+    if (Object.keys(proof).length !== 4) return invalid()
+    stage = { stage_id: id(proof.stage_id), ordinal: integer(proof.ordinal, 0, 3), depth: integer(proof.depth, 1, 3), status: member(proof.status, ['current_supported', 'superseded', 'unsupported', 'needs_review']) }
+    const expected = state === 'unsupported' ? 'unsupported' : !isCurrent ? 'superseded' : stage.status === 'needs_review' ? 'needs_review' : 'current_supported'
+    if (stage.status !== expected) return invalid()
+  }
+  if (isCurrent !== (requested === current) || supported !== (isCurrent && state === 'supported' && stage?.status !== 'needs_review') || historical !== (!isCurrent || state === 'unsupported') || canGenerate !== (isCurrent && supported)) return invalid()
   if (revision === 0 ? assessment !== null || current !== root || state !== 'supported' : assessment === null) return invalid()
-  return { requested_result_id: requested, root_result_id: root, current_result_id: current, current_run_id: id(item.current_run_id), state, revision, last_assessment_id: assessment, is_current: isCurrent, is_supported: supported, is_historical: historical, can_generate: canGenerate }
+  return { ...(stage ? { discovery_stage: stage } : {}), requested_result_id: requested, root_result_id: root, current_result_id: current, current_run_id: id(item.current_run_id), state, revision, last_assessment_id: assessment, is_current: isCurrent, is_supported: supported, is_historical: historical, can_generate: canGenerate }
 }
 
 export function parseAssessmentJob(value: unknown): AssessmentJob {
@@ -177,21 +188,21 @@ export function parseAssessmentJob(value: unknown): AssessmentJob {
     mode: member(item.mode, ['explore', 'ask', 'surprise']), task_kind: 'reassess_finding', goal: text(item.goal, 4000, false), status, created_at: date(item.created_at), updated_at: date(item.updated_at), result_id: null, artifact_id: null, assessment_id: assessment, error_code: code(item.error_code), external_outcome_unknown: bool(item.external_outcome_unknown), ...(native ? { native_research: native } : {}) }
 }
 
-async function json(response: Response): Promise<unknown> {
+async function json(response: Response, maximum = MAX_BYTES): Promise<unknown> {
   const size = response.headers.get('content-length')
-  if (size !== null && (!/^\d+$/.test(size) || Number(size) > MAX_BYTES)) return invalid()
+  if (size !== null && (!/^\d+$/.test(size) || Number(size) > maximum)) return invalid()
   const reader = response.body?.getReader()
   if (!reader) return invalid()
   const chunks: Uint8Array[] = []; let length = 0
   try {
-    while (true) { const { done, value } = await reader.read(); if (done) break; length += value.byteLength; if (length > MAX_BYTES) { await reader.cancel(); return invalid() }; chunks.push(value) }
+    while (true) { const { done, value } = await reader.read(); if (done) break; length += value.byteLength; if (length > maximum) { await reader.cancel(); return invalid() }; chunks.push(value) }
     const bytes = new Uint8Array(length); let offset = 0
     for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length }
     return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)) as unknown
   } catch { return invalid() } finally { reader.releaseLock() }
 }
 
-async function request<T>(path: string, parse: (value: unknown) => T, signal?: AbortSignal, write?: { csrf: string; body?: unknown; native?: NativeSubmissionContext }): Promise<T> {
+async function request<T>(path: string, parse: (value: unknown) => T, signal?: AbortSignal, write?: { csrf: string; body?: unknown; native?: NativeSubmissionContext }, maximum = MAX_BYTES): Promise<T> {
   if (write && !HASH.test(write.csrf)) throw new AssessmentError('session_expired')
   if (write?.native && !validNativeSubmission(write.native)) throw new AssessmentError('native_authority_changed')
   if (signal?.aborted) throw new AssessmentError('aborted')
@@ -215,7 +226,7 @@ async function request<T>(path: string, parse: (value: unknown) => T, signal?: A
       const fallback = response.status === 404 ? 'not_found' : response.status === 409 ? 'assessment_changed' : response.status === 422 ? 'invalid_request' : response.status === 429 ? 'queue_limit' : 'unavailable'
       throw new AssessmentError(detail ?? fallback, !!write && response.status >= 500 && detail !== 'research_unavailable')
     }
-    return parse(await json(response))
+    return parse(await json(response, maximum))
   } catch (error) {
     if (error instanceof AssessmentError) {
       if (write && sent && error.code === 'invalid_response') throw new AssessmentError(error.code, true)
@@ -272,9 +283,21 @@ export function assessmentMatchesJob(record: AssessmentRecord, job: AssessmentJo
 
 export function parseFindingVersion(value: unknown): FindingVersion {
   const item = object(value), run = object(item.run), resultId = id(item.id), runId = id(item.run_id), kind = member(item.task_kind, ['research', 'reassess_finding']), head = parseFindingHead(item.assessment)
-  if (run.id !== runId || run.task_kind !== kind || run.status !== 'succeeded' || run.artifact_id !== null || head.requested_result_id !== resultId || head.is_current && head.current_run_id !== runId || (kind === 'research' ? run.result_id !== resultId || head.root_result_id !== resultId : run.result_id !== null)) return invalid()
+  let stage: DiscoveryStage | undefined
+  if (item.discovery_stage !== undefined) { try { stage = parseDiscoveryStage(item.discovery_stage) } catch { return invalid() } }
+  const intent = parseDiscoveryIntent(run.discovery_intent, invalid), native = parseNativeRunControl(run.native_research, invalid)
+  if (run.id !== runId || run.task_kind !== kind || run.artifact_id !== null || head.requested_result_id !== resultId || head.is_current && head.current_run_id !== runId) return invalid()
+  if (stage) {
+    if (kind !== 'research' || run.mode !== 'surprise' || !intent || !head.discovery_stage || stage.stage.run_id !== runId || stage.stage.result_id !== resultId || stage.stage.ordinal >= intent.max_stages || stage.stage.depth > intent.max_depth || head.root_result_id !== resultId) return invalid()
+    const expected = head.state === 'unsupported' ? 'unsupported' : !head.is_current ? 'superseded' : head.discovery_stage?.status === 'needs_review' ? 'needs_review' : 'current_supported'
+    if (stage.status !== expected || head.discovery_stage && (head.discovery_stage.stage_id !== stage.stage.stage_id || head.discovery_stage.ordinal !== stage.stage.ordinal || head.discovery_stage.depth !== stage.stage.depth)) return invalid()
+  } else if (head.discovery_stage || intent || run.status !== 'succeeded' || (kind === 'research' ? run.result_id !== resultId || head.root_result_id !== resultId : run.result_id !== null)) return invalid()
   let parsed: ResearchResult
   try { parsed = parseResult(item.payload) } catch { return invalid() }
+  if (stage) {
+    if (!equal({ ...parsed, sources: [] }, { ...stage.result, sources: [] }) || stage.result.sources.some((source) => !parsed.sources.some((candidate) => equal(source, candidate)))) return invalid()
+    parsed = stage.result
+  }
   if (parsed.status !== 'bridge' && parsed.status !== 'answer' || !parsed.finding || parsed.finding.outcome === 'insufficient_evidence') return invalid()
   const proposed = finding(parsed.finding), selections = fields(parsed.field_selections), quotes = list(parsed.quotes, researchQuote, 1, 64), mode = member(run.mode, ['explore', 'ask', 'surprise'])
   if (parsed.mode !== mode) return invalid()
@@ -282,9 +305,9 @@ export function parseFindingVersion(value: unknown): FindingVersion {
   const sources = list(parsed.sources, (raw) => { const source = object(raw), bibliography = parseBibliography(source.bibliography, invalid), coverage = parseSourceCoverage(source.coverage, invalid); const document = { source_id: text(source.source_id, 200), title: text(source.title, 1000), url: safeUrl(source.url), text: text(source.text, 20000), content_kind: member(source.content_kind, ['abstract', 'full_text']), retrieved_at: date(source.retrieved_at), extraction_method: text(source.extraction_method, 100), ...(bibliography === undefined ? {} : { bibliography }), ...(coverage === undefined ? {} : { coverage }) }; validateSourceCoverageContext(document, invalid); return document }, 1, 200)
   distinct(sources.map((source) => source.source_id))
   for (const quote of quotes) { const source = sources.find((source) => source.source_id === quote.source_id); if (!source || source.content_kind !== quote.content_kind || Array.from(source.text).slice(quote.start, quote.end).join('') !== quote.quote) return invalid() }
-  return { id: resultId, run_id: runId, task_kind: kind, run: { id: runId, task_kind: kind, mode, goal: text(run.goal, 4000, false), status: 'succeeded', created_at: date(run.created_at), updated_at: date(run.updated_at), result_id: nullableId(run.result_id), artifact_id: null, assessment_id: run.assessment_id === undefined ? null : nullableId(run.assessment_id), error_code: code(run.error_code), external_outcome_unknown: bool(run.external_outcome_unknown) }, payload: { ...parsed, finding: proposed, sources, quotes, field_selections: selections }, assessment: head }
+  return { id: resultId, run_id: runId, task_kind: kind, run: { id: runId, task_kind: kind, mode, goal: text(run.goal, 4000, false), status: member(run.status, JOB_STATUSES), created_at: date(run.created_at), updated_at: date(run.updated_at), result_id: nullableId(run.result_id), artifact_id: null, assessment_id: run.assessment_id === undefined ? null : nullableId(run.assessment_id), error_code: code(run.error_code), external_outcome_unknown: bool(run.external_outcome_unknown), ...(native ? { native_research: native } : {}), ...(intent ? { discovery_intent: intent } : {}) }, ...(stage ? { discovery_stage: stage } : {}), payload: { ...parsed, finding: proposed, sources, quotes, field_selections: selections }, assessment: head }
 }
 
 export function getFindingVersion(resultId: string, signal?: AbortSignal): Promise<FindingVersion> {
-  return request(`${BASE}/findings/${inputId(resultId)}`, (value) => { const version = parseFindingVersion(value); return version.id === resultId ? version : invalid() }, signal)
+  return request(`${BASE}/findings/${inputId(resultId)}`, (value) => { const version = parseFindingVersion(value); return version.id === resultId ? version : invalid() }, signal, undefined, 8 * 1024 * 1024)
 }

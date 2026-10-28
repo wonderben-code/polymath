@@ -4,6 +4,13 @@ Baseline updated 27 October 2026 after the owner's full-scope direction. **Deadl
 
 This is the product-outcome roadmap. [ARCHITECTURE.md](ARCHITECTURE.md) explains the design; [BUILD_PLAN.md](BUILD_PLAN.md) provides tasks and acceptance gates; [PROGRESS.md](PROGRESS.md) records actual progress and blockers. Dates below are targets, not completion claims.
 
+Verified 28 October: local implementation now includes all three modes, native
+Meta composition, automatic Surprise discovery ladders, owned memory/map,
+collection/reassessment, Formalise/Write, exact publication controls and revocable
+public reading. The latest local regression has 2,978 passing tests. Next is
+controlled visitor research access. Real Meta/scientific evaluation, approved
+Zenodo publication, hosting and submission remain open gates; paid calls stay off.
+
 ## Release scope
 
 Deliver a complete Meta-powered research product: Explore, Ask, Surprise Me, the live research view, connections between connections, a growing knowledge base, a map, Formalise, Write, approval-gated Zenodo publication, and a public API. This supersedes earlier after-v1/stretch labels. Research decisions must be model-driven and grounded in recorded evidence.

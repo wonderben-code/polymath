@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 from polymath.access_models import BrowserSession, ResearchRunAccess
 from polymath.assessment_eligibility import (
     EligibilityError,
+    completed_result_condition,
     current_supported_condition,
     lock_current_source,
     result_assessment_state,
@@ -158,7 +159,7 @@ def _source(session: Session, owner: str, result_id) -> EvidenceResult:
         .where(
             EvidenceResult.id == _uuid(result_id),
             ResearchRunAccess.session_hash == owner,
-            ResearchRun.status == "succeeded",
+            completed_result_condition(),
             ResearchRun.task_kind.in_(("research", "reassess_finding")),
             EvidenceResult.status.in_(("bridge", "answer")),
         )
@@ -290,7 +291,13 @@ def _status(session: Session, row: SharedFinding) -> tuple[str, datetime | None]
         raise SharingError("sharing_source_integrity_failed")
     if head.current_result_id != row.source_result_id:
         return "superseded", None
-    return ("unsupported" if head.state == "unsupported" else "current"), None
+    if head.state == "unsupported":
+        return "unsupported", None
+    if not result_assessment_state(session, row.owner_session_hash, row.source_result_id)[
+        "is_supported"
+    ]:
+        return "needs_review", None
+    return "current", None
 
 
 def _record(session: Session, row: SharedFinding) -> ShareRecord:
