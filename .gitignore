@@ -18,3 +18,4 @@ coverage/
 .cache/
 playwright-report/
 test-results/
+.polymath-client/

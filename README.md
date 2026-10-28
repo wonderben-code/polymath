@@ -29,6 +29,7 @@ Created 27 October 2026. Every push to `main` is Bitcoin-timestamped through Ope
 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Local development, tests, PostgreSQL migrations, and container startup |
 | [docs/FULL_TEXT.md](docs/FULL_TEXT.md) | Model-selected arXiv HTML indexes, exact saved excerpts, citation scope and recovery |
 | [docs/PUBLIC_SHARING.md](docs/PUBLIC_SHARING.md) | Explicit public snapshots, short cited excerpts, expiry, revocation and public-library API |
+| [docs/API.md](docs/API.md) | Versioned HTTP contract, ownership/CSRF, event replay and standalone external client |
 | [docs/HACKATHON.md](docs/HACKATHON.md) | Dates, judging, setup checklist, IP notes |
 | [CLAUDE.md](CLAUDE.md) | Instructions for any coding agent picking this up |
 
@@ -42,7 +43,8 @@ The implementation baseline is recorded in `docs/ARCHITECTURE.md`. The target is
 - [x] A4: bounded adaptive research-controller prototype and Meta adapter, verified with fixtures
 - [ ] A1–A2, A5: verified Meta capabilities and first real-source investigation
 - [ ] B–C: durable research, evidence, spending controls, and Explore
-- [ ] D: public URL and controlled public API
+- [x] D3 local contract/client: documented v1 API and standalone HTTP client, verified with real loopback worker journeys
+- [ ] D live gates: public URL, hosted access/operations and deployed external-client verification
 - [x] E1–E3: Ask and Surprise Me implementation, verified through synthetic worker/browser journeys
 - [ ] E4: live Meta/source evaluation and scientific quality review
 - [x] F3–F5 implementation: higher-level research, scheduled collection and cited reassessment

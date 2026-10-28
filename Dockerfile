@@ -17,6 +17,7 @@ RUN --mount=type=secret,id=proxy_ca \
     if [ -f /run/secrets/proxy_ca ]; then export SSL_CERT_FILE=/run/secrets/proxy_ca; fi; \
     uv sync --project backend --locked --no-dev --no-editable
 COPY --from=web /build/web/dist /app/web/dist
+COPY scripts/polymath-client.py /app/scripts/polymath-client.py
 RUN groupadd --gid 10001 polymath && useradd --uid 10001 --gid polymath --no-create-home polymath \
     && chmod -R a+rX /app
 USER 10001:10001

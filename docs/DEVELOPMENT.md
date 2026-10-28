@@ -87,6 +87,10 @@ The research and reassessment controllers expose explicit `open_full_text` and `
 
 Owner routes under `/api/v1/shares` retain normal session/CSRF/origin controls. Preview returns the exact allowlisted projection and SHA-256; the Share action sends that hash and a new UUID idempotency key. A lost-response retry reuses the same key/body; owner history resolves the actual grant. Revocation remains available while sharing is disabled. Shares expire with the owner's current anonymous session and can be revoked earlier. Only short cited excerpts, model findings and scholarly metadata are exposed. Raw source bodies, private investigation history and ancestor findings stay private. Later reassessment can change the public status badge but never silently replaces the shared content. See [PUBLIC_SHARING.md](PUBLIC_SHARING.md) for the complete content/API and privacy contract. Local PostgreSQL, frontend and two-browser verification passed. Public deployment remains pending.
 
+## External HTTP client
+
+`make api-client` prints standalone client help without network activity. The stdlib-only script is also included in the container at `/app/scripts/polymath-client.py`. Public reads use no cookie/session; private CLI commands require an explicit protected origin-bound cookie jar. Research creation and cancellation are explicit writes with CSRF/Origin and no automatic retry. Event replay uses persisted cursors, and artifact exports verify exact bytes before saving. See [API.md](API.md) for the complete v1 contract and commands. Real loopback HTTP/PostgreSQL/synthetic-worker checks passed; deployed external access and native Meta/provider verification remain separate gates.
+
 ## Session-owned research API
 
 The application now mounts the following routes, while **new research submission remains disabled by default**:

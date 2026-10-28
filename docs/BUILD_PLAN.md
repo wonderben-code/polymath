@@ -46,7 +46,7 @@ Dependencies: B; deploy the skeleton before C is complete, then validate the ful
 
 - [ ] **D1 — Package and deploy.** Create reproducible web/API and worker builds, migration/start commands, persistent storage, HTTPS, and environment-specific configuration. Verify host costs before provisioning paid resources.
 - [ ] **D2 — Add public access controls.** Implement bounded sessions/API access, quotas, rate/queue limits, operator authorization, and clear exhausted-budget behavior. Saved examples must be labelled.
-- [ ] **D3 — Publish the API contract.** Version research creation, status, events, cancellation, and result endpoints; document authentication, limits, and errors; exercise with an external client.
+- [ ] **D3 — Publish the API contract.** The v1 session/CSRF, research/status/events/replay/cancel/results, artifacts/export and public-sharing contract is documented in [API.md](API.md). A stdlib standalone external client and six real loopback HTTP/PostgreSQL/synthetic-worker journeys pass, including all three modes, exact exports and anonymous public reads. Protected ownership, bounded transport and unknown-write behavior are independently tested. Remaining: deployed external-client and native integration verification.
 - [ ] **D4 — Verify operations.** Test deployed SSE, disconnects, worker restart, persistent artifacts, migrations, backup/restore, and credential redaction. Document startup, rollback, and recovery commands.
 
 Gate: the real public URL runs Explore with controlled spending and survives the documented restart procedure. Creating a localhost page does not satisfy this gate.
