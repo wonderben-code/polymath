@@ -9,6 +9,8 @@ from polymath import (  # noqa: F401
     lineage_models,
     memory_models,
     models,
+    operator_models,
+    publication_models,
 )
 from polymath.config import Settings
 from polymath.database import Base

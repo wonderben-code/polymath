@@ -18,6 +18,9 @@ from polymath.artifact_api import create_artifact_router
 from polymath.config import Settings, get_settings
 from polymath.database import build_engine
 from polymath.knowledge import create_knowledge_router
+from polymath.operator_auth import OperatorPolicy, create_operator_router
+from polymath.publication_api import create_publication_router
+from polymath.publication_contracts import PublicationPolicy, PublisherIdentity
 from polymath.run_api import create_run_router
 
 
@@ -31,8 +34,28 @@ def create_app(
     settings: Settings | None = None,
     *,
     research_availability: Callable[[], bool] | None = None,
+    operator_policy: OperatorPolicy | None = None,
+    publication_policy: PublicationPolicy | None = None,
 ) -> FastAPI:
     settings = settings or get_settings()
+    if operator_policy is None:
+        operator_policy = OperatorPolicy(
+            bootstrap_token=settings.operator_bootstrap_token,
+            actor_id=settings.operator_actor_id,
+            display_name=settings.operator_display_name,
+        )
+    if publication_policy is None:
+        publication_policy = (
+            PublicationPolicy(
+                publisher=PublisherIdentity(
+                    identifier=settings.publication_publisher_id,
+                    display_name=settings.publication_publisher_name,
+                ),
+                allowed_destinations=settings.publication_destinations,
+            )
+            if settings.publication_approval_enabled
+            else PublicationPolicy()
+        )
 
     @asynccontextmanager
     async def lifespan(application: FastAPI) -> AsyncIterator[None]:
@@ -41,6 +64,8 @@ def create_app(
 
     application = FastAPI(title="Polymath API", version=__version__, lifespan=lifespan)
     application.state.settings = settings
+    application.state.operator_policy = operator_policy
+    application.state.publication_policy = publication_policy
     application.state.engine = build_engine(settings)
     application.include_router(
         create_run_router(application.state.engine, availability=research_availability)
@@ -48,6 +73,14 @@ def create_app(
     application.include_router(create_knowledge_router(application.state.engine))
     application.include_router(
         create_artifact_router(application.state.engine, availability=research_availability)
+    )
+    application.include_router(
+        create_operator_router(application.state.engine, policy=operator_policy)
+    )
+    application.include_router(
+        create_publication_router(
+            application.state.engine, policy=publication_policy, operator_policy=operator_policy
+        )
     )
 
     @application.middleware("http")

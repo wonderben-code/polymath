@@ -3,6 +3,7 @@ import { exportUrl } from './client'
 import type { ArtifactKind, ArtifactPassage, CitedText, DocumentDraft, FiniteCheckResult, FormalisationDraft, SavedArtifact } from './types'
 import { useArtifactWorkspace } from './useArtifactWorkspace'
 import './artifacts.css'
+import { PublicationPanel } from '../publications/PublicationPanel'
 
 interface ArtifactWorkspaceProps {
   sourceResultId: string
@@ -136,5 +137,6 @@ export function ArtifactWorkspace({ sourceResultId, sourceKind, csrfToken, enabl
     {(workspace.activeJob || activity.length > 0) && <details className="artifact-activity" open={!visibleArtifact}><summary>Recorded generation activity<span>{connectionNames[workspace.connection]}</span></summary>{activity.length ? <ol aria-label="Recorded generation activity">{activity.map((event) => <li key={event.sequence}>{event.summary}</li>)}</ol> : <p>No recorded generation activity yet.</p>}</details>}
     {workspace.selectedId && !workspace.activeJob && workspace.phase === 'ready' && <p className="artifact-message" role="status">Loading this saved task…</p>}
     {visibleArtifact && <Preview artifact={visibleArtifact} />}
+    {visibleArtifact?.status === 'ready' && visibleArtifact.kind !== 'formalise' && <PublicationPanel key={visibleArtifact.id} artifact={visibleArtifact} csrfToken={csrfToken} enabled={enabled} onSessionExpired={onSessionExpired} />}
   </section>
 }

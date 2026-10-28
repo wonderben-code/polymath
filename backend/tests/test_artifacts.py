@@ -311,12 +311,13 @@ def test_migration_downgrade_refuses_to_discard_document_history(artifacts_api):
     _, source_id = seed(engine, client)
     complete_artifact(engine, client, source_id)
     config = Config(str(Path(__file__).parents[1] / "alembic.ini"))
+    with engine.connect() as connection:
+        original_head = connection.scalar(text("SELECT version_num FROM alembic_version"))
     with pytest.raises(Exception, match="Cannot discard saved artifact"):
         command.downgrade(config, "0009_research_parents")
     with engine.connect() as connection:
-        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == (
-            "0010_artifact_jobs"
-        )
+        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == (original_head)
+    command.check(config)
 
 
 def test_oversized_basis_admission_rolls_back_job_ownership_and_quota(artifacts_api, monkeypatch):

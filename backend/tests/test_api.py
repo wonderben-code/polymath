@@ -38,6 +38,44 @@ def test_credentials_alone_never_enable_research_submission() -> None:
     assert capabilities["research_available"] is False
 
 
+def test_default_publication_routes_are_mounted_without_privileged_authority() -> None:
+    application = create_app(Settings(_env_file=None))
+    with TestClient(application) as client:
+        publication = client.get("/api/v1/publications/capabilities")
+        assert publication.status_code == 200
+        assert publication.json() == {
+            "configured": False,
+            "publisher": None,
+            "destinations": [],
+            "can_prepare": False,
+        }
+        operator = client.get("/api/v1/operator/session")
+        assert operator.status_code == 200
+        assert operator.json()["configured"] is False
+        assert operator.json()["authenticated"] is False
+        assert operator.json()["csrf_token"] is None
+        assert publication.headers["cache-control"] == "no-store"
+
+
+def test_explicit_approval_configuration_does_not_enable_model_execution() -> None:
+    application = create_app(
+        Settings(
+            operator_bootstrap_token="Synthetic_Operator_0123456789abcdef-ABCDEF",
+            publication_approval_enabled=True,
+            publication_publisher_id="synthetic-publisher",
+            publication_publisher_name="Synthetic Publisher",
+            publication_destinations=("sandbox",),
+            _env_file=None,
+        )
+    )
+    with TestClient(application) as client:
+        publication = client.get("/api/v1/publications/capabilities").json()
+        assert publication["configured"] is True
+        assert publication["destinations"] == ["sandbox"]
+        assert publication["publisher"]["identifier"] == "synthetic-publisher"
+        assert client.get("/api/v1/capabilities").json()["research_available"] is False
+
+
 def test_unavailable_database_has_sanitized_readiness(monkeypatch: pytest.MonkeyPatch) -> None:
     application = create_app(Settings(_env_file=None))
 

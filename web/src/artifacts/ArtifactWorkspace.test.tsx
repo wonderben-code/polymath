@@ -48,6 +48,9 @@ function server(initial: ArtifactJob[] = [], initialArtifacts: SavedArtifact[] =
   const state = { jobs: initial, artifacts: new Map(initialArtifacts.map((item) => [item.id, item])), historyStatus: 200, artifactStatus: 200, cancelStatus: 200 }
   const requests = vi.fn(async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const path = input.toString()
+    if (path === '/api/v1/publications/capabilities') return Response.json({ configured: false, publisher: null, destinations: [], can_prepare: false })
+    if (path === '/api/v1/operator/session') return Response.json({ configured: false, authenticated: false, actor_id: null, display_name: null, expires_at: null, csrf_token: null })
+    if (path.startsWith('/api/v1/publications?')) return Response.json({ manifests: [], next_cursor: null })
     if (path === '/api/v1/artifacts/jobs' && init?.method === 'POST') {
       const body = JSON.parse(init.body as string) as { kind: ArtifactKind }
       const created = job(body.kind, state.jobs.length ? SECOND_JOB : JOB)

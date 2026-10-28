@@ -122,6 +122,12 @@ Meta generates typed, individually cited prose and may choose bounded mathematic
 
 Small generated versions are immutable PostgreSQL records capped at262KiB, preserving structured payload, input basis, escaped Markdown and separate SHA-256 hashes. Export returns the exact saved UTF-8 bytes without rerendering. Future publication approval must bind these bytes and metadata; generation itself cannot authorize publication. Live scientific support and Meta compatibility remain separate acceptance gates.
 
+### Implemented human approval boundary
+
+Publisher authentication is separate from ordinary research ownership. A server-configured bootstrap secret creates a short-lived HttpOnly operator cookie; only hashes and a policy fingerprint are stored. Privileged writes require both browser and operator CSRF tokens. Login never approves a document. Rotation, logout, identity changes, expiry and browser transfer invalidate old authority.
+
+An immutable publication manifest binds exact saved Markdown bytes/count and filename, artifact/run identity, payload/basis hashes, canonical human-entered metadata, configured publisher and sandbox/production destination. A deterministic hash-bound marker supports later remote reconciliation. Approval receipts and revocations are append-only; receipts expire no later than their browser/operator sessions. Checks run again after lock waits, with operator-before-manifest lock order. Edits create a new manifest and require fresh approval. G3 performs no external publication and contains no path to the Zenodo client. A future dispatcher must validate the exact receipt and persist a unique send grant in one transaction before any external mutation.
+
 ## 7. Durable jobs and live activity
 
 Use explicit states: queued, running, waiting_retry, cancel_requested, cancelled, succeeded, failed, and interrupted. Jobs use transactional claims and expiring leases with heartbeats; checkpoints carry a version/fencing token so an expired worker cannot overwrite its replacement. Deduplicate tool outputs and events where possible.
