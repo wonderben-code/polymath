@@ -12,6 +12,7 @@ META_RESEARCH_ERROR_STATUSES = {
     "meta_research_authority_expired": 409,
     "meta_research_activation_required": 409,
     "meta_research_scientific_protocol_unavailable": 409,
+    "meta_research_explore_protocol_unavailable": 409,
     "meta_research_input_changed": 409,
     "meta_research_outcome_unknown": 409,
     "meta_research_storage_unavailable": 503,

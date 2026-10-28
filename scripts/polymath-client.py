@@ -41,6 +41,7 @@ DIGEST = re.compile(r"[a-f0-9]{64}")
 ASK_OVERVIEW_PROTOCOL = "polymath-ask-claim-overview-v1"
 ARTIFACT_CONTEXT_PROTOCOL = "polymath-artifact-scientific-context-v1"
 ASSESSMENT_OVERVIEW_PROTOCOL = "polymath-ask-reassessment-overview-v1"
+EXPLORE_COLLECTION_PROTOCOL = "polymath-explore-collection-v1"
 SCIENTIFIC_CAPABILITIES = (
     "artifact_scientific_context_v1",
     "ask_claim_overview_v1",
@@ -96,6 +97,10 @@ SAFE_ERRORS = {
     "scientific_context_admission_changed",
     "ask_overview_wrong_run",
     "artifact_context_too_large",
+    "meta_research_explore_protocol_unavailable",
+    "explore_collection_not_found",
+    "explore_collection_storage_unavailable",
+    "invalid_explore_collection_request",
 }
 SAFE_ERRORS.update(PUBLIC_ACCESS_REASONS)
 SECRET_FIELDS = {
@@ -341,6 +346,39 @@ def _scientific_intent(value, protocol):
     return {"protocol": protocol}
 
 
+def _explore_collection_intent(value):
+    if (
+        not isinstance(value, dict)
+        or set(value) != {"protocol", "max_bridges"}
+        or value["protocol"] != EXPLORE_COLLECTION_PROTOCOL
+    ):
+        raise ClientError("invalid_arguments")
+    return {
+        "protocol": EXPLORE_COLLECTION_PROTOCOL,
+        "max_bridges": _integer(value["max_bridges"], 1, 4),
+    }
+
+
+def _explore_protocols(value):
+    try:
+        if (
+            not isinstance(value, dict)
+            or set(value) != {"protocol", "activation_sha256", "explore_collection_intent"}
+            or value["protocol"] != "polymath-explore-collection-access-v1"
+        ):
+            raise ValueError
+        digest, intent = value["activation_sha256"], value["explore_collection_intent"]
+        if digest is not None and (not isinstance(digest, str) or not DIGEST.fullmatch(digest)):
+            raise ValueError
+        if intent is not None:
+            if digest is None:
+                raise ValueError
+            _explore_collection_intent(intent)
+        return value
+    except (ValueError, TypeError, KeyError, AttributeError, ClientError):
+        raise ClientError("invalid_explore_protocols_response") from None
+
+
 def _research_protocols(value):
     try:
         if not isinstance(value, dict) or set(value) != {
@@ -513,6 +551,10 @@ def _scientific_history(value):
         for name, protocol in fields:
             if name in value:
                 _scientific_intent(value[name], protocol)
+        if "explore_collection_intent" in value:
+            _explore_collection_intent(value["explore_collection_intent"])
+            if value.get("mode", "explore") != "explore" or value.get("parent_result_ids"):
+                raise ValueError
         if ("scientific_context_intent" in value) != ("scientific_context_sha256" in value):
             raise ValueError
         if "scientific_context_sha256" in value:
@@ -866,7 +908,7 @@ def _discovery_receipts(values, run_id, intent=None):
     return values
 
 
-def _discovery_detail(value, run_id, stage_id=None):
+def _discovery_detail(value, run_id, stage_id=None, *, mode="surprise"):
     if not isinstance(value, dict) or set(value) != {
         "stage",
         "result",
@@ -882,7 +924,7 @@ def _discovery_detail(value, run_id, stage_id=None):
     if (
         value["status"] not in ("current_supported", "superseded", "unsupported", "needs_review")
         or not isinstance(result, dict)
-        or result.get("mode") != "surprise"
+        or result.get("mode") != mode
         or result.get("status") != "bridge"
         or not isinstance(result.get("finding"), dict)
         or result["finding"].get("outcome") != "bridge"
@@ -920,6 +962,222 @@ def _discovery_detail(value, run_id, stage_id=None):
             raise ValueError
     if support != receipt["parent_refs"]:
         raise ValueError
+    return value
+
+
+def _explore_position(value):
+    step = int(value["model_request_id"][-4:])
+    _integer(step, 1, 20)
+    _integer(value["action_ordinal"], 1, min(step, 16))
+    return step
+
+
+def _explore_receipts(values, run_id, intent=None):
+    _discovery_receipts(values, run_id, {"max_stages": 4, "max_depth": 1})
+    if intent is not None and len(values) > intent["max_bridges"]:
+        raise ValueError
+    for receipt in values:
+        _explore_position(receipt)
+        if receipt["parent_refs"]:
+            raise ValueError
+    return values
+
+
+def _explore_rankings(values, run_id, stages=None):
+    if not isinstance(values, list) or len(values) > 16:
+        raise ValueError
+    seen, prior_refs, previous_step, previous_action, previous_coverage = set(), {}, 0, 0, 0
+    for ranking in values:
+        if (
+            not isinstance(ranking, dict)
+            or set(ranking)
+            != {
+                "ranking_id",
+                "run_id",
+                "packet_sha256",
+                "model_request_id",
+                "action_ordinal",
+                "covered_through_ordinal",
+                "ranked",
+                "excluded",
+            }
+            or ranking["run_id"] != run_id
+        ):
+            raise ValueError
+        canonical_uuid(ranking["ranking_id"])
+        if (
+            ranking["ranking_id"] in seen
+            or not isinstance(ranking["packet_sha256"], str)
+            or not DIGEST.fullmatch(ranking["packet_sha256"])
+            or not isinstance(ranking["model_request_id"], str)
+            or not re.fullmatch(r"model-[0-9]{4}", ranking["model_request_id"])
+        ):
+            raise ValueError
+        step = _explore_position(ranking)
+        coverage = ranking["covered_through_ordinal"]
+        count = 0 if coverage is None else _integer(coverage, 0, 3) + 1
+        if (
+            step <= previous_step
+            or ranking["action_ordinal"] <= previous_action
+            or count < previous_coverage
+        ):
+            raise ValueError
+        refs = []
+        for name, text_key in (("ranked", "rationale"), ("excluded", "reason")):
+            members = ranking[name]
+            if not isinstance(members, list) or len(members) > 4:
+                raise ValueError
+            for member in members:
+                if not isinstance(member, dict) or set(member) != {"reference", text_key}:
+                    raise ValueError
+                ref = _discovery_reference(member["reference"])
+                text = member[text_key]
+                if (
+                    ref["run_id"] != run_id
+                    or not isinstance(text, str)
+                    or not text.strip()
+                    or len(text) > 1500
+                ):
+                    raise ValueError
+                refs.append(ref)
+        if len(refs) != count or len({ref["result_id"] for ref in refs}) != len(refs):
+            raise ValueError
+        current_refs = {ref["result_id"]: ref for ref in refs}
+        if any(current_refs.get(identifier) != ref for identifier, ref in prior_refs.items()):
+            raise ValueError
+        if stages is not None:
+            visible = [
+                stage for stage in stages if stage["action_ordinal"] < ranking["action_ordinal"]
+            ]
+            if (
+                len(visible) != count
+                or any(_explore_position(stage) >= step for stage in visible)
+                or {tuple(sorted(ref.items())) for ref in refs}
+                != {
+                    tuple(
+                        sorted(
+                            {
+                                "run_id": run_id,
+                                "result_id": stage["result_id"],
+                                "content_sha256": stage["result_sha256"],
+                            }.items()
+                        )
+                    )
+                    for stage in visible
+                }
+            ):
+                raise ValueError
+            packet = {
+                key: ranking[key]
+                for key in ("ranked", "excluded", "model_request_id", "action_ordinal")
+            }
+            packet["visible_receipts"] = visible
+            digest = hashlib.sha256(
+                json.dumps(
+                    packet,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                    ensure_ascii=False,
+                    allow_nan=False,
+                ).encode("utf-8")
+            ).hexdigest()
+            if digest != ranking["packet_sha256"]:
+                raise ValueError
+        seen.add(ranking["ranking_id"])
+        prior_refs = current_refs
+        previous_step, previous_action, previous_coverage = step, ranking["action_ordinal"], count
+    return values
+
+
+def _explore_detail(value, run_id, stage_id=None):
+    _discovery_detail(value, run_id, stage_id, mode="explore")
+    receipt, result = value["stage"], value["result"]
+    _explore_position(receipt)
+    if (
+        receipt["depth"] != 1
+        or receipt["parent_refs"]
+        or value["parent_edges"]
+        or result.get("field_selections")
+        or "overview_binding" in result
+    ):
+        raise ValueError
+    groups = value["primary_paper_groups"]
+    if (
+        not isinstance(groups, list)
+        or len(groups) > 4096
+        or any(
+            not isinstance(group, dict)
+            or set(group) != {"paper_id", "source_ids"}
+            or group["paper_id"] != f"paper-{ordinal + 1}"
+            or not isinstance(group["source_ids"], list)
+            or not group["source_ids"]
+            or len(group["source_ids"]) > 4096
+            or any(not isinstance(item, str) or not item.strip() for item in group["source_ids"])
+            for ordinal, group in enumerate(groups)
+        )
+    ):
+        raise ValueError
+    # The receipt hashes the stored envelope, including private immutable source
+    # artifact IDs. This DTO rehydrates source bodies and cannot reproduce that
+    # envelope hash. Verify the exposed quotes against their exact source bytes.
+    sources, quotes = result.get("sources"), result.get("quotes")
+    if (
+        not isinstance(sources, list)
+        or not 1 <= len(sources) <= 64
+        or not isinstance(quotes, list)
+        or not 2 <= len(quotes) <= 64
+    ):
+        raise ValueError
+    by_id = {}
+    for source in sources:
+        if (
+            not isinstance(source, dict)
+            or not isinstance(source.get("source_id"), str)
+            or source["source_id"] in by_id
+            or not isinstance(source.get("text"), str)
+            or not 1 <= len(source["text"]) <= 20_000
+            or source.get("content_kind") not in ("abstract", "full_text")
+        ):
+            raise ValueError
+        by_id[source["source_id"]] = source
+    evidence = result["finding"].get("evidence")
+    if not isinstance(evidence, list) or len(evidence) != len(quotes):
+        raise ValueError
+    for quote, item in zip(quotes, evidence, strict=True):
+        if (
+            not isinstance(quote, dict)
+            or not isinstance(item, dict)
+            or set(quote)
+            != {
+                "source_id",
+                "side",
+                "claim_id",
+                "quote",
+                "supports",
+                "start",
+                "end",
+                "source_sha256",
+                "content_kind",
+            }
+            or set(item) != {"source_id", "side", "quote", "supports"}
+        ):
+            raise ValueError
+        source = by_id.get(quote["source_id"])
+        if (
+            source is None
+            or quote["side"] not in ("left", "right")
+            or quote["claim_id"] is not None
+            or any(quote[key] != item[key] for key in item)
+        ):
+            raise ValueError
+        start = _integer(quote["start"], 0, len(source["text"]) - 1)
+        end = _integer(quote["end"], start + 1, len(source["text"]))
+        if (
+            source["text"][start:end] != quote["quote"]
+            or quote["content_kind"] != source["content_kind"]
+            or hashlib.sha256(source["text"].encode("utf-8")).hexdigest() != quote["source_sha256"]
+        ):
+            raise ValueError
     return value
 
 
@@ -1484,6 +1742,29 @@ class PolymathClient:
     def research_protocols(self):
         return _research_protocols(self._private_json("/api/v1/research/protocols"))
 
+    def explore_protocols(self):
+        return _explore_protocols(self._private_json("/api/v1/research/explore-protocols"))
+
+    def _select_explore_protocol(self, path, body, current_hash):
+        if path != "/api/v1/runs" or body.get("mode") != "explore" or body.get("parent_result_ids"):
+            return body
+        protocols = self.explore_protocols()
+        if protocols["activation_sha256"] != current_hash:
+            raise ClientError("research_activation_changed", 409)
+        approved = protocols["explore_collection_intent"]
+        requested = body.get("explore_collection_intent")
+        if approved is None:
+            if requested is not None:
+                raise ClientError("research_explore_collection_not_approved", 409)
+            return body
+        if requested is not None and requested["max_bridges"] > approved["max_bridges"]:
+            raise ClientError("research_explore_collection_not_approved", 409)
+        intent = requested or {
+            "protocol": EXPLORE_COLLECTION_PROTOCOL,
+            "max_bridges": min(3, approved["max_bridges"]),
+        }
+        return {**body, "explore_collection_intent": dict(intent)}
+
     def get_assessment_finding(self, result_id):
         identifier = canonical_uuid(result_id)
         value = self._private_json("/api/v1/assessments/findings/" + identifier)
@@ -1589,11 +1870,14 @@ class PolymathClient:
                 ):
                     raise ClientError("research_discovery_not_approved", 409)
             body = self._select_scientific_protocol(path, body, current_hash)
+            body = self._select_explore_protocol(path, body, current_hash)
             body = {**body, "expected_activation_sha256": current_hash}
         elif require_native or expected_activation_sha256 is not None:
             raise ClientError("research_native_access_required", 409)
         elif not capabilities["research_available"]:
             raise ClientError("research_unavailable", 503)
+        elif "explore_collection_intent" in body:
+            raise ClientError("research_explore_collection_not_approved", 409)
         elif any(
             field in body
             for field in (
@@ -1754,6 +2038,140 @@ class PolymathClient:
         except (ValueError, TypeError, KeyError, AttributeError, ClientError):
             raise ClientError("invalid_discovery_response") from None
 
+    def get_explore_collection(self, run_id):
+        identifier = canonical_uuid(run_id)
+        value = self._private_json("/api/v1/runs/" + identifier + "/explore-collection")
+        try:
+            if (
+                not isinstance(value, dict)
+                or set(value)
+                != {
+                    "run_id",
+                    "run_status",
+                    "explore_collection_intent",
+                    "stages",
+                    "rankings",
+                    "selected_final_ranking",
+                    "stop_reason",
+                    "total_usage",
+                    "accounting",
+                }
+                or value["run_id"] != identifier
+            ):
+                raise ValueError
+            intent = _explore_collection_intent(value["explore_collection_intent"])
+            stages = _explore_receipts(value["stages"], identifier, intent)
+            rankings = _explore_rankings(value["rankings"], identifier, stages)
+            for key in ("action_ordinal", "model_request_id"):
+                if len({item[key] for item in stages + rankings}) != len(stages) + len(rankings):
+                    raise ValueError
+            final = value["selected_final_ranking"]
+            if (
+                value["run_status"]
+                not in (
+                    "queued",
+                    "running",
+                    "waiting_retry",
+                    "cancel_requested",
+                    "cancelled",
+                    "succeeded",
+                    "failed",
+                    "interrupted",
+                )
+                or final is not None
+                and (
+                    not rankings
+                    or final != rankings[-1]
+                    or final["covered_through_ordinal"] != (len(stages) - 1 if stages else None)
+                )
+                or value["stop_reason"] is not None
+                and (
+                    not isinstance(value["stop_reason"], str)
+                    or not value["stop_reason"].strip()
+                    or len(value["stop_reason"]) > 2000
+                )
+            ):
+                raise ValueError
+            usage, money = value["total_usage"], value["accounting"]
+            if (
+                not isinstance(usage, dict)
+                or set(usage)
+                != {
+                    "model_calls",
+                    "input_tokens_reported",
+                    "output_tokens_reported",
+                    "calls_without_usage",
+                }
+                or not isinstance(money, dict)
+                or set(money)
+                != {
+                    "counted_spend_microdollars",
+                    "open_hold_microdollars",
+                    "unknown_hold_microdollars",
+                }
+            ):
+                raise ValueError
+            minimum = max((_explore_position(item) for item in stages + rankings), default=0)
+            calls = _integer(usage["model_calls"], minimum, 20)
+            _integer(usage["calls_without_usage"], 0, calls)
+            for number in [
+                usage["input_tokens_reported"],
+                usage["output_tokens_reported"],
+                *money.values(),
+            ]:
+                if not isinstance(number, str) or not re.fullmatch(
+                    r"(?:0|[1-9][0-9]{0,999})", number
+                ):
+                    raise ValueError
+            if int(money["unknown_hold_microdollars"]) > int(money["open_hold_microdollars"]):
+                raise ValueError
+            return value
+        except (ValueError, TypeError, KeyError, AttributeError, ClientError):
+            raise ClientError("invalid_explore_collection_response") from None
+
+    def list_explore_bridges(self, run_id):
+        identifier = canonical_uuid(run_id)
+        value = self._private_json("/api/v1/runs/" + identifier + "/bridges")
+        try:
+            if (
+                not isinstance(value, dict)
+                or set(value) != {"run_id", "stages"}
+                or value["run_id"] != identifier
+            ):
+                raise ValueError
+            details = value["stages"]
+            if not isinstance(details, list) or len(details) > 4:
+                raise ValueError
+            _explore_receipts(
+                [_explore_detail(item, identifier)["stage"] for item in details], identifier
+            )
+            return value
+        except (ValueError, TypeError, KeyError, AttributeError, ClientError):
+            raise ClientError("invalid_explore_collection_response") from None
+
+    def get_explore_bridge(self, run_id, stage_id):
+        identifier, stage = canonical_uuid(run_id), canonical_uuid(stage_id)
+        value = self._private_json("/api/v1/runs/" + identifier + "/bridges/" + stage)
+        try:
+            return _explore_detail(value, identifier, stage)
+        except (ValueError, TypeError, KeyError, AttributeError, ClientError):
+            raise ClientError("invalid_explore_collection_response") from None
+
+    def list_explore_rankings(self, run_id):
+        identifier = canonical_uuid(run_id)
+        value = self._private_json("/api/v1/runs/" + identifier + "/rankings")
+        try:
+            if (
+                not isinstance(value, dict)
+                or set(value) != {"run_id", "rankings"}
+                or value["run_id"] != identifier
+            ):
+                raise ValueError
+            _explore_rankings(value["rankings"], identifier)
+            return value
+        except (ValueError, TypeError, KeyError, AttributeError, ClientError):
+            raise ClientError("invalid_explore_collection_response") from None
+
     def create_run(
         self,
         mode,
@@ -1762,6 +2180,7 @@ class PolymathClient:
         *,
         discovery_intent=None,
         ask_overview_intent=None,
+        explore_collection_intent=None,
         expected_activation_sha256=None,
     ):
         if (
@@ -1793,6 +2212,17 @@ class PolymathClient:
                 raise ClientError("invalid_arguments")
             body["ask_overview_intent"] = _scientific_intent(
                 ask_overview_intent, ASK_OVERVIEW_PROTOCOL
+            )
+        if explore_collection_intent is not None:
+            if (
+                mode != "explore"
+                or parents
+                or discovery_intent is not None
+                or ask_overview_intent is not None
+            ):
+                raise ClientError("invalid_arguments")
+            body["explore_collection_intent"] = _explore_collection_intent(
+                explore_collection_intent
             )
         return self._scientific_write(
             "/api/v1/runs",
@@ -2071,6 +2501,7 @@ def parser():
     research = commands.add_parser("research").add_subparsers(dest="action", required=True)
     research.add_parser("access")
     research.add_parser("protocols")
+    research.add_parser("explore-protocols")
     runs = commands.add_parser("runs").add_subparsers(dest="action", required=True)
     listing = runs.add_parser("list")
     listing.add_argument("--limit", type=int, default=20)
@@ -2098,12 +2529,20 @@ def parser():
     create.add_argument("--max-depth", type=int)
     create.add_argument("--expected-activation-sha256")
     create.add_argument("--claim-overview", action="store_true")
+    create.add_argument("--explore-collection", action="store_true")
+    create.add_argument("--max-bridges", type=int)
     discovery = commands.add_parser("discovery").add_subparsers(dest="action", required=True)
     for action in ("show", "stages"):
         discovery.add_parser(action).add_argument("run_id")
     stage = discovery.add_parser("stage")
     stage.add_argument("run_id")
     stage.add_argument("stage_id")
+    explore = commands.add_parser("explore").add_subparsers(dest="action", required=True)
+    for action in ("show", "bridges", "rankings"):
+        explore.add_parser(action).add_argument("run_id")
+    bridge = explore.add_parser("bridge")
+    bridge.add_argument("run_id")
+    bridge.add_argument("stage_id")
     artifacts = commands.add_parser("artifacts").add_subparsers(dest="action", required=True)
     artifacts.add_parser("show").add_argument("artifact_id")
     artifact_create = artifacts.add_parser("create")
@@ -2150,11 +2589,11 @@ def main(argv=None):
             elif args.command == "session":
                 value = client.init_session()
             elif args.command == "research":
-                value = (
-                    client.research_access()
-                    if args.action == "access"
-                    else client.research_protocols()
-                )
+                value = {
+                    "access": client.research_access,
+                    "protocols": client.research_protocols,
+                    "explore-protocols": client.explore_protocols,
+                }[args.action]()
             elif args.command == "artifacts":
                 if args.action == "show":
                     value = client.get_artifact(args.artifact_id)
@@ -2190,6 +2629,15 @@ def main(argv=None):
                     value = client.list_discovery_stages(args.run_id)
                 else:
                     value = client.get_discovery_stage(args.run_id, args.stage_id)
+            elif args.command == "explore":
+                if args.action == "show":
+                    value = client.get_explore_collection(args.run_id)
+                elif args.action == "bridges":
+                    value = client.list_explore_bridges(args.run_id)
+                elif args.action == "rankings":
+                    value = client.list_explore_rankings(args.run_id)
+                else:
+                    value = client.get_explore_bridge(args.run_id, args.stage_id)
             elif args.action == "list":
                 value = client.list_runs(args.limit, args.before)
             elif args.action == "show":
@@ -2216,6 +2664,23 @@ def main(argv=None):
                 return 0
             else:
                 intent = None
+                explore_intent = None
+                if args.explore_collection:
+                    if (
+                        args.mode != "explore"
+                        or args.parent_result
+                        or args.discovery_ladder
+                        or args.claim_overview
+                    ):
+                        raise ClientError("invalid_arguments")
+                    explore_intent = _explore_collection_intent(
+                        {
+                            "protocol": EXPLORE_COLLECTION_PROTOCOL,
+                            "max_bridges": 3 if args.max_bridges is None else args.max_bridges,
+                        }
+                    )
+                elif args.max_bridges is not None:
+                    raise ClientError("invalid_arguments")
                 if args.discovery_ladder:
                     if args.mode != "surprise":
                         raise ClientError("invalid_arguments")
@@ -2246,6 +2711,11 @@ def main(argv=None):
                     goal,
                     args.parent_result,
                     **({"discovery_intent": intent} if intent is not None else {}),
+                    **(
+                        {"explore_collection_intent": explore_intent}
+                        if explore_intent is not None
+                        else {}
+                    ),
                     **(
                         {"ask_overview_intent": {"protocol": ASK_OVERVIEW_PROTOCOL}}
                         if args.claim_overview

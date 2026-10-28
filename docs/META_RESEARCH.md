@@ -345,3 +345,24 @@ account or revoke its activation to advance the database epoch, verify the stop,
 worker processes, then reload configuration. Rearming requires a fresh explicit
 approval. Per-process configuration comparisons cannot instantly revoke another
 process that still has old settings; the persisted epoch fences all workers.
+
+## Explore collection profile
+
+The optional `explore_collection_profile` authorizes seeded Explore collections
+under controller protocol `polymath-meta-explore-collection-v1`. Preview takes
+`explore_collection: {protocol:"polymath-explore-collection-v1",max_bridges:3}`.
+It is a separate frozen profile type; old task profiles, SC bindings and Surprise
+ladder hashes remain unchanged. Old approvals acquire no new capability.
+
+The new profile preserves every original research quantitative limit, including
+16 valid actions. A run may request fewer bridges than approved, while retaining
+the original approved profile/hash. Its immutable actual intent separately enters
+the native scientific-input hash and worker fingerprint. Fresh grants validate
+the current new prompt/schema/protocol; historical billing and replay reconstruct
+only the saved original profile and intent. Ranking is a model action inside
+that same run, never an application-funded follow-up or a confidence sort.
+
+Private/public admission, known usage settlement, unknown holds, cancellation,
+explicit original resume and DB-only late billing retain the existing ledger and
+authority checks. See [EXPLORE_COLLECTION.md](EXPLORE_COLLECTION.md) for exact
+acknowledgement coverage, immutable ranking history and schema0025 rollout.

@@ -1,3 +1,5 @@
+import type { ExploreCollectionIntent } from '../exploreCollection/types'
+import type { ExploreCollectionProfileBinding } from '../exploreCollection/profile'
 import type { ScientificCapability } from '../scientificContext/types'
 import type { DiscoveryIntent } from '../discovery/types'
 export interface MetaResearchCapabilities {
@@ -79,6 +81,7 @@ export interface MetaResearchManifest {
   task_profiles: NativeTaskProfileBinding[]
   discovery_ladder_profile?: NativeDiscoveryProfileBinding
   scientific_context_profiles?: NativeScientificContextProfiles
+  explore_collection_profile?: ExploreCollectionProfileBinding
   valid_until: string
 }
 export interface MetaResearchPreview { manifest: MetaResearchManifest; manifest_sha256: string; research_execution_available: false }
@@ -101,9 +104,10 @@ export interface EligibleActivation {
   profiles: NativeTaskProfile[]
   discovery_ladder_profile?: NativeDiscoveryProfileBinding
   scientific_context_profiles?: NativeScientificContextProfiles
+  explore_collection_profile?: ExploreCollectionProfileBinding
   research_execution_available: true
 }
 export interface CurrentResearchActivation { activation: EligibleActivation | null; reason: 'meta_research_activation_required' | 'meta_research_authority_expired' | 'meta_research_unavailable' | 'meta_research_prior_unresolved' | null }
 export interface ResearchActivationHistory { activations: MetaResearchActivation[]; next_cursor: string | null }
-export interface ResearchActivationPreviewRequest { readiness_id: string; canary_receipt_id: string; review: NativeResearchReview; provider_account_attestation: ProviderAccountAttestation; discovery?: DiscoveryIntent; scientific_context?: ScientificContextReviewIntent }
+export interface ResearchActivationPreviewRequest { readiness_id: string; canary_receipt_id: string; review: NativeResearchReview; provider_account_attestation: ProviderAccountAttestation; discovery?: DiscoveryIntent; scientific_context?: ScientificContextReviewIntent; explore_collection?: ExploreCollectionIntent }
 export interface ActivateResearchRequest { manifest: MetaResearchManifest; expected_manifest_sha256: string }

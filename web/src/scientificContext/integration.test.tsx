@@ -40,7 +40,7 @@ describe('same-authority scientific capability discovery', () => {
     expect(result.current.scientificCapabilities).toEqual(capabilities); expect(result.current.canSubmit).toBe(false); expect(result.current.canResume).toBe(true)
     await act(async () => { await vi.advanceTimersByTimeAsync(40000) })
     expect(fetch.mock.calls.filter(([path]) => String(path).endsWith('/protocols'))).toHaveLength(1)
-    expect(fetch.mock.calls.every(([path]) => ['/api/v1/research/access', '/api/v1/research/protocols'].includes(String(path)))).toBe(true)
+    expect(fetch.mock.calls.every(([path]) => ['/api/v1/research/access', '/api/v1/research/protocols', '/api/v1/research/explore-protocols'].includes(String(path)))).toBe(true)
   })
   it('refuses stale hash capabilities without losing browser ownership or base funding', async () => {
     vi.stubGlobal('fetch', vi.fn(async (path: RequestInfo | URL) => Response.json(String(path).endsWith('/protocols') ? protocols('d'.repeat(64)) : publicAccess())))
@@ -60,7 +60,7 @@ describe('same-authority scientific capability discovery', () => {
     const props = settings(), { result } = renderHook(() => useNativeResearchContext(props)); await act(async () => { await vi.advanceTimersByTimeAsync(0) })
     expect(result.current.scientificPhase).toBe('error'); expect(result.current.retryAfterSeconds).toBe(17); expect(result.current.canResume).toBe(true)
     act(() => result.current.refresh()); await act(async () => { await vi.advanceTimersByTimeAsync(16000) }); expect(fetch).toHaveBeenCalledTimes(2)
-    await act(async () => { await vi.advanceTimersByTimeAsync(1000) }); expect(fetch).toHaveBeenCalledTimes(3); expect(props.onBrowserExpired).not.toHaveBeenCalled()
+    await act(async () => { await vi.advanceTimersByTimeAsync(1000) }); expect(fetch).toHaveBeenCalledTimes(4); expect(props.onBrowserExpired).not.toHaveBeenCalled()
   })
   it('clears private scope on protocol browser expiry, and aborts stale capability reads on owner rotation', async () => {
     const props = settings(); vi.stubGlobal('fetch', vi.fn(async (path: RequestInfo | URL) => String(path).endsWith('/protocols') ? Response.json({ detail: 'research_session_required' }, { status: 401 }) : Response.json(publicAccess())))

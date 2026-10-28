@@ -3,6 +3,7 @@ import type { SourceCoverage } from './sourceCoverage'
 import type { FindingVersionNoticeProps } from '../assessments/FindingVersionNotice'
 import type { NativeRunControl } from './nativeAdmission'
 import type { AskOverviewBinding, AskOverviewIntent } from '../scientificContext/types'
+import type { ExploreCollectionIntent } from '../exploreCollection/types'
 import type { DiscoveryIntent } from '../discovery/types'
 
 export interface ResearchRunSummary {
@@ -13,6 +14,7 @@ export interface ResearchRunSummary {
   task_kind?: string
   native_research?: NativeRunControl
   discovery_intent?: DiscoveryIntent
+  explore_collection_intent?: ExploreCollectionIntent
   ask_overview_intent?: AskOverviewIntent
 }
 

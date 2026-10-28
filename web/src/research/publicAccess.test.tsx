@@ -31,7 +31,7 @@ describe('visitor-safe research access', () => {
   it('uses funded access without operator GET and displays exact UTC limits', async () => {
     const fetch = vi.fn(async (path: RequestInfo | URL) => Response.json(String(path).endsWith('/protocols') ? { protocol: 'polymath-research-protocols-v1', activation_sha256: publicAccess().expected_activation_sha256, capabilities: [] } : publicAccess())); vi.stubGlobal('fetch', fetch)
     const { result } = renderHook(() => useNativeResearchContext(settings())); await waitFor(() => expect(result.current.canSubmit).toBe(true))
-    expect(result.current.activation).toBeNull(); expect(result.current.submission).toEqual({ audience: 'public_sessions', expectedActivationSha256: publicAccess().expected_activation_sha256 }); expect(fetch).toHaveBeenCalledTimes(2)
+    expect(result.current.activation).toBeNull(); expect(result.current.submission).toEqual({ audience: 'public_sessions', expectedActivationSha256: publicAccess().expected_activation_sha256 }); expect(fetch).toHaveBeenCalledTimes(3)
     render(<NativeResearchNotice context={result.current} />); expect(screen.getByText(/No operator sign-in is required/)).toBeInTheDocument(); expect(screen.getByText(publicAccess().expires_at!)).toBeInTheDocument(); expect(screen.queryByRole('link', { name: /operator/ })).not.toBeInTheDocument()
   })
   it('retains continuation authority when the daily new-job allowance reaches zero', async () => {
@@ -60,7 +60,7 @@ describe('visitor-safe research access', () => {
     await act(async () => { await vi.advanceTimersByTimeAsync(17000) })
     expect(result.current.retryAfterSeconds).toBeNull(); expect(fetch).toHaveBeenCalledTimes(1)
     limited = false; act(() => result.current.refresh()); await act(async () => { await vi.advanceTimersByTimeAsync(0) })
-    expect(result.current.canSubmit).toBe(true); expect(fetch).toHaveBeenCalledTimes(3); expect(props.onBrowserExpired).not.toHaveBeenCalled()
+    expect(result.current.canSubmit).toBe(true); expect(fetch).toHaveBeenCalledTimes(4); expect(props.onBrowserExpired).not.toHaveBeenCalled()
   })
   it('aborts and fences late reads across browser rotation', async () => {
     let resolve!: (value: Response) => void, reads = 0, oldSignal: AbortSignal | null = null

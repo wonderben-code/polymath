@@ -1,0 +1,15 @@
+export class ExploreCollectionError extends Error { constructor(readonly code = 'invalid_response', readonly retryAfterSeconds: number | null = null) { super(code); this.name = 'ExploreCollectionError' } }
+export function invalid(): never { throw new ExploreCollectionError() }
+export function object(value: unknown, keys: readonly string[]): Record<string, unknown> { if (!value || typeof value !== 'object' || Array.isArray(value)) return invalid(); const item = value as Record<string, unknown>; if (Object.keys(item).length !== keys.length || keys.some((key) => !Object.hasOwn(item, key)) || Object.keys(item).some((key) => !keys.includes(key))) return invalid(); return item }
+export function text(value: unknown, maximum: number): string { return typeof value === 'string' && !!value.trim() && Array.from(value).length <= maximum && !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f\uD800-\uDFFF]/u.test(value) ? value : invalid() }
+export function integer(value: unknown, minimum = 0, maximum = Number.MAX_SAFE_INTEGER): number { return typeof value === 'number' && Number.isSafeInteger(value) && value >= minimum && value <= maximum ? value : invalid() }
+export function uuid(value: unknown): string { return typeof value === 'string' && /^[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}$/.test(value) ? value : invalid() }
+export function hash(value: unknown): string { return typeof value === 'string' && /^[a-f\d]{64}$/.test(value) ? value : invalid() }
+export function decimal(value: unknown): string { return typeof value === 'string' && /^(?:0|[1-9]\d{0,999})$/.test(value) ? value : invalid() }
+export function member<T extends string>(value: unknown, allowed: readonly T[]): T { return typeof value === 'string' && allowed.includes(value as T) ? value as T : invalid() }
+export function list<T>(value: unknown, parse: (raw: unknown) => T, maximum: number, minimum = 0): T[] { return Array.isArray(value) && value.length >= minimum && value.length <= maximum ? value.map(parse) : invalid() }
+export function nullable<T>(value: unknown, parse: (raw: unknown) => T): T | null { return value === null ? null : parse(value) }
+export function canonical(value: unknown): string { if (Array.isArray(value)) return '[' + value.map(canonical).join(',') + ']'; if (value && typeof value === 'object') return '{' + Object.keys(value).sort().map((key) => JSON.stringify(key) + ':' + canonical((value as Record<string, unknown>)[key])).join(',') + '}'; const encoded = JSON.stringify(value); return encoded === undefined ? invalid() : encoded }
+export function equal(left: unknown, right: unknown): boolean { return canonical(left) === canonical(right) }
+export function modelStep(value: unknown): number { if (typeof value !== 'string' || !/^model-\d{4}$/.test(value)) return invalid(); const step = Number(value.slice(-4)); return integer(step, 1, 20) }
+export function position(requestId: unknown, actionOrdinal: unknown): { model_request_id: string; action_ordinal: number } { const step = modelStep(requestId); return { model_request_id: requestId as string, action_ordinal: integer(actionOrdinal, 1, Math.min(16, step)) } }

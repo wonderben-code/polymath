@@ -1,3 +1,5 @@
+import { getExploreProtocols, ExploreCollectionError } from '../exploreCollection/client'
+import type { ExploreCollectionAccess } from '../exploreCollection/types'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { operatorSession, PublicationError } from '../publications/client'
 import { BudgetError } from '../budget/client'
@@ -14,23 +16,26 @@ import type { NativeResearchContextValue } from './nativeContext'
 export function useNativeResearchContext({ enabled, csrfToken, required, available, onBrowserExpired }: { enabled: boolean; csrfToken: string | null; required: boolean; available: boolean; onBrowserExpired: () => void }): NativeResearchContextValue {
   const [phase, setPhase] = useState<NativeResearchContextValue['phase']>(required ? 'disabled' : 'not_required'), [activation, setActivation] = useState<EligibleActivation | null>(null), [access, setAccess] = useState<ResearchAccess | null>(null), [operatorCsrf, setOperatorCsrf] = useState<string | null>(null), [operatorExpiry, setOperatorExpiry] = useState<string | null>(null), [reason, setReason] = useState<string | null>(null), [revision, setRevision] = useState(0), [pollPaused, setPollPaused] = useState(false)
   const [loadedCsrf, setLoadedCsrf] = useState<string | null>(null), [retryUntil, setRetryUntil] = useState<number | null>(null), [scientificCapabilities, setScientificCapabilities] = useState<ScientificCapability[]>([]), [scientificPhase, setScientificPhase] = useState<'disabled' | 'loading' | 'ready' | 'error'>('disabled')
+  const [exploreAccess, setExploreAccess] = useState<ExploreCollectionAccess | null>(null), [explorePhase, setExplorePhase] = useState<'disabled' | 'loading' | 'ready' | 'error'>('disabled')
+  const exploreBlockedHash = useRef<string | null>(null)
   const generation = useRef(0), request = useRef<AbortController | null>(null), browserExpired = useRef(onBrowserExpired), scientificBlockedHash = useRef<string | null>(null), authorityHash = useRef<string | null>(null)
   browserExpired.current = onBrowserExpired
   authorityHash.current = access?.expected_activation_sha256 ?? activation?.manifest_sha256 ?? null
+  const invalidateExplore = useCallback((expectedHash?: string) => { if (expectedHash && expectedHash !== authorityHash.current) return; exploreBlockedHash.current = authorityHash.current; setExploreAccess(null); setExplorePhase('error') }, [])
   const invalidateScientific = useCallback((expectedHash?: string) => { if (expectedHash && expectedHash !== authorityHash.current) return; scientificBlockedHash.current = authorityHash.current; setScientificCapabilities([]); setScientificPhase('error') }, [])
-  const invalidate = useCallback((why = 'meta_research_authority_expired') => { generation.current++; request.current?.abort(); setActivation(null); setScientificCapabilities([]); setScientificPhase('disabled'); setOperatorCsrf(null); setOperatorExpiry(null); setLoadedCsrf(null); setPollPaused(false); setReason(why); setPhase('expired') }, [])
-  const refresh = useCallback(() => { if (retryUntil !== null && retryUntil > Date.now()) return; generation.current++; request.current?.abort(); setActivation(null); setAccess(null); setScientificCapabilities([]); setScientificPhase('disabled'); setOperatorCsrf(null); setOperatorExpiry(null); setLoadedCsrf(null); setPollPaused(false); setReason(null); setRevision((value) => value + 1) }, [retryUntil])
+  const invalidate = useCallback((why = 'meta_research_authority_expired') => { generation.current++; request.current?.abort(); setActivation(null); setExploreAccess(null); setExplorePhase('disabled'); setScientificCapabilities([]); setScientificPhase('disabled'); setOperatorCsrf(null); setOperatorExpiry(null); setLoadedCsrf(null); setPollPaused(false); setReason(why); setPhase('expired') }, [])
+  const refresh = useCallback(() => { if (retryUntil !== null && retryUntil > Date.now()) return; generation.current++; request.current?.abort(); setActivation(null); setAccess(null); setExploreAccess(null); setExplorePhase('disabled'); setScientificCapabilities([]); setScientificPhase('disabled'); setOperatorCsrf(null); setOperatorExpiry(null); setLoadedCsrf(null); setPollPaused(false); setReason(null); setRevision((value) => value + 1) }, [retryUntil])
   useEffect(() => {
-    scientificBlockedHash.current = null
-    const scope = ++generation.current, controller = new AbortController(); request.current = controller; let active = true, timer: number | undefined, reads = 0, protocolsHash: string | null = null
-    setActivation(null); setAccess(null); setScientificCapabilities([]); setScientificPhase('disabled'); setOperatorCsrf(null); setOperatorExpiry(null); setLoadedCsrf(null); setRetryUntil(null); setPollPaused(false); setReason(null)
+    scientificBlockedHash.current = null; exploreBlockedHash.current = null
+    const scope = ++generation.current, controller = new AbortController(); request.current = controller; let active = true, timer: number | undefined, reads = 0, protocolsHash: string | null = null, exploreHash: string | null = null
+    setActivation(null); setAccess(null); setExploreAccess(null); setExplorePhase('disabled'); setScientificCapabilities([]); setScientificPhase('disabled'); setOperatorCsrf(null); setOperatorExpiry(null); setLoadedCsrf(null); setRetryUntil(null); setPollPaused(false); setReason(null)
     if (!required) { setPhase('not_required'); return () => controller.abort() }
     if (!enabled || !csrfToken || !available) { setPhase('disabled'); return () => controller.abort() }
     setPhase('loading')
     const current = () => active && scope === generation.current && !controller.signal.aborted
     function failed(caught: unknown) {
       if (!current()) return
-      setActivation(null); setScientificCapabilities([]); setScientificPhase('disabled'); setOperatorCsrf(null); setOperatorExpiry(null); setPollPaused(false)
+      setActivation(null); setExploreAccess(null); setExplorePhase('disabled'); setScientificCapabilities([]); setScientificPhase('disabled'); setOperatorCsrf(null); setOperatorExpiry(null); setPollPaused(false)
       const code = caught instanceof BudgetError || caught instanceof PublicationError || caught instanceof ResearchAccessError ? caught.code : 'unavailable'
       setReason(code)
       if (caught instanceof ResearchAccessError && caught.code === 'resource_limited' && caught.retryAfterSeconds !== null) setRetryUntil(Date.now() + caught.retryAfterSeconds * 1000)
@@ -42,13 +47,14 @@ export function useNativeResearchContext({ enabled, csrfToken, required, availab
       try { const currentActivation = await getCurrentResearchActivation(controller.signal); if (!current()) return
         reads++
         if (!currentActivation.activation || Date.parse(currentActivation.activation.expires_at) <= Date.now()) {
-          setActivation(null); setScientificCapabilities([]); setScientificPhase('disabled'); setReason(currentActivation.reason ?? 'meta_research_authority_expired'); setPhase('activation_required')
+          setActivation(null); setExploreAccess(null); setExplorePhase('disabled'); setScientificCapabilities([]); setScientificPhase('disabled'); setReason(currentActivation.reason ?? 'meta_research_authority_expired'); setPhase('activation_required')
           if (currentActivation.reason === 'meta_research_prior_unresolved') {
             if (reads < 60) timer = window.setTimeout(() => void readCurrent(), 10000)
             else setPollPaused(true)
           } else { setOperatorCsrf(null); setOperatorExpiry(null); setLoadedCsrf(null) }
           return
         }
+        if (exploreBlockedHash.current !== currentActivation.activation.manifest_sha256) { const profile = currentActivation.activation.explore_collection_profile?.profile; setExploreAccess({ protocol: 'polymath-explore-collection-access-v1', activation_sha256: currentActivation.activation.manifest_sha256, explore_collection_intent: profile ? { protocol: 'polymath-explore-collection-v1', max_bridges: profile.max_bridges } : null }); setExplorePhase('ready') }
         setActivation(currentActivation.activation); if (scientificBlockedHash.current !== currentActivation.activation.manifest_sha256) { setScientificCapabilities(currentActivation.activation.scientific_context_profiles ? ['artifact_scientific_context_v1', 'ask_claim_overview_v1', 'ask_reassessment_overview_v1'] : []); setScientificPhase('ready') }; setReason(null); setPhase('ready')
         if (reads < 60) timer = window.setTimeout(() => void readCurrent(), 10000)
         else setPollPaused(true)
@@ -67,7 +73,7 @@ export function useNativeResearchContext({ enabled, csrfToken, required, availab
         reads++; setActivation(null); setOperatorCsrf(null); setOperatorExpiry(null)
         const live = next.audience === 'public_sessions' && next.available && !!next.expires_at && Date.parse(next.expires_at) > Date.now()
         setLoadedCsrf(live ? csrfToken : null); setPhase(live ? 'ready' : 'activation_required'); setReason(live ? null : next.reason ?? 'public_research_authority_expired')
-        if (!live) { protocolsHash = null; setScientificCapabilities([]); setScientificPhase('disabled') }
+        if (!live) { exploreHash = null; setExploreAccess(null); setExplorePhase('disabled'); protocolsHash = null; setScientificCapabilities([]); setScientificPhase('disabled') }
         else if (protocolsHash !== next.expected_activation_sha256) {
           protocolsHash = next.expected_activation_sha256; setScientificCapabilities([]); setScientificPhase('loading')
           try {
@@ -79,6 +85,19 @@ export function useNativeResearchContext({ enabled, csrfToken, required, availab
             if (caught instanceof ResearchAccessError && ['browser_expired', 'browser_changed'].includes(caught.code)) { failed(caught); return }
             setScientificCapabilities([]); setScientificPhase('error')
             if (caught instanceof ResearchAccessError && caught.retryAfterSeconds !== null) { protocolRetrySeconds = caught.retryAfterSeconds; setRetryUntil(Date.now() + caught.retryAfterSeconds * 1000) }
+          }
+        }
+        if (live && protocolRetrySeconds === 0 && exploreHash !== next.expected_activation_sha256) {
+          exploreHash = next.expected_activation_sha256; setExploreAccess(null); setExplorePhase('loading')
+          try {
+            const protocols = await getExploreProtocols(controller.signal); if (!current()) return
+            if (protocols.activation_sha256 !== next.expected_activation_sha256) { setExploreAccess(null); setExplorePhase('error') }
+            else if (exploreBlockedHash.current !== protocols.activation_sha256) { setExploreAccess(protocols); setExplorePhase('ready') }
+          } catch (caught) {
+            if (!current()) return
+            if (caught instanceof ExploreCollectionError && caught.code === 'session_expired') { failed(new ResearchAccessError('browser_expired')); return }
+            setExploreAccess(null); setExplorePhase('error')
+            if (caught instanceof ExploreCollectionError && caught.retryAfterSeconds !== null) { protocolRetrySeconds = Math.max(protocolRetrySeconds, caught.retryAfterSeconds); setRetryUntil(Date.now() + caught.retryAfterSeconds * 1000) }
           }
         }
         // Only GETs can refresh funding; an earlier task keeps its original hash.
@@ -101,5 +120,5 @@ export function useNativeResearchContext({ enabled, csrfToken, required, availab
   const canResume = !required || enabled && available && phase === 'ready' && !pollPaused && loadedCsrf === csrfToken && (publicLive || privateLive)
   const canSubmit = canResume && (access?.audience !== 'public_sessions' || (access.remaining_session_jobs_today ?? 0) > 0)
   const submission = useMemo<NativeSubmissionContext | null>(() => !required || !canResume ? null : access?.audience === 'public_sessions' && access.expected_activation_sha256 ? { audience: 'public_sessions', expectedActivationSha256: access.expected_activation_sha256 } : operatorCsrf && activation ? { operatorCsrfToken: operatorCsrf, expectedActivationSha256: activation.manifest_sha256 } : null, [required, canResume, access?.audience, access?.expected_activation_sha256, operatorCsrf, activation?.manifest_sha256])
-  return useMemo(() => ({ required, phase, activation, access, scientificCapabilities, scientificPhase, invalidateScientific, submission, canSubmit, canResume, retryAfterSeconds, pollPaused, reason, invalidate, refresh }), [required, phase, activation, access, scientificCapabilities, scientificPhase, invalidateScientific, submission, canSubmit, canResume, retryAfterSeconds, pollPaused, reason, invalidate, refresh])
+  return useMemo(() => ({ required, phase, activation, access, exploreAccess, explorePhase, invalidateExplore, scientificCapabilities, scientificPhase, invalidateScientific, submission, canSubmit, canResume, retryAfterSeconds, pollPaused, reason, invalidate, refresh }), [required, phase, activation, access, exploreAccess, explorePhase, invalidateExplore, scientificCapabilities, scientificPhase, invalidateScientific, submission, canSubmit, canResume, retryAfterSeconds, pollPaused, reason, invalidate, refresh])
 }

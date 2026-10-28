@@ -25,6 +25,7 @@ from polymath.budget_models import BudgetAccount
 from polymath.config import Settings, get_settings
 from polymath.database import build_engine
 from polymath.discovery_api import create_discovery_router
+from polymath.explore_collection_api import create_explore_collection_router
 from polymath.ingestion_api import create_ingestion_router
 from polymath.knowledge import create_knowledge_router
 from polymath.meta_probe_api import create_meta_probe_router
@@ -272,6 +273,7 @@ def create_app(
         )
     )
     application.include_router(create_discovery_router(application.state.engine))
+    application.include_router(create_explore_collection_router(application.state.engine))
     application.include_router(
         create_public_research_router(
             application.state.engine,

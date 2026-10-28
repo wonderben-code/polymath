@@ -1,4 +1,5 @@
-import { hasScientificCapability, scientificSelectionReady } from './nativeContext'
+import { chooseExploreIntent } from '../exploreCollection/presentation'
+import { hasScientificCapability, scientificSelectionReady, exploreSelectionReady } from './nativeContext'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { DiscoveryIntent } from '../discovery/types'
 import {
@@ -22,6 +23,7 @@ function message(code: ResearchApiErrorCode, retry: number | null = null): strin
     case 'queue_limit': return 'The research queue or your active-investigation limit has been reached.'
     case 'invalid_request': return 'Check the research request and try again.'
     case 'invalid_response': return 'The research service returned an unreadable record. Reload saved research to try again.'
+    case 'explore_variant_unavailable': return 'The approved Explore features changed. Refresh research access before trying again; this request was not retried.'
     case 'scientific_variant_unavailable': return 'The approved scientific features changed. Refresh research access before trying again; this request was not retried.'
     case 'scientific_context_unavailable': return 'The saved scientific context cannot currently be verified. Saved findings remain available; this request was not retried.'
     case 'scientific_context_too_large': return 'This finding has more scientific context than the reviewed limit allows. No task was queued.'
@@ -69,6 +71,7 @@ export function useResearchWorkspace(enabled: boolean, researchAvailable: boolea
   const [cancellingId, setCancellingId] = useState<string | null>(null)
   const [refreshVersion, setRefreshVersion] = useState(0)
   const [detailVersion, setDetailVersion] = useState(0)
+  const rejectedExploreHash = useRef<string | null>(null)
   const generation = useRef(0)
   const selected = useRef<string | null>(null)
   const bootstrap = useRef<AbortController | null>(null)
@@ -119,6 +122,7 @@ export function useResearchWorkspace(enabled: boolean, researchAvailable: boolea
   }, [clearPrivateState])
 
   const native = useNativeResearchContext({ enabled: phase === 'ready' && enabled, csrfToken: csrf, required: nativeRequired, available: researchAvailable, onBrowserExpired: () => invalidate('session_expired') })
+  useEffect(() => { if (native.explorePhase === 'ready') rejectedExploreHash.current = null }, [native.explorePhase, native.exploreAccess])
   const ownActiveResearch = native.access?.audience === 'public_sessions' && runs.some((run) => ['queued', 'running', 'waiting_retry', 'cancel_requested', 'interrupted'].includes(run.status))
   const ladderProfile = native.activation?.discovery_ladder_profile?.profile
   const discoveryIntent = useMemo<DiscoveryIntent | null>(() => native.access?.audience === 'public_sessions' ? native.access.limits?.discovery_intent ?? null : ladderProfile ? { protocol: 'polymath-surprise-ladder-v1', max_stages: Math.min(3, ladderProfile.max_stages), max_depth: Math.min(2, ladderProfile.max_depth) } : null, [ladderProfile?.max_stages, ladderProfile?.max_depth, native.access])
@@ -358,7 +362,7 @@ export function useResearchWorkspace(enabled: boolean, researchAvailable: boolea
   }, [phase, csrf, activeRun, invalidate, remember])
 
   const submit = useCallback(async (mode: OwnedRun['mode'], goal: string, parentResultIds: readonly string[] = []) => {
-    if (mode === 'ask' && !scientificSelectionReady(native)) return
+    if (mode === 'ask' && !scientificSelectionReady(native) || mode === 'explore' && !parentResultIds.length && (!exploreSelectionReady(native) || !!native.submission && rejectedExploreHash.current === native.submission.expectedActivationSha256)) return
     if (!enabled || !researchAvailable || !native.canSubmit || ownActiveResearch || unconfirmedSubmission || phase !== 'ready' || !csrf || mutation.current) return
     const controller = new AbortController()
     const current = generation.current
@@ -366,7 +370,8 @@ export function useResearchWorkspace(enabled: boolean, researchAvailable: boolea
     setSubmitting(true)
     setError('')
     try {
-      const response = await createResearchRun(mode, goal, csrf, controller.signal, parentResultIds, native.submission ?? undefined, mode === 'surprise' ? discoveryIntent ?? undefined : undefined, mode === 'ask' && hasScientificCapability(native, 'ask_claim_overview_v1') ? { protocol: 'polymath-ask-claim-overview-v1' } : undefined)
+      const collection = native.required && native.submission && native.exploreAccess ? chooseExploreIntent({ mode, initialParentIds: parentResultIds, expectedActivationSha256: native.submission.expectedActivationSha256, access: native.exploreAccess }) : undefined
+      const response = await createResearchRun(mode, goal, csrf, controller.signal, parentResultIds, native.submission ?? undefined, mode === 'surprise' ? discoveryIntent ?? undefined : undefined, mode === 'ask' && hasScientificCapability(native, 'ask_claim_overview_v1') ? { protocol: 'polymath-ask-claim-overview-v1' } : undefined, collection)
       if (controller.signal.aborted || current !== generation.current) return
       const run = remember(response)
       setRuns((items) => updated(items, run))
@@ -377,13 +382,14 @@ export function useResearchWorkspace(enabled: boolean, researchAvailable: boolea
       if (controller.signal.aborted || current !== generation.current) return
       const failureCode = code(failure)
       if (failureCode === 'session_expired' || failureCode === 'session_changed') invalidate(failureCode)
+      else if (failureCode === 'explore_variant_unavailable') { rejectedExploreHash.current = native.submission?.expectedActivationSha256 ?? null; native.invalidateExplore?.(native.submission?.expectedActivationSha256); setError(message(failureCode)) }
       else if (failureCode === 'scientific_variant_unavailable') { native.invalidateScientific?.(native.submission?.expectedActivationSha256); setError(message(failureCode)) }
       else if (failureCode === 'native_authority_changed') { native.invalidate(); setError(message(failureCode)) }
       else { if (['connection_failed', 'invalid_response', 'unavailable'].includes(failureCode)) setUnconfirmedSubmission(true); setError(failureCode === 'connection_failed' ? 'Could not confirm whether the investigation was queued. Reload saved research before trying again.' : message(failureCode, failure instanceof ResearchApiError ? failure.retryAfterSeconds : null)) }
     } finally {
       if (mutation.current === controller) { mutation.current = null; setSubmitting(false) }
     }
-  }, [enabled, researchAvailable, phase, csrf, unconfirmedSubmission, invalidate, remember, native.canSubmit, native.submission, native.invalidate, native.scientificCapabilities, native.scientificPhase, native.invalidateScientific, discoveryIntent, ownActiveResearch])
+  }, [enabled, researchAvailable, phase, csrf, unconfirmedSubmission, invalidate, remember, native.canSubmit, native.submission, native.invalidate, native.scientificCapabilities, native.scientificPhase, native.invalidateScientific, native.exploreAccess, native.explorePhase, native.invalidateExplore, discoveryIntent, ownActiveResearch])
 
   const investigateBridges = useCallback((parentResultIds: readonly string[]) => submit(
     'explore',
@@ -398,6 +404,7 @@ export function useResearchWorkspace(enabled: boolean, researchAvailable: boolea
     connection, submitting, cancelling: cancellingId === activeRun?.id,
     canCancel: !submitting && (!cancellingId || cancellingId === activeRun?.id),
     canAsk: scientificSelectionReady(native),
+    canExplore: exploreSelectionReady(native),
     canSubmit: enabled && researchAvailable && native.canSubmit && !ownActiveResearch && !unconfirmedSubmission && phase === 'ready' && !!csrf && !submitting && !cancellingId,
     csrfToken: csrf, invalidateSession,
     refresh, selectRun, loadMore, cancel, submit, investigateBridges, native, discoveryIntent, ownActiveResearch,

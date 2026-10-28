@@ -18,6 +18,7 @@ from sqlalchemy import Engine
 from starlette.exceptions import HTTPException
 
 from polymath.discovery_contracts import DiscoveryIntent
+from polymath.explore_collection_contracts import ExploreCollectionIntent
 from polymath.meta_probe_contracts import ProbeId, ProviderAccountAttestation
 from polymath.meta_readiness_contracts import ReadinessPolicy, _utc
 from polymath.meta_research_api import HEADERS, _response
@@ -116,6 +117,14 @@ class PreviewPublicResearch(BaseModel):
     valid_until: datetime
     discovery: DiscoveryIntent | None = None
     scientific_context: ScientificContextIntent | None = None
+    explore_collection: ExploreCollectionIntent | None = None
+
+    @field_validator("explore_collection", mode="before")
+    @classmethod
+    def explicit_explore_marker_is_not_null(cls, value):
+        if value is None:
+            raise ValueError("explore_collection_intent_invalid")
+        return value
 
     @field_validator("valid_until", mode="before")
     @classmethod
@@ -183,6 +192,10 @@ def create_public_research_router(
     def protocols(request: Request):
         return _response(parent().public_service.protocols(request))
 
+    @router.get("/api/v1/research/explore-protocols")
+    def explore_protocols(request: Request):
+        return _response(parent().public_service.explore_protocols(request))
+
     @router.get(PREFIX + "/capabilities")
     def capabilities():
         role = bool(
@@ -220,6 +233,11 @@ def create_public_research_router(
                 **(
                     {"scientific_context": body.scientific_context}
                     if body.scientific_context is not None
+                    else {}
+                ),
+                **(
+                    {"explore_collection": body.explore_collection}
+                    if body.explore_collection is not None
                     else {}
                 ),
             )

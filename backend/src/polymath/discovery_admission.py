@@ -7,8 +7,10 @@ from sqlalchemy.orm import Session
 
 from polymath.discovery_contracts import DiscoveryIntent
 from polymath.discovery_models import DiscoveryIntent as DiscoveryIntentRecord
+from polymath.explore_collection_models import ResearchStageOwner
 from polymath.meta_research_errors import MetaResearchError
 from polymath.models import ResearchRun
+from polymath.stage_owners import StageOwnerError, load_stage_owner
 
 
 def _intent_sha256(intent: DiscoveryIntent) -> str:
@@ -24,21 +26,10 @@ def _intent_sha256(intent: DiscoveryIntent) -> str:
 
 
 def load_discovery_intent(session: Session, run: ResearchRun) -> DiscoveryIntent | None:
-    row = session.get(DiscoveryIntentRecord, run.id)
-    if row is None:
-        return None
     try:
-        intent = DiscoveryIntent(
-            protocol=row.protocol, max_stages=row.max_stages, max_depth=row.max_depth
-        )
-        if (
-            run.task_kind != "research"
-            or run.mode != "surprise"
-            or row.config_sha256 != _intent_sha256(intent)
-        ):
-            raise ValueError
-        return intent
-    except (ValueError, TypeError, AttributeError):
+        owner = load_stage_owner(session, run)
+        return owner.intent if owner is not None and owner.mode == "surprise" else None
+    except StageOwnerError:
         raise MetaResearchError("meta_research_storage_unavailable") from None
 
 
@@ -71,6 +62,17 @@ def bind_discovery_intent(
             max_stages=intent.max_stages,
             max_depth=intent.max_depth,
             config_sha256=_intent_sha256(intent),
+        )
+    )
+    session.flush()
+    session.add(
+        ResearchStageOwner(
+            run_id=run.id,
+            mode=run.mode,
+            task_kind=run.task_kind,
+            protocol=intent.protocol,
+            config_sha256=_intent_sha256(intent),
+            surprise_intent_run_id=run.id,
         )
     )
     session.flush()

@@ -13,21 +13,14 @@ from polymath.access_models import BrowserSession, ResearchRunAccess
 from polymath.budget import OPEN_STATES
 from polymath.budget_models import BudgetReservation
 from polymath.discovery_contracts import (
-    DISCOVERY_ACTION_ADAPTER,
     DiscoveryFinishPacket,
     DiscoveryOutcome,
-    StageCommitPacket,
     StageCommitReceipt,
     StageContext,
     StageParentFinding,
     StageParentQuote,
-    discovery_packet_sha256,
-)
-from polymath.discovery_contracts import (
-    DiscoveryIntent as Intent,
 )
 from polymath.discovery_models import (
-    DiscoveryIntent,
     DiscoveryStop,
     StageCommit,
     StageContextRecord,
@@ -93,18 +86,54 @@ def _typed(cls, value):
         raise StageValidationError("discovery_invalid_payload") from None
 
 
+def _stage_protocol(session, run):
+    from polymath.stage_owners import StageOwnerError
+    from polymath.stage_protocols import StageProtocolError, resolve_stage_protocol
+
+    try:
+        return resolve_stage_protocol(session, run)
+    except (StageOwnerError, StageProtocolError, ValueError, TypeError, AttributeError):
+        raise DiscoveryError("discovery_storage_unavailable") from None
+
+
+def _stage_packet(protocol, value):
+    try:
+        return protocol.validate_result_branch_fields(value)
+    except (ValueError, TypeError, AttributeError):
+        raise StageValidationError("discovery_invalid_payload") from None
+
+
+def _stage_context_action(protocol, context, action):
+    from polymath.stage_protocols import StageProtocolError
+
+    try:
+        protocol.validate_context_action(context, action)
+    except StageProtocolError as error:
+        raise DiscoveryError(error.code) from None
+
+
+def _stage_commit_action(protocol, packet, action):
+    from polymath.stage_protocols import StageProtocolError
+
+    try:
+        protocol.validate_commit_action(packet, action)
+    except StageProtocolError as error:
+        raise DiscoveryError(error.code) from None
+
+
+def _stage_memory_keys(protocol, session, run, result, reads):
+    from polymath.stage_protocols import StageProtocolError
+
+    try:
+        return protocol.memory_keys(session, run, result, reads)
+    except StageProtocolError as error:
+        raise StageValidationError(error.code) from None
+
+
 def _intent(session, run):
-    row = session.get(DiscoveryIntent, run.id)
-    if row is None:
-        return None
-    value = Intent(protocol=row.protocol, max_stages=row.max_stages, max_depth=row.max_depth)
-    if (
-        run.mode != "surprise"
-        or run.task_kind != "research"
-        or _hash(_canonical(value.model_dump(mode="json"))) != row.config_sha256
-    ):
-        raise DiscoveryError("discovery_storage_unavailable")
-    return value
+    # Historical Surprise wrapper: never reinterpret Explore as a ladder.
+    protocol = _stage_protocol(session, run)
+    return protocol.intent if protocol is not None and protocol.mode == "surprise" else None
 
 
 def _owner(session, run_id):
@@ -129,7 +158,7 @@ def _action(session, run, request_id):
     if row is None or row.status != "observed" or not isinstance(row.observation, dict):
         raise DiscoveryError("discovery_action_not_observed")
     try:
-        return DISCOVERY_ACTION_ADAPTER.validate_json(row.observation["content"])
+        return _stage_protocol(session, run).parse_action(row.observation["content"])
     except (ValueError, TypeError, KeyError):
         raise DiscoveryError("discovery_action_not_observed") from None
 
@@ -215,6 +244,19 @@ def _alias_context(session, run_id, *, identity_limit=256):
             refs.extend(source.source for source in parent.sources)
         elif observation.kind == "source_read":
             refs.append(_typed(SourceDocument, observation.payload["document"]))
+    run = session.get(ResearchRun, run_id)
+    protocol = _stage_protocol(session, run)
+    if protocol is not None:
+        from polymath.stage_memory import StageMemoryError
+
+        try:
+            refs.extend(
+                protocol.additional_identity_references(session, run, identity_limit=identity_limit)
+            )
+        except StageMemoryError as error:
+            if error.code == "source_identity_context_limit":
+                raise StageValidationError(error.code) from None
+            raise DiscoveryError("discovery_storage_unavailable") from None
     dedup = {}
     for ref in refs:
         dedup.setdefault(paper_aliases(ref), ref)
@@ -232,11 +274,18 @@ def _stored_result(session, result):
 def stage_current_supported(session, result):
     stage = session.scalar(select(StageCommit).where(StageCommit.result_id == result.id))
     if stage is None:
-        return session.get(DiscoveryIntent, result.run_id) is None
+        from polymath.stage_owners import has_stage_intent
+
+        return not has_stage_intent(session, result.run_id)
     if stage.run_id != result.run_id or stage.content_sha256 != result.content_sha256:
         raise DiscoveryError("discovery_storage_unavailable")
     _receipt(stage)
     packet = _stored_result(session, result)
+    run = session.get(ResearchRun, result.run_id)
+    protocol = _stage_protocol(session, run)
+    if protocol is None:
+        raise DiscoveryError("discovery_storage_unavailable")
+    protocol.validate_result_scope(_context(session, run, stage.context_ordinal), packet)
     try:
         source_map = {}
         for _quote, version, retrieval in session.execute(
@@ -262,7 +311,18 @@ def require_stage_current_supported(session, result):
         raise StageValidationError("discovery_stage_needs_review")
 
 
-class DiscoveryStore:
+class _AtomicStageStore:
+    """Shared transaction; concrete wrappers choose one stored protocol only."""
+
+    _stage_mode = "surprise"
+
+    def _owned_run(self, session, lease):
+        run = _owned(session, lease)
+        protocol = _stage_protocol(session, run)
+        if protocol is None or protocol.mode != self._stage_mode or _owner(session, run.id) is None:
+            raise DiscoveryError("discovery_not_found")
+        return run
+
     def __init__(self, engine):
         if engine.dialect.name != "postgresql":
             raise ValueError("DiscoveryStore requires PostgreSQL")
@@ -271,27 +331,25 @@ class DiscoveryStore:
 
     def load_intent(self, lease):
         with Session(self.engine) as session, session.begin():
-            return _intent(session, _owned(session, lease))
+            protocol = _stage_protocol(session, _owned(session, lease))
+            return (
+                protocol.intent
+                if protocol is not None and protocol.mode == self._stage_mode
+                else None
+            )
 
     def begin_context(self, lease, context):
         context = _typed(StageContext, context)
         payload = context.model_dump(mode="json")
         with Session(self.engine) as session, session.begin():
-            run = _owned_ladder(session, lease)
+            run = self._owned_run(session, lease)
             prior = session.get(StageContextRecord, (run.id, context.ordinal))
             if prior is not None:
                 if prior.context != payload or prior.context_sha256 != _hash(_canonical(payload)):
                     raise DiscoveryError("discovery_replay_conflict")
                 return
             action = _action(session, run, context.model_request_id)
-            if action.kind not in ("select_fields", "select_parents") or (
-                tuple(action.fields) != context.selection.fields
-                or action.rationale != context.selection.rationale
-            ):
-                raise DiscoveryError("discovery_context_action_mismatch")
-            refs = tuple(action.parents) if action.kind == "select_parents" else ()
-            if refs != context.parent_refs:
-                raise DiscoveryError("discovery_context_action_mismatch")
+            _stage_context_action(_stage_protocol(session, run), context, action)
             count = session.scalar(
                 select(func.count())
                 .select_from(StageContextRecord)
@@ -329,7 +387,7 @@ class DiscoveryStore:
         identifier = _id(result_id)
         key = f"parent:{context_ordinal}:{identifier}"
         with Session(self.engine) as session, session.begin():
-            run = _owned_ladder(session, lease)
+            run = self._owned_run(session, lease)
             context = _context(session, run, context_ordinal)
             prior = _observation(session, run.id, key)
             if prior is not None:
@@ -434,7 +492,7 @@ class DiscoveryStore:
     ):
         key = f"source:{context_ordinal}:{_id(result_id)}:{_id(retrieval_id)}"
         with Session(self.engine) as session, session.begin():
-            run = _owned_ladder(session, lease)
+            run = self._owned_run(session, lease)
             context = _context(session, run, context_ordinal)
             prior = _observation(session, run.id, key)
             if prior is not None:
@@ -461,7 +519,7 @@ class DiscoveryStore:
             version_id = row[0].id
         self.evidence.save_source(lease, doc)
         with Session(self.engine) as session, session.begin():
-            run = _owned_ladder(session, lease)
+            run = self._owned_run(session, lease)
             context = _context(session, run, context_ordinal)
             payload = {
                 "parent_result_id": result_id,
@@ -477,7 +535,7 @@ class DiscoveryStore:
         key = f"search:{context_ordinal}:{model_request_id}"
         payload = {"query": query, "purpose": purpose, "results": results.model_dump(mode="json")}
         with Session(self.engine) as session, session.begin():
-            run = _owned_ladder(session, lease)
+            run = self._owned_run(session, lease)
             context = _context(session, run, context_ordinal)
             prior = _observation(session, run.id, key)
             if prior is not None:
@@ -511,10 +569,11 @@ class DiscoveryStore:
     def commit(self, lease, packet):
         from polymath.assessment_eligibility import EligibilityError, require_current_supported
 
-        packet = _typed(StageCommitPacket, packet)
-        digest = discovery_packet_sha256(packet)
         with Session(self.engine) as session, session.begin():
-            run = _owned_ladder(session, lease)
+            run = self._owned_run(session, lease)
+            protocol = _stage_protocol(session, run)
+            packet = _stage_packet(protocol, packet)
+            digest = protocol.packet_sha256(packet)
             prior = session.scalar(
                 select(StageCommit).where(
                     StageCommit.run_id == run.id,
@@ -544,21 +603,13 @@ class DiscoveryStore:
             ):
                 raise StageValidationError("discovery_context_closed")
             action = _action(session, run, packet.model_request_id)
-            finding = getattr(action, "finding", getattr(action, "conclusion", None))
-            if (
-                action.kind not in ("record_bridge", "conclude")
-                or finding != packet.result.finding
-                or getattr(action, "assessment", None) != packet.assessment
-                or getattr(action, "revision_of", None) != packet.revision_of
-            ):
-                raise DiscoveryError("discovery_commit_action_mismatch")
-            intent = _intent(session, run)
+            _stage_commit_action(protocol, packet, action)
             stages = session.scalars(
                 select(StageCommit)
                 .where(StageCommit.run_id == run.id)
                 .order_by(StageCommit.ordinal)
             ).all()
-            if len(stages) >= intent.max_stages:
+            if len(stages) >= protocol.max_stages:
                 raise StageValidationError("discovery_stage_limit")
             observations = session.scalars(
                 select(StageObservation).where(
@@ -621,10 +672,8 @@ class DiscoveryStore:
                     raise StageValidationError("discovery_parent_revision_duplicate")
                 logical.add(root_id)
                 selected.append((reference, read))
-            depth = 1 + max(
-                (read.depth for _, read in selected if read.stage_id is not None), default=0
-            )
-            if depth > intent.max_depth:
+            depth = protocol.commit_depth(selected)
+            if depth > protocol.max_depth:
                 raise StageValidationError("discovery_depth_limit")
             # Every parent must have its original retrieval explicitly reread;
             # child quotes may choose another saved retrieval of EXACT version.
@@ -667,12 +716,7 @@ class DiscoveryStore:
                             covered = True
                 if not covered:
                     raise StageValidationError("discovery_parent_original_quote_missing")
-            scientific = {
-                "finding": packet.result.finding.model_dump(mode="json"),
-                "quotes": [q.model_dump(mode="json") for q in packet.result.quotes],
-                "fields": list(context.selection.fields),
-            }
-            scientific_sha = _hash(_canonical(scientific))
+            scientific_sha = protocol.scientific_sha256(context, packet.result)
             if (
                 session.scalar(
                     select(StageCommit.id).where(
@@ -683,14 +727,11 @@ class DiscoveryStore:
                 is not None
             ):
                 raise StageValidationError("discovery_duplicate_scientific_body")
-            if packet.revision_of is not None:
-                original = reads.get(packet.revision_of.result_id)
-                if original is None or original.reference != packet.revision_of:
+            if protocol.revision_reference(packet) is not None:
+                original = reads.get(protocol.revision_reference(packet).result_id)
+                if original is None or original.reference != protocol.revision_reference(packet):
                     raise StageValidationError("discovery_revision_not_observed")
-            keys = tuple(
-                (read.reference.result_id, read.reference.run_id, read.reference.content_sha256)
-                for read in reads.values()
-            )
+            keys = _stage_memory_keys(protocol, session, run, packet.result, reads)
             cited = {q.source_id for q in packet.result.quotes}
             # The immutable packet may contain audit-only documents. Validate
             # those reads too, then persist only cited bodies in this finding.
@@ -790,8 +831,8 @@ class DiscoveryStore:
                         kind="support",
                     )
                 )
-            if packet.revision_of is not None:
-                reference = packet.revision_of
+            if protocol.revision_reference(packet) is not None:
+                reference = protocol.revision_reference(packet)
                 read = reads[reference.result_id]
                 session.add(
                     StageParent(
@@ -821,10 +862,13 @@ class DiscoveryStore:
             return receipt
 
     def finish(self, lease, packet):
+        # Explore's model-authored ranking/finish is its own immutable protocol.
+        if self._stage_mode != "surprise":
+            raise DiscoveryError("explore_collection_ranking_required")
         packet = _typed(DiscoveryFinishPacket, packet)
         payload = packet.model_dump(mode="json")
         with Session(self.engine) as session, session.begin():
-            run = _owned_ladder(session, lease)
+            run = self._owned_run(session, lease)
             prior = session.get(StageFinalSelection, run.id)
             if prior is not None:
                 if prior.packet != payload or prior.packet_sha256 != _hash(_canonical(payload)):
@@ -861,9 +905,11 @@ class DiscoveryStore:
             )
 
     def record_stop(self, lease, outcome):
+        if self._stage_mode != "surprise":
+            raise DiscoveryError("explore_collection_ranking_required")
         outcome = _typed(DiscoveryOutcome, outcome)
         with Session(self.engine) as session, session.begin():
-            run = _owned_ladder(session, lease)
+            run = self._owned_run(session, lease)
             rows = session.scalars(
                 select(StageCommit)
                 .where(StageCommit.run_id == run.id)
@@ -926,7 +972,7 @@ class DiscoveryStore:
 
     def record_interruption(self, lease, reason):
         with Session(self.engine) as session, session.begin():
-            run = _owned_ladder(session, lease)
+            run = self._owned_run(session, lease)
             run.status = "interrupted"
             run.lease_token += 1
             run.interruption_reason = (
@@ -936,7 +982,13 @@ class DiscoveryStore:
 
     def _owned_read(self, session, owner_hash, run_id):
         run = session.get(ResearchRun, _id(run_id))
-        if run is None or _owner(session, run.id) != owner_hash or _intent(session, run) is None:
+        protocol = _stage_protocol(session, run) if run is not None else None
+        if (
+            run is None
+            or _owner(session, run.id) != owner_hash
+            or protocol is None
+            or protocol.mode != self._stage_mode
+        ):
             raise DiscoveryError("discovery_not_found")
         return run
 
@@ -991,6 +1043,21 @@ class DiscoveryStore:
             if stage is None or stage.run_id != run.id:
                 raise DiscoveryError("discovery_not_found")
             return _detail(session, stage)
+
+
+class DiscoveryStore(_AtomicStageStore):
+    """Existing Surprise API and worker entry point; unchanged terminal protocol."""
+
+    _stage_mode = "surprise"
+
+
+class ExploreStageStore(_AtomicStageStore):
+    """Shared begin/search/commit/read path, inherited by Explore ranking store."""
+
+    _stage_mode = "explore"
+
+    def summary(self, owner_hash, run_id):
+        raise DiscoveryError("explore_collection_ranking_required")
 
 
 def _logical_finding(session, result_id):

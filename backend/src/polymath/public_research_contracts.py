@@ -17,6 +17,7 @@ from typing import Annotated, Literal
 from pydantic import Field, field_validator, model_serializer, model_validator
 
 from polymath.discovery_contracts import DiscoveryIntent
+from polymath.explore_collection_contracts import ExploreCollectionIntent
 from polymath.meta_probe_contracts import ModelId, ProbeId, ProviderAccountAttestation
 from polymath.meta_readiness_contracts import (
     MAX_HARD_CAP_MICRODOLLARS,
@@ -36,6 +37,7 @@ from polymath.meta_research_contracts import (
     MetaResearchManifest,
     NativeDiscoveryProfile,
     NativeDiscoveryProfileBinding,
+    NativeExploreCollectionProfileBinding,
     NativeResearchPolicy,
     NativeResearchReview,
     NativeScientificContextProfiles,
@@ -47,6 +49,7 @@ from polymath.meta_research_contracts import (
     build_research_manifest,
     derive_discovery_ladder_profile,
     derive_task_profiles,
+    validate_current_explore_collection_profile,
     validate_current_scientific_context_profiles,
 )
 
@@ -241,6 +244,7 @@ class PublicResearchManifest(_ReadinessModel):
     ]
     discovery_ladder_profile: NativeDiscoveryProfileBinding | None = None
     scientific_context_profiles: NativeScientificContextProfiles | None = None
+    explore_collection_profile: NativeExploreCollectionProfileBinding | None = None
     valid_until: datetime
     public_limits: PublicLimits
     public_policy_sha256: Digest
@@ -263,6 +267,13 @@ class PublicResearchManifest(_ReadinessModel):
     def json_profiles(cls, value):
         return tuple(value) if isinstance(value, list) else value
 
+    @field_validator("explore_collection_profile", mode="before")
+    @classmethod
+    def explicit_explore_profile_is_not_null(cls, value):
+        if value is None:
+            raise ValueError("explore_collection_profile_invalid")
+        return value
+
     @model_serializer(mode="wrap")
     def omit_absent_discovery(self, handler):
         value = handler(self)
@@ -270,6 +281,8 @@ class PublicResearchManifest(_ReadinessModel):
             value.pop("discovery_ladder_profile", None)
         if self.scientific_context_profiles is None:
             value.pop("scientific_context_profiles", None)
+        if self.explore_collection_profile is None:
+            value.pop("explore_collection_profile", None)
         return value
 
     @model_validator(mode="after")
@@ -372,6 +385,10 @@ def validate_current_public_research_manifest(
         validate_current_scientific_context_profiles(
             manifest.scientific_context_profiles, manifest.proposal
         )
+    if manifest.explore_collection_profile is not None:
+        validate_current_explore_collection_profile(
+            manifest.explore_collection_profile, manifest.proposal
+        )
 
 
 def build_public_research_manifest(
@@ -390,6 +407,7 @@ def build_public_research_manifest(
     now: datetime,
     discovery: DiscoveryIntent | None = None,
     scientific_context: ScientificContextIntent | None = None,
+    explore_collection: ExploreCollectionIntent | None = None,
 ) -> PublicResearchManifest:
     common = build_research_manifest(
         readiness_id,
@@ -402,6 +420,7 @@ def build_public_research_manifest(
         valid_until=valid_until,
         discovery=discovery,
         scientific_context=scientific_context,
+        explore_collection=explore_collection,
     ).model_dump(mode="json")
     common.update(
         protocol=PUBLIC_RESEARCH_PROTOCOL,

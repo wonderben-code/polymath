@@ -23,8 +23,7 @@ from polymath.assessment_eligibility import (
     require_current_supported,
 )
 from polymath.assessment_models import AssessmentRequest, FindingAssessment, FindingHead
-from polymath.discovery_contracts import DiscoveryIntent, StageContext
-from polymath.discovery_models import DiscoveryIntent as DiscoveryIntentRow
+from polymath.discovery_contracts import StageContext
 from polymath.discovery_models import StageCommit, StageContextRecord, StageParent
 from polymath.discovery_store import DiscoveryError, _receipt
 from polymath.evidence import EvidenceError, _canonical, _document, _hash, _metadata
@@ -439,10 +438,12 @@ class _Builder:
             _integrity()
         stage = stages[0]
         receipt = _receipt(stage)
-        intent = self.session.get(DiscoveryIntentRow, row.run_id)
+        from polymath.stage_protocols import resolve_stage_protocol
+
+        protocol = resolve_stage_protocol(self.session, self.run(row.run_id))
         context = self.session.get(StageContextRecord, (row.run_id, stage.context_ordinal))
         if (
-            intent is None
+            protocol is None
             or context is None
             or receipt.reference != _reference(row)
             or receipt.action_ordinal != stage.action_ordinal
@@ -450,21 +451,11 @@ class _Builder:
             or _hash(_canonical(context.context)) != context.context_sha256
         ):
             _integrity()
-        config = DiscoveryIntent(
-            protocol=intent.protocol, max_stages=intent.max_stages, max_depth=intent.max_depth
-        )
-        if _hash(_canonical(config.model_dump(mode="json"))) != intent.config_sha256:
-            _integrity()
         scope = _typed(StageContext, context.context)
         if scope.ordinal != stage.context_ordinal or scope.parent_refs != receipt.parent_refs:
             _integrity()
         packet = self.packet(row)
-        scientific = {
-            "finding": packet.finding.model_dump(mode="json"),
-            "quotes": [q.model_dump(mode="json") for q in packet.quotes],
-            "fields": list(scope.selection.fields),
-        }
-        if _hash(_canonical(scientific)) != stage.scientific_sha256:
+        if protocol.scientific_sha256(scope, packet) != stage.scientific_sha256:
             _integrity()
         parents = self.session.scalars(
             select(StageParent)
@@ -505,11 +496,9 @@ class _Builder:
             else:
                 references.append(reference)
             actual.append((reference, "premise" if parent.kind == "support" else "revision", None))
-        if (
-            tuple(references) != receipt.parent_refs
-            or tuple(packet.memory_reads) != receipt.parent_refs
-        ):
+        if tuple(references) != receipt.parent_refs:
             _integrity()
+        protocol.validate_saved_stage(receipt, scope, packet, revision_of=revision)
         self.parents[row.id] = actual
         value = StageOriginContext(
             receipt=receipt,

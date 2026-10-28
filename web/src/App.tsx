@@ -1,3 +1,4 @@
+import { ExploreWorkspace } from './exploreCollection/ExploreWorkspace'
 import { DiscoveryWorkspace } from './discovery/DiscoveryWorkspace'
 import { NativeResumeControl } from './research/NativeResumeControl'
 import { useCallback, useEffect, useState } from 'react'
@@ -88,7 +89,7 @@ export function App() {
     !!system?.researchAvailable,
     !!system?.nativeResearchRequired,
   )
-  const findingResultId = workspace.activeRun?.status === 'succeeded' && (workspace.result?.finding?.outcome === 'bridge' || workspace.result?.finding?.outcome === 'answer') ? workspace.activeRun.result_id : null
+  const findingResultId = !workspace.activeRun?.discovery_intent && !workspace.activeRun?.explore_collection_intent && workspace.activeRun?.status === 'succeeded' && (workspace.result?.finding?.outcome === 'bridge' || workspace.result?.finding?.outcome === 'answer') ? workspace.activeRun.result_id : null
   const findingHead = useFindingHead({ resultId: findingResultId, enabled: workspace.phase === 'ready' && selectedFindingId === null, onSessionExpired: workspace.invalidateSession, refreshToken: assessmentRefresh })
   const discoveryChanged = useCallback(() => setDiscoveryRefresh((previous) => previous + 1), [])
   const assessmentChanged = useCallback(() => setAssessmentRefresh((previous) => previous + 1), [])
@@ -127,10 +128,11 @@ export function App() {
 
   // The server defaults to unavailable. A real cookie-owned session and healthy
   // storage are required as well; a capability flag alone cannot create a job.
-  const researchConnected = workspace.canSubmit && (mode !== 'ask' || workspace.canAsk) && !artifactBusy && !assessmentBusy && (mode === 'surprise' || !!prompts[mode].trim())
+  const researchReady = workspace.canSubmit && (mode !== 'ask' || workspace.canAsk) && (mode !== 'explore' || workspace.canExplore)
+  const researchConnected = researchReady && !artifactBusy && !assessmentBusy && (mode === 'surprise' || !!prompts[mode].trim())
   const unavailable = connection === 'offline'
     ? 'The research service could not be reached. Check the connection and try again.'
-    : workspace.ownActiveResearch ? 'An investigation is active in this browser. Finish or cancel it before starting another model task.' : workspace.native.required && workspace.native.phase !== 'disabled' ? 'Current funding authority or this browser’s limits do not permit a new model task. Saved research remains readable.' : 'Live investigations are disabled or unavailable. Saved research remains readable.'
+    : mode === 'explore' && workspace.native.canSubmit && !workspace.canExplore ? workspace.native.explorePhase === 'loading' ? 'Checking the approved Explore features…' : 'Explore features could not be verified for this funding approval. Refresh research access before starting an investigation; saved findings remain readable.' : workspace.ownActiveResearch ? 'An investigation is active in this browser. Finish or cancel it before starting another model task.' : workspace.native.required && workspace.native.phase !== 'disabled' ? 'Current funding authority or this browser’s limits do not permit a new model task. Saved research remains readable.' : 'Live investigations are disabled or unavailable. Saved research remains readable.'
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -206,7 +208,7 @@ export function App() {
 
               <div className="availability-note" id="research-availability" role="status">
                 <span className="small-star" aria-hidden="true">✳︎</span>
-                <p>{connection === 'loading' ? 'Checking the research service…' : artifactBusy ? 'A formalisation or writing task is active. Follow its progress below.' : assessmentBusy ? 'An evidence reassessment is active. Follow its saved progress in the literature watch.' : workspace.canSubmit ? 'Research is available. Your investigation will be saved to this browser session.' : unavailable}</p>
+                <p>{connection === 'loading' ? 'Checking the research service…' : artifactBusy ? 'A formalisation or writing task is active. Follow its progress below.' : assessmentBusy ? 'An evidence reassessment is active. Follow its saved progress in the literature watch.' : researchReady ? 'Research is available. Your investigation will be saved to this browser session.' : unavailable}</p>
               </div>
               {notice && <p role="alert">{notice}</p>}
             </section>
@@ -252,12 +254,13 @@ export function App() {
 
           {workspace.selectedId && !workspace.activeRun && <p className="history-note" role="status">Loading the saved investigation…</p>}
           {workspace.detailError && <div className="research-detail-error" role="alert"><p>{workspace.detailError}</p>{workspace.selectedId && <button type="button" className="text-button" onClick={() => workspace.selectRun(workspace.selectedId!)}>Reload investigation</button>}</div>}
-          {!selectedFindingId && workspace.activeRun && <ResearchRunView hideOutcome={!!workspace.activeRun.discovery_intent} run={workspace.activeRun} events={workspace.events} result={workspace.result} connection={workspace.connection} onCancel={workspace.canCancel ? () => void workspace.cancel() : undefined} cancelling={workspace.cancelling} onOpenRun={openRun} findingVersion={findingResultId ? { head: findingHead.head, phase: findingHead.phase, pollPaused: findingHead.pollPaused, onRefresh: findingHead.refresh, onOpenFinding: openFinding } : undefined} />}
+          {!selectedFindingId && workspace.activeRun && <ResearchRunView hideOutcome={!!workspace.activeRun.discovery_intent || !!workspace.activeRun.explore_collection_intent} run={workspace.activeRun} events={workspace.events} result={workspace.result} connection={workspace.connection} onCancel={workspace.canCancel ? () => void workspace.cancel() : undefined} cancelling={workspace.cancelling} onOpenRun={openRun} findingVersion={findingResultId ? { head: findingHead.head, phase: findingHead.phase, pollPaused: findingHead.pollPaused, onRefresh: findingHead.refresh, onOpenFinding: openFinding } : undefined} />}
 
+          {!selectedFindingId && workspace.activeRun?.explore_collection_intent && <ExploreWorkspace key={`collection:${workspace.activeRun.id}`} run={workspace.activeRun} events={workspace.events} enabled={workspace.phase === 'ready'} csrfToken={workspace.csrfToken} onSessionExpired={workspace.invalidateSession} onOpenFinding={openFinding} onStagesChanged={discoveryChanged} />}
           {!selectedFindingId && workspace.activeRun?.discovery_intent && <DiscoveryWorkspace key={`discovery:${workspace.activeRun.id}`} run={workspace.activeRun} events={workspace.events} finalResult={workspace.result} enabled={workspace.phase === 'ready'} csrfToken={workspace.csrfToken} canGenerate={workspace.canSubmit && !assessmentBusy} onSessionExpired={workspace.invalidateSession} onOpenFinding={openFinding} onOpenRun={openRun} onBusyChange={setArtifactBusy} onStagesChanged={discoveryChanged} />}
           {!selectedFindingId && workspace.activeRun && <NativeResumeControl run={workspace.activeRun} csrfToken={workspace.csrfToken} onResumed={workspace.refresh} onSessionExpired={workspace.invalidateSession} />}
-          {!selectedFindingId && !workspace.activeRun?.discovery_intent && workspace.phase === 'ready' && workspace.activeRun?.status === 'succeeded' && workspace.activeRun.result_id && workspace.result?.finding && (workspace.result.finding.outcome === 'bridge' || workspace.result.finding.outcome === 'answer') && <ArtifactWorkspace key={workspace.activeRun.result_id} sourceResultId={workspace.activeRun.result_id} sourceKind={workspace.result.finding.outcome} csrfToken={workspace.csrfToken} enabled={workspace.phase === 'ready'} canGenerate={workspace.canSubmit && findingHead.canGenerate && !assessmentBusy} sourceCurrent={findingHead.canGenerate} onSessionExpired={workspace.invalidateSession} onBusyChange={setArtifactBusy} />}
-          {!selectedFindingId && !workspace.activeRun?.discovery_intent && findingResultId && <ShareWorkspace key={`share:${findingResultId}`} sourceResultId={findingResultId} enabled={workspace.phase === 'ready'} csrfToken={workspace.csrfToken} sourceCurrent={findingHead.canGenerate} refreshToken={assessmentRefresh} onSessionExpired={workspace.invalidateSession} />}
+          {!selectedFindingId && !workspace.activeRun?.discovery_intent && !workspace.activeRun?.explore_collection_intent && workspace.phase === 'ready' && workspace.activeRun?.status === 'succeeded' && workspace.activeRun.result_id && workspace.result?.finding && (workspace.result.finding.outcome === 'bridge' || workspace.result.finding.outcome === 'answer') && <ArtifactWorkspace key={workspace.activeRun.result_id} sourceResultId={workspace.activeRun.result_id} sourceKind={workspace.result.finding.outcome} csrfToken={workspace.csrfToken} enabled={workspace.phase === 'ready'} canGenerate={workspace.canSubmit && findingHead.canGenerate && !assessmentBusy} sourceCurrent={findingHead.canGenerate} onSessionExpired={workspace.invalidateSession} onBusyChange={setArtifactBusy} />}
+          {!selectedFindingId && !workspace.activeRun?.discovery_intent && !workspace.activeRun?.explore_collection_intent && findingResultId && <ShareWorkspace key={`share:${findingResultId}`} sourceResultId={findingResultId} enabled={workspace.phase === 'ready'} csrfToken={workspace.csrfToken} sourceCurrent={findingHead.canGenerate} refreshToken={assessmentRefresh} onSessionExpired={workspace.invalidateSession} />}
           {selectedFindingId && <FindingVersionWorkspace key={selectedFindingId} resultId={selectedFindingId} enabled={workspace.phase === 'ready'} csrfToken={workspace.csrfToken} canGenerate={workspace.canSubmit && !assessmentBusy} refreshToken={assessmentRefresh} onSessionExpired={workspace.invalidateSession} onOpenFinding={openFinding} onOpenRun={openRun} onBusyChange={setArtifactBusy} onClose={() => setSelectedFindingId(null)} />}
 
           <KnowledgeBrowser enabled={workspace.phase === 'ready'} onOpenRun={openRun} onOpenFinding={openFinding} refreshToken={`${workspace.activeRun?.result_id ?? ''}:${assessmentRefresh}:${discoveryRefresh}`} canInvestigate={workspace.canSubmit && !artifactBusy && !assessmentBusy} investigating={workspace.submitting} onInvestigateBridges={workspace.investigateBridges} csrfToken={workspace.csrfToken} onSessionExpired={workspace.invalidateSession} onAssessmentApplied={assessmentChanged} onAssessmentBusyChange={setAssessmentBusy} />

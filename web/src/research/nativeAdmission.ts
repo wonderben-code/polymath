@@ -17,7 +17,7 @@ export function validNativeSubmission(value: NativeSubmissionContext): boolean {
 export function nativeSubmissionHeaders(value: NativeSubmissionContext): Record<string, string> { return value.audience === 'public_sessions' ? {} : { 'X-Operator-CSRF-Token': value.operatorCsrfToken } }
 
 export function nativeAdmissionFailure(status: number, detail: unknown): boolean {
-  if (typeof detail !== 'string' || ['public_research_requester_expired', 'meta_research_scientific_protocol_unavailable'].includes(detail)) return false
+  if (typeof detail !== 'string' || ['public_research_requester_expired', 'meta_research_scientific_protocol_unavailable', 'meta_research_explore_protocol_unavailable'].includes(detail)) return false
   if (['operator_session_required', 'operator_csrf_check_failed', 'operator_unavailable', 'readiness_role_unavailable', 'readiness_actor_forbidden'].includes(detail)) return true
   return (detail.startsWith('meta_research_') || detail.startsWith('public_research_')) && [401, 403, 409, 503].includes(status) && !['meta_research_storage_unavailable', 'public_research_storage_unavailable', 'public_research_resource_unavailable'].includes(detail)
 }

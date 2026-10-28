@@ -4,6 +4,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import (
+    CheckConstraint,
     DateTime,
     ForeignKey,
     ForeignKeyConstraint,
@@ -21,6 +22,16 @@ from polymath.database import Base
 
 class DiscoveryIntent(Base):
     __tablename__ = "research_discovery_intents"
+    __table_args__ = (
+        UniqueConstraint("run_id", "protocol", "config_sha256", name="uq_surprise_owner_config"),
+        CheckConstraint(
+            "protocol='polymath-surprise-ladder-v1' AND max_stages BETWEEN 1 AND 4 "
+            "AND max_depth BETWEEN 1 AND 3 AND config_sha256=encode(sha256(convert_to("
+            "'{\"max_depth\":' || max_depth::text || ',\"max_stages\":' || max_stages::text || "
+            "',\"protocol\":\"polymath-surprise-ladder-v1\"}','UTF8')),'hex')",
+            name="ck_surprise_owner_config",
+        ),
+    )
     run_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("research_runs.id"), primary_key=True
     )
@@ -33,7 +44,7 @@ class DiscoveryIntent(Base):
 class StageContextRecord(Base):
     __tablename__ = "research_stage_contexts"
     run_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid, ForeignKey("research_discovery_intents.run_id"), primary_key=True
+        Uuid, ForeignKey("research_stage_owners.run_id"), primary_key=True
     )
     ordinal: Mapped[int] = mapped_column(Integer, primary_key=True)
     context: Mapped[dict] = mapped_column(JSONB)
@@ -51,7 +62,7 @@ class StageObservation(Base):
         ),
     )
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-    run_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("research_discovery_intents.run_id"))
+    run_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("research_stage_owners.run_id"))
     context_ordinal: Mapped[int] = mapped_column(Integer)
     kind: Mapped[str] = mapped_column(String(32))
     observation_key: Mapped[str] = mapped_column(String(256))
@@ -69,6 +80,14 @@ class StageCommit(Base):
         UniqueConstraint("run_id", "action_ordinal", name="uq_stage_commit_action"),
         UniqueConstraint("id", "run_id", name="uq_stage_commit_run"),
         UniqueConstraint("id", "result_id", "run_id", name="uq_stage_commit_result_run"),
+        UniqueConstraint(
+            "id",
+            "result_id",
+            "run_id",
+            "content_sha256",
+            "receipt_sha256",
+            name="uq_stage_ranking_receipt",
+        ),
         ForeignKeyConstraint(
             ["result_id", "run_id"], ["evidence_results.id", "evidence_results.run_id"]
         ),
@@ -78,7 +97,7 @@ class StageCommit(Base):
         ),
     )
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-    run_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("research_discovery_intents.run_id"))
+    run_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("research_stage_owners.run_id"))
     ordinal: Mapped[int] = mapped_column(Integer)
     context_ordinal: Mapped[int] = mapped_column(Integer)
     model_request_id: Mapped[str] = mapped_column(String(128))

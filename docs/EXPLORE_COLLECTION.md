@@ -1,26 +1,32 @@
 # Model-directed Explore bridge collections
 
-**EC1 complete; EC2–EC6 pending.** Strict pure collection/commit/ranking contracts
-pass 67 cases. The actual saved SC archive `a95011a` supplies 40 compatibility
-cases: 38 captured values and two provenance checks. The current backend unit
-suite passes 1,970 tests. Collection runtime, migration, native profiles and UI
-are not wired yet; the sections below describe that remaining integration.
+**EC1–EC6 implemented and locally verified.** Schema 0025, atomic model-ranked
+collections, native profiles/runtime, downstream provenance and UI/SDK are
+connected. Final release checks pass **4,423 distinct tests: 2,194 backend unit,
+1,311 PostgreSQL and 918 frontend**. The full database run passed without
+failures in41m04s. The composite actual browser journey passed approval,
+collection/ranking/exclusion, readers, Formalise/SC paper/export, reload,
+mobile390 and funding Stop. Browser partial-run Resume remains omitted;
+actual native recovery is verified separately.
 
-The last full SC release passed 3,939 tests: 1,863 unit, 1,232 PostgreSQL and 844
-frontend. PostgreSQL/frontend suites were not rerun for this pure-foundation
-checkpoint. This contract grants no paid execution, public funding or
-publication authority. No paid calls ran. Meta remains the scientific
-decision-maker; the existing worker and budget ledger are retained.
+EC1 was saved as `346d60f`: 67 pure cases plus 40 archived SC compatibility
+cases (38 captured values and two provenance checks). The prior full SC release
+`a95011a` passed 3,939 tests. Real archive migration 24→25→24 verification checks
+287 backend blobs, preserves all 67 original table inventories/bytes and
+retargets exactly three stage-owner FKs. Local packaging is verified separately
+in [PROGRESS.md](PROGRESS.md).
+No paid calls ran. Meta remains the scientific decision-maker; the same worker
+and ledger enforce separately reviewed authority and limits.
 
 ## Product outcome and decisions
 
 `SPEC.md` §§3.1/3.3 and Flow A require several inspectable bridges, ranked cards,
-novelty/confidence and visible discarded hypotheses. Ordinary Explore currently
-stops at one `BridgeFinding`. Surprise F6 already has adaptive hypotheses,
+novelty/confidence and visible discarded hypotheses. Legacy Explore without
+collection intent still stops at one `BridgeFinding`. Surprise F6 has adaptive hypotheses,
 atomic stages, scoped challenges and durable partial results, but only a single
 explicit preferred final stage, not a model-authored ordered collection.
 
-Add an explicit `explore_collection_intent`:
+An explicit `explore_collection_intent` selects the collection variant:
 `{protocol:"polymath-explore-collection-v1",max_bridges:3}`. Reviewed maximum is
 1–4; it is a ceiling, never a promised number of discoveries. Empty and partial
 outcomes are valid. Default UI selects this when its exact current activation
@@ -39,7 +45,7 @@ their order/rank and when to stop. There is no fixed field list, fixed branch
 sequence, application-written scientific ranking or score-based sort. Keep the
 original run goal in every branch's initial scope; a field change cannot erase it.
 
-## Actual reuse constraints and proposed storage
+## Shared storage and compatibility
 
 Verified source constraints, not an assumption of interchangeable modes:
 
@@ -52,7 +58,7 @@ Verified source constraints, not an assumption of interchangeable modes:
 | `assessment_eligibility`, generic evidence save | Only the Surprise intent currently excludes ordinary positive-result eligibility and generic saves | Treat either concrete collection intent as collection-scoped, even if a malformed registry row is missing. Only exact atomic commits may expose positives. |
 | `scientific_context_builder.stage_origin` | Reads Surprise intent directly and computes original fields from its scoped context | Resolve validated stage owner/protocol centrally. Receipt, assessment and existing context shape can remain unchanged. |
 
-Suggested registry: `ResearchStageOwner(run_id PK,mode,task_kind,protocol,
+Implemented registry: `ResearchStageOwner(run_id PK,mode,task_kind,protocol,
 surprise_intent_run_id?,explore_intent_run_id?)`. Use SC's existing
 `research_runs(id,mode,task_kind)` unique key for a composite FK. Require exactly
 one concrete intent FK equal to `run_id`, with matching protocol/mode. A registry
@@ -61,8 +67,8 @@ original enqueue transaction. Backfill before replacing the three old FKs;
 downgrade refuses to discard any Explore intent/ranking/history.
 Fence paid work and stop the old API/worker generation before this migration:
 older code cannot insert the new registry. Restart only the new compatible
-generation; startup never rearms funding. Choose the migration revision from
-the actual pushed SC head, not a reserved number in this draft.
+generation; startup never rearms funding. Migration `0025_explore_collection` follows
+`0024_scientific_context`.
 
 Keep `EvidenceResult`, quotes, `StageCommit`, `StageParent`, scoped observations,
 receipt and atomic checkpoint acknowledgements as the shared scientific store.
@@ -72,7 +78,7 @@ is explicitly an uncalibrated Meta judgement, with rationale and limitations.
 Do not add rank or collection fields to `BridgeFinding`, `ResearchResult`, the
 old action adapters or scientific-context v1 envelopes.
 
-Extract a small internal stage-protocol strategy around the existing store/loop:
+A small internal stage-protocol strategy wraps the existing store/loop:
 validate intent, parse observed action, validate commit packet and positive mode.
 Default Surprise wrapper retains exact old calls/serialization. Reuse all source
 identity, exact quote, scoped counterevidence/prior-work, evidence deduplication,
@@ -90,7 +96,7 @@ New Explore action adapter reuses search/read/full-text/memory, model field
 selection and bounded `record_note` hypothesis decisions, plus `record_bridge`
 with assessment. The pure contract defines terminal `finish_ranked` and
 nonterminal `rank_saved`, which saves an interim model ranking while research
-continues. Their controller/store integration remains pending.
+continues. Both use the shared recorded worker and atomic store.
 
 Ranking contains ordered exact acknowledged `MemoryReadReference`s and a concise
 model rationale per entry. Add explicit excluded/unranked references with reasons.
@@ -166,6 +172,11 @@ scores are included in a newly approved public snapshot, use an omitted optional
 model-assessment projection bound to its exact shared finding, with no private
 handles and unchanged historical public bytes.
 
+The SDK verifies exact receipt-reference bindings and reconstructs canonical
+ranking packet hashes. Hydrated finding DTOs cannot reproduce the stored
+evidence-envelope hash; the server validates that original envelope. A client
+must not label that stored-result hash independently recomputed.
+
 ## Implementation order and release evidence
 
 - [x] **EC1 — Pure contracts and archived compatibility.** Implemented
@@ -173,25 +184,27 @@ handles and unchanged historical public bytes.
   finish and acknowledgement validation; 67 pure cases pass. The actual pushed
   SC archive `a95011ae46fcb3d66b784abab7444167e39c33fc` supplies 40 compatibility
   cases (38 captured values plus two provenance checks). Full backend unit suite:
-  1,970 passed. No collection runtime or capability endpoint is wired.
-- [ ] **EC2 — Registry, admission and shared stage protocol.** Add migration and
-  concrete Explore ownership; verify FKs, immutable history and downgrade
-  refusal. Reuse the stage transaction behind the unchanged Surprise wrapper.
-- [ ] **EC3 — Controller and atomic ranking/stop store.** Exercise independent
-  bridges, discarded weak leads, model ranking that differs from score order,
-  empty/partial stops, ordinary Bridge/Ask memory leads, late alias review and
-  lost stage/ranking receipts. Keep the original goal and whole-run counters.
-- [ ] **EC4 — Native profiles and runtime.** Connect private/public activation
-  and exact input/profile/worker binding; permit a tighter run bridge ceiling
-  within the original approved profile. Prove old hashes, one-ledger limits,
-  cached replay and DB-only late billing.
-- [ ] **EC5 — Downstream eligibility and scientific context.** Integrate
-  memory/map/F3/artifact/reassessment/sharing with exact original/reassessed
-  Explore stage provenance.
-- [ ] **EC6 — UI/SDK and connected verification.** Add separate capability
-  discovery, ranked/unranked/partial/history readers and synthetic HTTP/browser
-  journeys: mobile, zero-POST reload, foreign 404, funding stops, retained
-  exports and full regressions. Live science/deployment remain separate gates.
+  1,970 passed at that foundation checkpoint; saved as `346d60f`.
+- [x] **EC2 — Registry, admission and shared stage protocol.** Schema 0025 binds
+  concrete Explore ownership and preserves Surprise history; archived round-trip
+  and structural/downgrade checks pass.
+- [x] **EC3 — Controller and atomic ranking/stop store.** Model rank can differ
+  from score order; original goals, ordinary Bridge/Ask memory, partials and
+  global counters persist. Store 21 and worker 53 PostgreSQL cases pass,
+  including lost stage/rank/finish acknowledgements without duplicate sends.
+- [x] **EC4 — Native profiles and runtime.** Private/public optional activation,
+  tighter actual intent ceilings and original input/profile binding are wired.
+  Fourteen mock-native/recovery cases pass with one-ledger and keyless recovery.
+- [x] **EC5 — Downstream eligibility and scientific context.** Six focused cases
+  cover memory/map/F3/artifact/reassessment/sharing with exact original-stage
+  provenance.
+- [x] **EC6 — UI/SDK and connected verification.** Capability discovery and
+  ranked/unranked/partial/history readers are implemented. Frontend 918 and
+  actual SDK 3 cases pass. The composite browser journey and full 1,311-case
+  PostgreSQL release run passed. Browser partial-run Resume remains omitted,
+  with actual native recovery checked separately. Mobile390, zero-POST/model
+  reload and Stop-retained export are verified. Live science/deployment remain
+  separate gates.
 
 Track task acceptance in [BUILD_PLAN.md](BUILD_PLAN.md) and exact checkpoint
 evidence in [PROGRESS.md](PROGRESS.md).

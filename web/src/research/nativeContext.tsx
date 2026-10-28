@@ -1,3 +1,4 @@
+import type { ExploreCollectionAccess } from '../exploreCollection/types'
 import { createContext, useContext } from 'react'
 import type { ReactNode } from 'react'
 import type { EligibleActivation } from '../budget/activationTypes'
@@ -11,6 +12,9 @@ export interface NativeResearchContextValue {
   activation: EligibleActivation | null
   submission: NativeSubmissionContext | null
   access?: ResearchAccess | null
+  exploreAccess?: ExploreCollectionAccess | null
+  explorePhase?: 'disabled' | 'loading' | 'ready' | 'error'
+  invalidateExplore?: (expectedActivationSha256?: string) => void
   invalidateScientific?: (expectedActivationSha256?: string) => void
   scientificCapabilities?: ScientificCapability[]
   scientificPhase?: 'disabled' | 'loading' | 'ready' | 'error'
@@ -33,3 +37,5 @@ export function NativeResearchProvider({ value, children }: { value: NativeResea
 
 export function scientificSelectionReady(context: NativeResearchContextValue): boolean { return !context.required || context.scientificPhase === 'ready' }
 export function hasScientificCapability(context: NativeResearchContextValue, capability: ScientificCapability): boolean { return context.required && context.scientificPhase === 'ready' && context.scientificCapabilities?.includes(capability) === true }
+
+export function exploreSelectionReady(context: NativeResearchContextValue): boolean { return !context.required || context.explorePhase === 'ready' }

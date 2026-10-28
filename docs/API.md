@@ -398,6 +398,87 @@ bytes and write atomically without clobbering existing files.
 or fall back automatically. See [SCIENTIFIC_CONTEXT.md](SCIENTIFIC_CONTEXT.md)
 for the full versioned contract and compatibility evidence.
 
+## Explore bridge collections
+
+New seeded Explore runs can request an explicitly approved collection:
+
+```json
+{
+  "mode": "explore",
+  "goal": "A concept to investigate",
+  "expected_activation_sha256": "<exact current funding hash>",
+  "explore_collection_intent": {
+    "protocol": "polymath-explore-collection-v1",
+    "max_bridges": 3
+  }
+}
+```
+
+The maximum is an integer 1–4 and a ceiling, not a promised result count.
+It may be lower than the reviewed maximum; the original approved profile/hash
+and all financial/call/action limits remain unchanged. One collection is one
+job on the existing ledger, with at most the original 16 valid actions. Meta
+selects fields, searches, challenges, saved bridges, exclusions, order and stop.
+Confidence is an uncalibrated model judgement and never sorts the collection.
+Initial F3 parent selection, Ask and Surprise intents cannot be combined with
+this version. Omitting the field retains the original single-result protocol;
+explicit null is invalid. A selected variant never silently falls back.
+
+Owner-only `GET /api/v1/research/explore-protocols` returns exactly:
+
+```json
+{
+  "protocol": "polymath-explore-collection-access-v1",
+  "activation_sha256": null,
+  "explore_collection_intent": null
+}
+```
+
+An eligible legacy public grant returns its hash and null intent. A reviewed
+collection grant returns that same funding hash plus its approved maximum.
+Closed/private contexts return null/null; anonymous requests return 401 without
+creating a session. This metadata grants no execution authority. Cross-check its
+hash with `/research/access`; the creation transaction independently rechecks
+the actual approval. The strict D2 access and SC protocol responses are unchanged.
+
+All following GETs require the existing owner and consume normal read limits:
+
+| Route under `/api/v1/runs/{run_id}` | Response |
+| --- | --- |
+| `/explore-collection` | Run state, intent, receipts, rankings, selected final ranking, stop reason, whole-run usage and accounting |
+| `/bridges` | `{run_id,stages}`; at most four existing stage-detail objects |
+| `/bridges/{stage_id}` | Exact saved finding/evidence, original model assessment and current review status |
+| `/rankings` | `{run_id,rankings}`; at most 16 immutable ranking receipts |
+
+Each ranking's ordered `ranked` and `excluded` arrays partition exactly the
+acknowledged bridges visible at its model step. Explanations are model-authored.
+An interim ranking never covers a later bridge automatically. Unranked partial
+bridges retain discovery order and have no invented preference. A final ranking
+covers all saved stages; its first ranked reference alone may supply the normal
+`/result` pointer. Empty/all-excluded finishes have no positive result pointer.
+Cancellation, budget stops and later reassessment preserve historical ranks,
+scores and exact findings. Fresh downstream use still requires current support.
+Reloading any collection reader performs GETs only.
+
+Private/public preview accepts an optional `explore_collection` marker with the
+same intent shape and derives `manifest.explore_collection_profile`. Old manifests
+omit this field entirely. Current private operator projections include approved
+scientific-context/Explore extensions only when present. Original resume and
+keyless late billing use saved intent/profile metadata, not capability discovery
+or today's prompts. Unknown model calls never resend automatically.
+
+The client adds `research explore-protocols`, `runs create --explore-collection
+--max-bridges 2`, and `explore show|bridges|bridge|rankings`. Eligible ordinary
+public Explore automatically requests `min(3, approved maximum)`; selected F3
+parents and original resume retain their existing behavior. Explicit unsupported
+requests fail before a POST. Collection readers validate exact receipt/reference
+bindings and reconstruct ranking packet hashes. A hydrated finding DTO cannot
+reproduce its stored evidence-envelope hash: the server checks that original
+envelope before returning its linked source documents.
+`meta_research_explore_protocol_unavailable` is 409; malformed/scope-conflicting
+creation is 422. Neither response authorizes a fallback or retry. See
+[EXPLORE_COLLECTION.md](EXPLORE_COLLECTION.md).
+
 ## Standalone discovery ladder commands
 
 Explicit ladder creation uses the same bounded research admission:

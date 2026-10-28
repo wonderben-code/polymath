@@ -14,16 +14,16 @@ from test_worker import database as database_fixture
 from test_worker import setup_worker
 
 from polymath.budget import BudgetService
+from polymath.discovery_admission import bind_discovery_intent
 from polymath.discovery_contracts import DiscoveryIntent
-from polymath.discovery_models import DiscoveryIntent as IntentRow
 from polymath.discovery_models import StageCommit
 from polymath.discovery_store import DiscoveryStore
 from polymath.evidence import EvidenceStore
 from polymath.evidence_models import EvidenceResult
 from polymath.jobs import JobRepository
+from polymath.models import ResearchRun
 from polymath.research.discovery import DiscoveryLimits
 from polymath.research.meta import ModelReply
-from polymath.worker import _digest
 
 database = database_fixture
 pytestmark = pytest.mark.integration
@@ -35,13 +35,7 @@ def queued(engine):
     assign(engine, run.id, token)
     intent = DiscoveryIntent()
     with Session(engine) as session, session.begin():
-        session.add(
-            IntentRow(
-                run_id=run.id,
-                **intent.model_dump(mode="json"),
-                config_sha256=_digest(intent.model_dump(mode="json")),
-            )
-        )
+        bind_discovery_intent(session, session.get(ResearchRun, run.id), intent)
     return token, run.id
 
 

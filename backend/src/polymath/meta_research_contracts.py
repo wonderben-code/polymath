@@ -17,6 +17,10 @@ from typing import TYPE_CHECKING, Annotated, Literal
 
 from pydantic import Field, SecretStr, field_validator, model_serializer, model_validator
 
+from polymath.explore_collection_contracts import (
+    ExploreCollectionIntent,
+    validate_explore_admission,
+)
 from polymath.meta_probe_contracts import (
     MetaObservation,
     MetaProbePolicy,
@@ -234,6 +238,39 @@ class NativeTaskProfile(_ReadinessModel):
         return self
 
 
+class NativeExploreCollectionProfile(_ReadinessModel):
+    """A separate Explore protocol with the original ordinary research ceilings."""
+
+    task_kind: Literal["research"] = "research"
+    controller_protocol: Literal["polymath-meta-explore-collection-v1"] = (
+        "polymath-meta-explore-collection-v1"
+    )
+    controller_sha256: Digest
+    request_protocol: Literal["polymath-meta-research-request-v1"] = REQUEST_PROTOCOL
+    max_model_calls: Annotated[int, Field(ge=1, le=20)]
+    max_actions: Literal[16] = 16
+    max_repairs: Literal[2] = 2
+    max_output_tokens: Annotated[int, Field(ge=16, le=4096)]
+    max_context_characters: Annotated[int, Field(ge=1000, le=90000)]
+    request_timeout_seconds: Annotated[float, Field(ge=0.001, le=60)]
+    model_timeout_seconds: Annotated[float, Field(ge=30.001, le=90)]
+    tool_timeout_seconds: Literal[20.0] = 20.0
+    max_sources: Literal[200] = 200
+    collection_protocol: Literal["polymath-explore-collection-v1"] = (
+        "polymath-explore-collection-v1"
+    )
+    max_bridges: Annotated[int, Field(ge=1, le=4)]
+
+    @model_validator(mode="after")
+    def original_research_limits(self):
+        # A distinct DTO prevents an old typed binding from dropping the new
+        # fields. Common quantitative rules remain the original implementation.
+        NativeTaskProfile.model_validate_json(
+            _canonical(self.model_dump(mode="json", exclude={"collection_protocol", "max_bridges"}))
+        )
+        return self
+
+
 def controller_protocol_sha256(task_kind: TaskKind) -> str:
     """Fingerprint current static controller semantics, only for fresh authority."""
     base = {
@@ -332,10 +369,17 @@ def minimum_controller_context_characters(task_kind: TaskKind) -> int:
     raise ValueError("unsupported native task protocol")
 
 
-def task_profile_sha256(profile: NativeTaskProfile) -> str:
-    kind = (
-        NativeDiscoveryProfile if isinstance(profile, NativeDiscoveryProfile) else NativeTaskProfile
-    )
+def task_profile_sha256(
+    profile: NativeTaskProfile | NativeDiscoveryProfile | NativeExploreCollectionProfile,
+) -> str:
+    if isinstance(profile, NativeExploreCollectionProfile):
+        kind = NativeExploreCollectionProfile
+    else:
+        kind = (
+            NativeDiscoveryProfile
+            if isinstance(profile, NativeDiscoveryProfile)
+            else NativeTaskProfile
+        )
     profile = kind.model_validate_json(profile.model_dump_json())
     return _sha(profile.model_dump(mode="json"))
 
@@ -349,6 +393,111 @@ class NativeTaskProfileBinding(_ReadinessModel):
         if self.profile_sha256 != task_profile_sha256(self.profile):
             raise ValueError("native task profile hash mismatch")
         return self
+
+
+class NativeExploreCollectionProfileBinding(_ReadinessModel):
+    profile: NativeExploreCollectionProfile
+    profile_sha256: Digest
+
+    @model_validator(mode="after")
+    def exact_profile(self):
+        if self.profile_sha256 != task_profile_sha256(self.profile):
+            raise ValueError("explore_collection_profile_hash_mismatch")
+        return self
+
+
+def validate_historical_explore_collection_profile(
+    extension, proposal, *, original_research_profile
+) -> None:
+    """Original saved bounds only; never current prompts, keys, time or heads."""
+    value = NativeExploreCollectionProfileBinding.model_validate_json(extension.model_dump_json())
+    proposal = MetaReadinessProposal.model_validate_json(proposal.model_dump_json())
+    original = NativeTaskProfile.model_validate_json(original_research_profile.model_dump_json())
+    quantitative = tuple(
+        name
+        for name in NativeTaskProfile.model_fields
+        if name not in {"controller_protocol", "controller_sha256"}
+    )
+    if original.task_kind != "research" or any(
+        getattr(value.profile, name) != getattr(original, name) for name in quantitative
+    ):
+        raise ValueError("explore_collection_quantitative_profile_changed")
+    limits = proposal.application_limits
+    if (
+        value.profile.max_model_calls > limits.max_model_calls
+        or value.profile.max_output_tokens != limits.max_output_tokens
+        or value.profile.max_context_characters != limits.max_context_characters
+        or value.profile.request_timeout_seconds != limits.request_timeout_seconds
+    ):
+        raise ValueError("historical_explore_collection_profile_exceeds_proposal")
+
+
+def _explore_controller():
+    try:
+        from polymath.research.explore_collection import (
+            explore_collection_initial_messages,
+            explore_collection_protocol_payload,
+        )
+    except ImportError:
+        raise ValueError("explore_collection_protocol_unavailable") from None
+    return explore_collection_initial_messages, explore_collection_protocol_payload
+
+
+def explore_collection_controller_sha256() -> str:
+    _, payload = _explore_controller()
+    value = payload()
+    if not isinstance(value, dict) or value.get("controller_protocol") != (
+        "polymath-meta-explore-collection-v1"
+    ):
+        raise ValueError("explore_collection_controller_protocol_mismatch")
+    return _sha(value)
+
+
+def minimum_explore_collection_characters(intent: ExploreCollectionIntent) -> int:
+    intent = ExploreCollectionIntent.model_validate_json(intent.model_dump_json())
+    messages, _ = _explore_controller()
+    return max(
+        sum(len(item["content"]) for item in messages("", intent, memory_available=memory))
+        for memory in (False, True)
+    )
+
+
+def derive_explore_collection_profile(
+    proposal: MetaReadinessProposal, intent: ExploreCollectionIntent
+) -> NativeExploreCollectionProfileBinding:
+    proposal = MetaReadinessProposal.model_validate_json(proposal.model_dump_json())
+    intent = ExploreCollectionIntent.model_validate_json(intent.model_dump_json())
+    if proposal.application_limits.max_context_characters < minimum_explore_collection_characters(
+        intent
+    ):
+        raise ValueError("explore_collection_fixed_prompt_exceeds_proposal")
+    original = next(
+        item.profile
+        for item in derive_task_profiles(proposal)
+        if item.profile.task_kind == "research"
+    )
+    profile = NativeExploreCollectionProfile.model_validate_json(
+        _canonical(
+            original.model_dump(mode="json")
+            | {
+                "controller_protocol": "polymath-meta-explore-collection-v1",
+                "controller_sha256": explore_collection_controller_sha256(),
+                "max_bridges": intent.max_bridges,
+            }
+        )
+    )
+    return NativeExploreCollectionProfileBinding(
+        profile=profile, profile_sha256=task_profile_sha256(profile)
+    )
+
+
+def validate_current_explore_collection_profile(extension, proposal) -> None:
+    value = NativeExploreCollectionProfileBinding.model_validate_json(extension.model_dump_json())
+    actual = derive_explore_collection_profile(
+        proposal, ExploreCollectionIntent(max_bridges=value.profile.max_bridges)
+    )
+    if value != actual:
+        raise ValueError("explore_collection_profile_changed")
 
 
 SCIENTIFIC_CONTEXT_PROFILES_PROTOCOL = "polymath-scientific-context-profiles-v1"
@@ -726,6 +875,7 @@ class MetaResearchManifest(_ReadinessModel):
     ]
     discovery_ladder_profile: NativeDiscoveryProfileBinding | None = None
     scientific_context_profiles: NativeScientificContextProfiles | None = None
+    explore_collection_profile: NativeExploreCollectionProfileBinding | None = None
     valid_until: datetime
 
     @model_serializer(mode="wrap")
@@ -735,6 +885,15 @@ class MetaResearchManifest(_ReadinessModel):
             value.pop("discovery_ladder_profile", None)
         if self.scientific_context_profiles is None:
             value.pop("scientific_context_profiles", None)
+        if self.explore_collection_profile is None:
+            value.pop("explore_collection_profile", None)
+        return value
+
+    @field_validator("explore_collection_profile", mode="before")
+    @classmethod
+    def explicit_explore_profile_is_not_null(cls, value):
+        if value is None:
+            raise ValueError("explore_collection_profile_invalid")
         return value
 
     @field_validator("valid_until", mode="before")
@@ -788,6 +947,12 @@ class MetaResearchManifest(_ReadinessModel):
             validate_historical_scientific_context_profiles(
                 self.scientific_context_profiles, proposal
             )
+        if self.explore_collection_profile is not None:
+            validate_historical_explore_collection_profile(
+                self.explore_collection_profile,
+                proposal,
+                original_research_profile=self.task_profiles[0].profile,
+            )
         if self.valid_until > min(
             proposal.valid_until, self.review.valid_until, attestation.valid_until
         ) or self.valid_until <= max(
@@ -818,6 +983,7 @@ def build_research_manifest(
     valid_until: datetime,
     discovery=None,
     scientific_context: ScientificContextIntent | None = None,
+    explore_collection: ExploreCollectionIntent | None = None,
 ) -> MetaResearchManifest:
     if (
         not policy.configured
@@ -846,6 +1012,15 @@ def build_research_manifest(
         if scientific_context is not None
         else None,
         valid_until=valid_until,
+        **(
+            {
+                "explore_collection_profile": derive_explore_collection_profile(
+                    proposal, explore_collection
+                )
+            }
+            if explore_collection is not None
+            else {}
+        ),
     )
 
 
@@ -941,6 +1116,57 @@ def select_scientific_profile(
                 raise ValueError("scientific_context_intent_scope_invalid")
             return binding.profile
     raise ValueError("scientific_context_profile_not_approved")
+
+
+def select_profile_with_explore(
+    manifest,
+    task_kind,
+    mode,
+    *,
+    discovery=None,
+    scientific_intent=None,
+    explore_collection_intent=None,
+    parent_result_ids=(),
+):
+    """Historical approved profile; a tighter run intent never replaces its maximum."""
+    if explore_collection_intent is None:
+        return select_scientific_profile(
+            manifest, task_kind, mode, discovery=discovery, scientific_intent=scientific_intent
+        )
+    from polymath.public_research_contracts import PublicResearchManifest
+
+    cls = (
+        PublicResearchManifest
+        if isinstance(manifest, PublicResearchManifest)
+        else MetaResearchManifest
+    )
+    value = cls.model_validate_json(manifest.model_dump_json())
+    intent = ExploreCollectionIntent.model_validate_json(
+        explore_collection_intent.model_dump_json()
+    )
+    validate_explore_admission(
+        intent, mode=mode, task_kind=task_kind, parent_result_ids=parent_result_ids
+    )
+    if discovery is not None or scientific_intent is not None:
+        raise ValueError("explore_collection_intents_conflict")
+    extension = value.explore_collection_profile
+    if extension is None or intent.max_bridges > extension.profile.max_bridges:
+        raise ValueError("explore_collection_profile_not_approved")
+    return extension.profile
+
+
+class ExploreCollectionAccess(_ReadinessModel):
+    protocol: Literal["polymath-explore-collection-access-v1"] = (
+        "polymath-explore-collection-access-v1"
+    )
+    activation_sha256: Digest | None
+    explore_collection_intent: ExploreCollectionIntent | None
+
+    @model_validator(mode="after")
+    def approved_public_version(self):
+        if self.activation_sha256 is None and self.explore_collection_intent is not None:
+            raise ValueError("explore_collection_capability_without_public_activation")
+        return self
 
 
 class PublicResearchProtocols(_ReadinessModel):

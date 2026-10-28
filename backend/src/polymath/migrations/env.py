@@ -8,6 +8,7 @@ from polymath import (  # noqa: F401
     budget_models,
     discovery_models,
     evidence_models,
+    explore_collection_models,
     full_text_models,
     ingestion_models,
     lineage_models,

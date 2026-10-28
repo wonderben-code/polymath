@@ -790,12 +790,20 @@ def _discovery_store(engine: Engine):
     return DiscoveryStore(engine)
 
 
+def _explore_store(engine: Engine):
+    from polymath.explore_collection_store import ExploreCollectionStore
+
+    return ExploreCollectionStore(engine)
+
+
 class _RecordedDiscoverySink:
     """Run-fenced stage receipts; only this replay's acknowledgements are visible.
 
     Stage/checkpoint writes are one store transaction. A lost response stops the
     controller, preserving the committed receipt for deterministic explicit replay.
     """
+
+    failure_prefix = "discovery"
 
     def __init__(self, context: _RunContext, store, model):
         self.context, self.store, self.model = context, store, model
@@ -813,11 +821,11 @@ class _RecordedDiscoverySink:
         except StageValidationError as error:
             if repairable:
                 raise DiscoveryRejection(error.code) from None
-            raise ExecutionStopped("discovery_journal_not_saved") from None
+            raise ExecutionStopped(f"{self.failure_prefix}_journal_not_saved") from None
         except asyncio.CancelledError:
             raise
         except Exception:
-            raise ExecutionStopped("discovery_store_interrupted") from None
+            raise ExecutionStopped(f"{self.failure_prefix}_store_interrupted") from None
 
     async def begin_context(self, context) -> None:
         await self._call("begin_context", context)
@@ -863,7 +871,7 @@ class _RecordedDiscoverySink:
 
     async def record_search(self, query: str, purpose: str, results: SearchResults) -> None:
         if self.current_context is None or not 1 <= self.model.step <= 20:
-            raise ExecutionStopped("discovery_context_missing")
+            raise ExecutionStopped(f"{self.failure_prefix}_context_missing")
         await self._call(
             "record_search",
             self.current_context.ordinal,
@@ -873,6 +881,63 @@ class _RecordedDiscoverySink:
             results,
             repairable=False,
         )
+
+
+class _RecordedExploreCollectionSink(_RecordedDiscoverySink):
+    """Exact local receipt prefix, never the store's later persisted state."""
+
+    failure_prefix = "explore_collection"
+
+    def __init__(self, context: _RunContext, store, model):
+        super().__init__(context, store, model)
+        self.visible_receipts = []
+
+    async def commit(self, packet):
+        from polymath.discovery_contracts import StageCommitReceipt
+        from polymath.explore_collection_contracts import validate_explore_commit_receipt
+
+        receipt = await self._call("commit", packet)
+        try:
+            if not isinstance(receipt, StageCommitReceipt):
+                raise ValueError
+            receipt = StageCommitReceipt.model_validate_json(receipt.model_dump_json())
+            validate_explore_commit_receipt(
+                packet, receipt, previous_receipts=tuple(self.visible_receipts)
+            )
+            if receipt.run_id != str(self.context.lease.run_id):
+                raise ValueError
+        except Exception:
+            raise ExecutionStopped("explore_collection_commit_receipt_invalid") from None
+        self.visible_receipts.append(receipt)
+        self.visible_stage_ids.append(receipt.stage_id)
+        return receipt
+
+    async def _ranking(self, name, packet):
+        from polymath.explore_collection_contracts import (
+            ExploreRankingReceipt,
+            validate_explore_ranking_receipt,
+        )
+
+        ranking = packet.ranking if name == "finish" else packet
+        if ranking.visible_receipts != tuple(self.visible_receipts):
+            raise ExecutionStopped("explore_collection_ranking_visibility_invalid")
+        receipt = await self._call(name, packet, visible_stage_ids=tuple(self.visible_stage_ids))
+        try:
+            if not isinstance(receipt, ExploreRankingReceipt):
+                raise ValueError
+            receipt = ExploreRankingReceipt.model_validate_json(receipt.model_dump_json())
+            validate_explore_ranking_receipt(
+                ranking, receipt, run_id=str(self.context.lease.run_id)
+            )
+        except Exception:
+            raise ExecutionStopped("explore_collection_ranking_receipt_invalid") from None
+        return receipt
+
+    async def rank(self, packet):
+        return await self._ranking("rank", packet)
+
+    async def finish(self, packet):
+        return await self._ranking("finish", packet)
 
 
 class _RecordedDiscoveryTools:
@@ -922,6 +987,7 @@ class ResearchWorker:
         native_claim_account_id: str | None = None,
         tools_context_factory: Callable[[_RunContext, RunSnapshot], LiteratureTools] | None = None,
         discovery_store_factory: Callable[[Engine], Any] | None = None,
+        explore_store_factory: Callable[[Engine], Any] | None = None,
     ):
         if type(execution_enabled) is not bool:
             raise ValueError("execution_enabled must be a bool")
@@ -949,6 +1015,7 @@ class ResearchWorker:
         self.native_claim_account_id = native_claim_account_id
         self.tools_context_factory = tools_context_factory
         self.discovery_store_factory = discovery_store_factory or _discovery_store
+        self.explore_store_factory = explore_store_factory or _explore_store
         self.jobs, self.budget = JobRepository(engine), BudgetService(engine)
 
     async def run_until_stopped(
@@ -1063,6 +1130,8 @@ class ResearchWorker:
         pulse = asyncio.create_task(heartbeat())
         discovery_store = None
         discovery_intent = None
+        explore_store = None
+        explore_intent = None
         scientific_intent = None
 
         async def stop_heartbeat() -> None:
@@ -1076,6 +1145,16 @@ class ResearchWorker:
             scientific_intent = await asyncio.to_thread(_load_scientific_intent, self.engine, lease)
             discovery_store = self.discovery_store_factory(self.engine)
             discovery_intent = await asyncio.to_thread(discovery_store.load_intent, lease)
+            explore_store = self.explore_store_factory(self.engine)
+            explore_intent = await asyncio.to_thread(explore_store.load_intent, lease)
+            if explore_intent is not None:
+                if (
+                    snapshot.task_kind != "research"
+                    or snapshot.mode != "explore"
+                    or discovery_intent is not None
+                    or scientific_intent is not None
+                ):
+                    raise ExecutionStopped("explore_collection_intent_mismatch")
             if discovery_intent is not None:
                 from polymath.research.discovery import DiscoveryLimits
 
@@ -1087,6 +1166,8 @@ class ResearchWorker:
                     limits = DiscoveryLimits(**asdict(limits))
                     profile = replace(profile, limits=limits)
             parents = await asyncio.to_thread(get_parent_refs, self.engine, lease)
+            if explore_intent is not None and parents:
+                raise ExecutionStopped("explore_collection_parent_intent_unsupported")
             basis: ArtifactBasis | None = None
             assessment_basis: AssessmentBasis | None = None
             assessment_limits = None
@@ -1123,6 +1204,10 @@ class ResearchWorker:
                 fingerprint_input["native_run_binding"] = profile.protocol_binding
             if discovery_intent is not None:
                 fingerprint_input["discovery_intent"] = discovery_intent.model_dump(mode="json")
+            if explore_intent is not None:
+                fingerprint_input["explore_collection_intent"] = explore_intent.model_dump(
+                    mode="json"
+                )
             if scientific_intent is not None:
                 fingerprint_input["scientific_intent"] = scientific_intent.model_dump(mode="json")
             fingerprint = _digest(fingerprint_input)
@@ -1243,21 +1328,33 @@ class ResearchWorker:
                 if discovery_intent is not None
                 else None
             )
+            explore_sink = (
+                _RecordedExploreCollectionSink(context, explore_store, model)
+                if explore_intent is not None
+                else None
+            )
+            stage_sink = discovery_sink or explore_sink
             controller = ResearchController(
                 model,
-                _RecordedDiscoveryTools(recorded_tools, discovery_sink)
-                if discovery_sink is not None
+                _RecordedDiscoveryTools(recorded_tools, stage_sink)
+                if stage_sink is not None
                 else recorded_tools,
                 limits,
                 on_event=public_event,
                 memory=_RecordedMemory(context, ResearchMemory(self.engine, lease)),
                 **({"discovery_sink": discovery_sink} if discovery_sink is not None else {}),
+                **({"explore_collection_sink": explore_sink} if explore_sink is not None else {}),
             )
             result = await controller.investigate(
                 snapshot.goal,
                 mode=snapshot.mode,
                 parent_result_ids=tuple(parent.result_id for parent in parents),
                 **({"discovery": discovery_intent} if discovery_intent is not None else {}),
+                **(
+                    {"explore_collection_intent": explore_intent}
+                    if explore_intent is not None
+                    else {}
+                ),
                 **(
                     {"ask_overview_intent": scientific_intent}
                     if scientific_intent is not None
@@ -1268,6 +1365,19 @@ class ResearchWorker:
             current = await asyncio.to_thread(self.jobs.get, lease.run_id)
             if current.external_request_in_flight:
                 raise ExecutionStopped("external_outcome_unknown")
+            if explore_intent is not None:
+                from polymath.explore_collection_contracts import ExploreCollectionOutcome
+
+                if not isinstance(result, ExploreCollectionOutcome):
+                    raise ExecutionStopped("explore_collection_outcome_invalid")
+                await stop_heartbeat()
+                await asyncio.to_thread(explore_store.record_stop, lease, result)
+                finished = await asyncio.to_thread(self.jobs.get, lease.run_id)
+                return WorkerOutcome(
+                    finished.status,
+                    str(lease.run_id),
+                    result_id=(finished.outcome or {}).get("result_id"),
+                )
             if discovery_intent is not None:
                 from polymath.discovery_contracts import DiscoveryOutcome
 
@@ -1298,14 +1408,15 @@ class ResearchWorker:
             return WorkerOutcome(status, str(lease.run_id), str(saved.id))
         except (ExecutionStopped, asyncio.CancelledError) as error:
             await stop_heartbeat()
-            if discovery_intent is not None:
+            stage_store = explore_store if explore_intent is not None else discovery_store
+            if discovery_intent is not None or explore_intent is not None:
                 reason = (
                     "ownership_lost"
                     if lost.is_set()
                     else (str(error) if isinstance(error, ExecutionStopped) else "worker_cancelled")
                 )
                 with suppress(Exception):
-                    await asyncio.to_thread(discovery_store.record_interruption, lease, reason)
+                    await asyncio.to_thread(stage_store.record_interruption, lease, reason)
             from polymath.jobs import PUBLIC_INTERRUPTION_REASONS
 
             public_reason = str(error) if isinstance(error, ExecutionStopped) else None
@@ -1320,10 +1431,11 @@ class ResearchWorker:
             )
         except Exception:
             await stop_heartbeat()
-            if discovery_intent is not None:
+            stage_store = explore_store if explore_intent is not None else discovery_store
+            if discovery_intent is not None or explore_intent is not None:
                 with suppress(Exception):
                     await asyncio.to_thread(
-                        discovery_store.record_interruption, lease, "worker_interrupted"
+                        stage_store.record_interruption, lease, "worker_interrupted"
                     )
             await self._stop(lease)
             return WorkerOutcome(

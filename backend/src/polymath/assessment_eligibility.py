@@ -19,7 +19,7 @@ from polymath.assessment_models import (
     FindingAssessment,
     FindingHead,
 )
-from polymath.discovery_models import DiscoveryIntent, StageCommit
+from polymath.discovery_models import StageCommit
 from polymath.evidence_models import EvidenceQuote, EvidenceResult
 from polymath.models import ResearchRun
 
@@ -35,11 +35,10 @@ def completed_result_condition(result=EvidenceResult):
     supported-head and stage structural checks. A succeeded ladder run cannot
     make an uncommitted positive row eligible.
     """
-    ladder = exists(
-        select(DiscoveryIntent.run_id)
-        .where(DiscoveryIntent.run_id == result.run_id)
-        .correlate(result)
-    )
+    from polymath.stage_owners import no_collection_intent_condition
+
+    # A missing registry cannot make a concrete collection ordinary research.
+    ladder = ~no_collection_intent_condition(result)
     stage = exists(
         select(StageCommit.id)
         .where(

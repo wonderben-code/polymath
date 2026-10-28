@@ -433,3 +433,21 @@ literature-provider access/fees and deployment/hosting costs remain unverified
 external prerequisites. Select no paid plan and make no live request under this
 design. A local fixture, saved example or synthetic browser journey is labelled
 as such and cannot establish native science, invoice accuracy or public deployment.
+
+## Optional Explore collection capability
+
+Durable public preview can separately review `explore_collection` and its 1–4
+maximum. The resulting omitted-when-absent `explore_collection_profile` uses the
+same visitor ownership, public quotas, global ledger, deadline and explicit stop.
+A collection counts as one job; its branches/rankings never reset any allowance.
+Sponsor logout behavior is unchanged.
+
+The separate existing-owner GET `/api/v1/research/explore-protocols` exposes only
+its fixed protocol, current public activation hash and optional approved intent.
+It adds nothing to D2 `/research/access` or SC `/research/protocols` v1. Ordinary
+UI/SDK Explore binds matching funding/capability hashes and requests at most three
+bridges by default; a tighter owner approval remains tighter. Parent-selected F3,
+other modes and original resume keep their existing contracts. Final admission
+independently verifies the reviewed extension. Missing support never triggers an
+automatic legacy POST. Saved collection/ranking readers remain available after
+funding stops, subject to normal browser ownership and read limits.

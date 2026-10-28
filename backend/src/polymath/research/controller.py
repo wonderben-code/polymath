@@ -54,6 +54,11 @@ from polymath.research.models import (
 
 if TYPE_CHECKING:
     from polymath.discovery_contracts import DiscoveryIntent, DiscoveryOutcome, DiscoverySink
+    from polymath.explore_collection_contracts import (
+        ExploreCollectionIntent,
+        ExploreCollectionOutcome,
+        ExploreCollectionSink,
+    )
     from polymath.full_text_contracts import FullTextIndex
     from polymath.scientific_context_contracts import AskOverviewIntent
 
@@ -494,6 +499,7 @@ class ResearchController:
         on_event: Callable[[ResearchEvent], Awaitable[None]] | None = None,
         memory: MemoryTools | None = None,
         discovery_sink: DiscoverySink | None = None,
+        explore_collection_sink: ExploreCollectionSink | None = None,
     ) -> None:
         self.model = model
         self.tools = tools
@@ -501,6 +507,7 @@ class ResearchController:
         self.on_event = on_event
         self.memory = memory
         self.discovery_sink = discovery_sink
+        self.explore_collection_sink = explore_collection_sink
 
     async def investigate(
         self,
@@ -510,7 +517,8 @@ class ResearchController:
         parent_result_ids: tuple[str, ...] = (),
         discovery: DiscoveryIntent | None = None,
         ask_overview_intent: AskOverviewIntent | None = None,
-    ) -> ResearchResult | DiscoveryOutcome:
+        explore_collection_intent: ExploreCollectionIntent | None = None,
+    ) -> ResearchResult | DiscoveryOutcome | ExploreCollectionOutcome:
         from polymath.discovery_contracts import (
             DISCOVERY_ACTION_ADAPTER,
             DiscoveryConcludeAction,
@@ -545,7 +553,12 @@ class ResearchController:
             ask_overview_intent = AskOverviewIntent.model_validate_json(
                 ask_overview_intent.model_dump_json()
             )
-            if mode != "ask" or discovery is not None or parent_result_ids:
+            if (
+                mode != "ask"
+                or discovery is not None
+                or parent_result_ids
+                or explore_collection_intent is not None
+            ):
                 raise ValueError("ask_overview_wrong_mode")
             ask_adapter = ASK_OVERVIEW_ACTION_ADAPTER
         ladder = None
@@ -554,6 +567,43 @@ class ResearchController:
             if mode != "surprise" or parent_result_ids or self.discovery_sink is None:
                 raise ValueError("Discovery requires Surprise mode and its explicit stage sink")
             ladder = DiscoveryState(discovery, self.discovery_sink)
+        collection = None
+        if explore_collection_intent is not None:
+            from polymath.explore_collection_contracts import (
+                EXPLORE_ACTION_ADAPTER,
+                MAX_EXPLORE_ACTIONS,
+                ExploreCollectionIntent,
+                ExploreCollectionOutcome,
+                ExploreCommitPacket,
+                ExploreConcludeAction,
+                ExploreFinishRankedAction,
+                ExploreRankSavedAction,
+                ExploreRecordBridgeAction,
+                validate_explore_admission,
+            )
+            from polymath.research.explore_collection import ExploreCollectionState
+
+            if not isinstance(explore_collection_intent, ExploreCollectionIntent):
+                raise ValueError("explore_collection_intent_invalid")
+            explore_collection_intent = ExploreCollectionIntent.model_validate_json(
+                explore_collection_intent.model_dump_json()
+            )
+            validate_explore_admission(
+                explore_collection_intent,
+                mode=mode,
+                task_kind="research",
+                parent_result_ids=parent_result_ids,
+            )
+            if discovery is not None or ask_overview_intent is not None:
+                raise ValueError("explore_collection_wrong_scope")
+            if self.explore_collection_sink is None:
+                raise ValueError("explore_collection_sink_required")
+            if self.limits.max_actions > MAX_EXPLORE_ACTIONS:
+                raise ValueError("explore_collection_action_limit")
+            collection = ExploreCollectionState(
+                explore_collection_intent, self.explore_collection_sink
+            )
+        stage_state = collection if collection is not None else ladder
         if not isinstance(mode, str) or mode not in MODE_INSTRUCTIONS:
             raise ValueError("Unsupported research mode")
         if (
@@ -604,6 +654,12 @@ class ResearchController:
             from polymath.research.ask_overview import ask_overview_initial_messages
 
             messages = ask_overview_initial_messages(goal, memory_available=self.memory is not None)
+        elif collection is not None:
+            from polymath.research.explore_collection import explore_collection_initial_messages
+
+            messages = explore_collection_initial_messages(
+                goal, explore_collection_intent, memory_available=self.memory is not None
+            )
         discovered: dict[str, SourceReference] = {}
         full_text_availability: dict[str, FullTextAvailability] = {}
         opened: dict[str, FullTextIndex] = {}
@@ -636,7 +692,7 @@ class ResearchController:
                 status=status,
                 mode=mode,
                 finding=finding,
-                field_selections=tuple(selections),
+                field_selections=tuple(selections) if collection is None else (),
                 memory_reads=tuple(parent.reference for parent in ladder.parents.values())
                 if ladder is not None
                 else tuple(
@@ -662,6 +718,19 @@ class ResearchController:
 
         def result(status: str, **values):
             current = research_result(status, **values)
+            if collection is not None:
+                return ExploreCollectionOutcome(
+                    status=status,
+                    stages=tuple(collection.stages),
+                    rankings=tuple(collection.rankings),
+                    result=current,
+                    events=current.events,
+                    usage=current.usage,
+                    error_code=current.error_code,
+                    reason=current.finding.reason
+                    if isinstance(current.finding, InsufficientFinding)
+                    else None,
+                )
             if ladder is None:
                 return current
             return DiscoveryOutcome(
@@ -677,15 +746,22 @@ class ResearchController:
             )
 
         async def commit_bridge(finding, assessment, revision_of=None):
-            if ladder is None or ladder.context is None:
+            if stage_state is None or stage_state.context is None:
                 raise ValueError("discovery_context_missing")
-            if len(ladder.stages) >= ladder.intent.max_stages:
-                raise ValueError("discovery_stage_limit")
+            ceiling = (
+                collection.intent.max_bridges
+                if collection is not None
+                else ladder.intent.max_stages
+            )
+            if len(stage_state.stages) >= ceiling:
+                raise ValueError(
+                    "explore_receipt_limit" if collection is not None else "discovery_stage_limit"
+                )
             # Historical commits must be reconstructed from observations already
             # replayed, never later durable locators. The store dedupes that exact
             # packet first and applies the full current closure to fresh writes.
             identity = _complete_identity_context(
-                sources.values(), opened.values(), ladder.identity_observations.values()
+                sources.values(), opened.values(), stage_state.identity_observations.values()
             )
             _verify_surprise_fields(finding, tuple(selections))
             quotes = _verify_evidence(finding, sources, purposes, alias_context=identity)
@@ -694,42 +770,55 @@ class ResearchController:
                 sources,
                 tuple(
                     reference
-                    for reference in ladder.identity_observations.values()
-                    if reference.source_id in ladder.prior_work_sources
+                    for reference in stage_state.identity_observations.values()
+                    if reference.source_id in stage_state.prior_work_sources
                 ),
                 alias_context=identity,
             ):
                 raise ValueError("discovery_prior_work_quote_missing")
-            depth = ladder.validate_quotes(quotes)
+            depth = stage_state.validate_quotes(quotes)
             current = research_result("bridge", finding=finding, quotes=quotes)
-            current = current.model_copy(
-                update={
-                    "memory_reads": tuple(parent.reference for parent in ladder.parents.values())
-                }
-            )
-            packet = StageCommitPacket(
-                context=ladder.context,
-                model_request_id=f"model-{calls:04d}",
-                action_ordinal=actions,
-                result=current,
-                assessment=assessment,
-                revision_of=revision_of,
-            )
+            if ladder is not None:
+                current = current.model_copy(
+                    update={
+                        "memory_reads": tuple(
+                            parent.reference for parent in ladder.parents.values()
+                        )
+                    }
+                )
+            if collection is not None:
+                packet = ExploreCommitPacket(
+                    context=collection.context,
+                    model_request_id=f"model-{calls:04d}",
+                    action_ordinal=actions,
+                    result=current,
+                    assessment=assessment,
+                )
+            else:
+                packet = StageCommitPacket(
+                    context=ladder.context,
+                    model_request_id=f"model-{calls:04d}",
+                    action_ordinal=actions,
+                    result=current,
+                    assessment=assessment,
+                    revision_of=revision_of,
+                )
             # The sink owns the durable transaction and control-stop semantics.
             # Never turn ambiguous commit/lease/cancellation into a paid repair.
             try:
-                receipt = await ladder.sink.commit(packet)
+                receipt = await stage_state.sink.commit(packet)
                 if not isinstance(receipt, StageCommitReceipt):
                     raise RuntimeError("discovery_commit_receipt_invalid")
                 receipt = StageCommitReceipt.model_validate_json(receipt.model_dump_json())
-                ladder.accept_commit(packet, receipt, depth)
+                stage_state.accept_commit(packet, receipt, depth)
             except DiscoveryRejection:
                 raise
             except ValueError:
                 raise RuntimeError("discovery_commit_interrupted") from None
             purposes.clear()
             selections.clear()
-            memory_findings.clear()
+            if collection is None:
+                memory_findings.clear()
             observation({"kind": "stage_committed", **receipt.model_dump(mode="json")})
             await event(
                 "stage_committed", f"Saved discovery stage {receipt.ordinal + 1}: {finding.title}"
@@ -756,6 +845,30 @@ class ResearchController:
                 reason=reason,
             )
 
+        async def save_explore_ranking(ranking, *, reason=None):
+            receipt = await collection.save_ranking(
+                ranking, f"model-{calls:04d}", actions, reason=reason
+            )
+            observation({"kind": "explore_ranking_saved", **receipt.model_dump(mode="json")})
+            await event(
+                "explore_ranked",
+                f"Saved a model-authored ordering of {len(receipt.ranked)} bridges; "
+                f"{len(receipt.excluded)} saved candidates excluded.",
+            )
+            if reason is None:
+                return None
+            await event("explore_finished", reason)
+            current = research_result("limit_reached")
+            return ExploreCollectionOutcome(
+                status="completed",
+                stages=tuple(collection.stages),
+                rankings=tuple(collection.rankings),
+                final_ranking=receipt,
+                events=current.events,
+                usage=current.usage,
+                reason=reason,
+            )
+
         async def reject(code: str) -> bool:
             nonlocal repairs
             repairs += 1
@@ -769,6 +882,9 @@ class ResearchController:
             return repairs > self.limits.max_repairs
 
         while calls < self.limits.max_model_calls and actions < self.limits.max_actions:
+            if collection is not None and collection.identity_limit_reached:
+                await event("stopped", "Stopped at the complete source-identity context limit.")
+                return result("limit_reached", error_code="identity_context_limit")
             if sum(len(message["content"]) for message in messages) > (
                 self.limits.max_context_characters
             ):
@@ -802,7 +918,9 @@ class ResearchController:
             overview_binding = None
             try:
                 action = (
-                    DISCOVERY_ACTION_ADAPTER
+                    EXPLORE_ACTION_ADAPTER
+                    if collection is not None
+                    else DISCOVERY_ACTION_ADAPTER
                     if ladder is not None
                     else ask_adapter
                     if ask_adapter is not None
@@ -822,23 +940,51 @@ class ResearchController:
                     return result("failed", error_code="repair_limit")
                 continue
             actions += 1
-            if ladder is not None and isinstance(action, RecordNoteAction):
-                if ladder.context is None:
+            if stage_state is not None and isinstance(action, RecordNoteAction):
+                if stage_state.context is None:
                     if await reject("discovery_context_missing"):
                         return result("failed", error_code="repair_limit")
                     continue
-                prior = ladder.notes.get(action.hypothesis_id)
+                prior = stage_state.notes.get(action.hypothesis_id)
                 if (
                     (prior is None and action.state != "proposed")
                     or (prior is not None and action.state == "proposed")
-                    or (prior is None and len(ladder.notes) >= 8)
+                    or (prior is None and len(stage_state.notes) >= 8)
                 ):
                     if await reject("discovery_note_transition_invalid"):
                         return result("failed", error_code="repair_limit")
                     continue
-                ladder.notes[action.hypothesis_id] = action.state
+                stage_state.notes[action.hypothesis_id] = action.state
                 observation({"kind": "research_note", **action.model_dump(mode="json")})
-                await event("research_note", f"{action.state}: {action.summary} {action.reason}")
+                await event(
+                    "research_note",
+                    f"{action.state}: {action.summary}"
+                    if collection is not None
+                    else f"{action.state}: {action.summary} {action.reason}",
+                )
+            elif collection is not None and isinstance(
+                action, (ExploreRankSavedAction, ExploreFinishRankedAction)
+            ):
+                try:
+                    finished = await save_explore_ranking(
+                        action.ranking,
+                        reason=action.reason
+                        if isinstance(action, ExploreFinishRankedAction)
+                        else None,
+                    )
+                except ValueError as error:
+                    if await reject(
+                        str(error)
+                        if isinstance(error, DiscoveryRejection)
+                        else "explore_ranking_invalid"
+                    ):
+                        return result("failed", error_code="repair_limit")
+                    continue
+                if finished is not None:
+                    return finished
+            elif collection is not None and isinstance(action, ExploreConcludeAction):
+                await event("concluded", "Stopped because further evidence is insufficient.")
+                return result("insufficient_evidence", finding=action.conclusion)
             elif ladder is not None and isinstance(action, SelectParentsAction):
                 known = {stage.result_id: stage.reference for stage in ladder.stages}
                 known.update(
@@ -957,8 +1103,9 @@ class ResearchController:
                     if await reject(exc.code):
                         return result("failed", error_code="repair_limit")
                     continue
-            elif ladder is not None and isinstance(
-                action, (RecordBridgeAction, DiscoveryConcludeAction)
+            elif (collection is not None and isinstance(action, ExploreRecordBridgeAction)) or (
+                ladder is not None
+                and isinstance(action, (RecordBridgeAction, DiscoveryConcludeAction))
             ):
                 if isinstance(action, DiscoveryConcludeAction) and isinstance(
                     action.conclusion, InsufficientFinding
@@ -966,7 +1113,9 @@ class ResearchController:
                     await event("concluded", "Stopped because further evidence is insufficient.")
                     return result("insufficient_evidence", finding=action.conclusion)
                 finding = (
-                    action.finding if isinstance(action, RecordBridgeAction) else action.conclusion
+                    action.finding
+                    if collection is not None or isinstance(action, RecordBridgeAction)
+                    else action.conclusion
                 )
                 # Only locally rejected evidence is repairable. Persistence
                 # interruptions must propagate through the control-stop path.
@@ -990,25 +1139,34 @@ class ResearchController:
                             return result("failed", error_code="repair_limit")
                         continue
             elif isinstance(action, SelectFieldsAction):
-                if mode != "surprise":
+                if mode != "surprise" and collection is None:
                     if await reject("field_selection_wrong_mode"):
                         return result("failed", error_code="repair_limit")
                     continue
-                if len(selections) >= 3 and ladder is None:
+                if len(selections) >= 3 and stage_state is None:
                     if await reject("field_selection_limit"):
                         return result("failed", error_code="repair_limit")
                     continue
                 selection = FieldSelection(fields=action.fields, rationale=action.rationale)
-                if ladder is not None:
+                if stage_state is not None:
                     try:
-                        context = await ladder.begin(selection, (), f"model-{calls:04d}", actions)
+                        context = await stage_state.begin(
+                            selection, (), f"model-{calls:04d}", actions
+                        )
                     except DiscoveryRejection as exc:
                         if await reject(exc.code):
                             return result("failed", error_code="repair_limit")
                         continue
                     selections[:] = [selection]
-                    memory_findings.clear()
-                    observation({"kind": "stage_context", **context.model_dump(mode="json")})
+                    if collection is None:
+                        memory_findings.clear()
+                    observation(
+                        {
+                            "kind": "stage_context",
+                            **context.model_dump(mode="json"),
+                            **({"research_goal": goal.strip()} if collection is not None else {}),
+                        }
+                    )
                 else:
                     selections.append(selection)
                 purposes.clear()
@@ -1030,7 +1188,7 @@ class ResearchController:
                         ReadMemorySourceAction,
                     ),
                 )
-                and mode == "surprise"
+                and (mode == "surprise" or collection is not None)
                 and not selections
             ):
                 if await reject("fields_not_selected"):
@@ -1102,6 +1260,8 @@ class ResearchController:
                     ):
                         raise ValueError("memory_identity_mismatch")
                     memory_findings[action.result_id] = saved
+                    if collection is not None:
+                        collection.remember_identity(source.source for source in saved.sources)
                     observation({"kind": "memory_finding", **saved.model_dump(mode="json")})
                     await event(
                         "memory_finding_read",
@@ -1150,6 +1310,8 @@ class ResearchController:
                     discovered_prior = discovered.get(document.source_id)
                     if discovered_prior is not None and discovered_prior.url != document.url:
                         raise ValueError("source_identity_conflict")
+                    if collection is not None:
+                        collection.remember_identity((document,))
                     document = _retain_source(sources, document)
                     observation(
                         {
@@ -1197,14 +1359,18 @@ class ResearchController:
                     if len(candidates) > 200:
                         raise ValueError("discovery_limit")
                     retained = _retain_full_text_availability(full_text_availability, available)
-                    if ladder is not None:
-                        ladder.remember_identity(discovery_search_identity_refs(matches, available))
+                    if stage_state is not None:
+                        stage_state.remember_identity(
+                            discovery_search_identity_refs(matches, available)
+                        )
                     discovered = candidates
                     full_text_availability = retained
-                    if ladder is None or matches or len(failures) < 2:
+                    if stage_state is None or matches or len(failures) < 2:
                         purposes.add(action.purpose)
-                        if ladder is not None and action.purpose == "prior_work":
-                            ladder.prior_work_sources.update(item.source_id for item in matches)
+                        if stage_state is not None and action.purpose == "prior_work":
+                            stage_state.prior_work_sources.update(
+                                item.source_id for item in matches
+                            )
                     observation(
                         {
                             "kind": "search_results",
@@ -1248,8 +1414,8 @@ class ResearchController:
                     prior = opened.get(index.snapshot_id)
                     if prior is not None and prior != index:
                         raise ValueError("full_text_index_mismatch")
-                    if ladder is not None:
-                        ladder.remember_identity(_complete_identity_context((), (index,), ()))
+                    if stage_state is not None:
+                        stage_state.remember_identity(_complete_identity_context((), (index,), ()))
                     opened[index.snapshot_id] = index
                     observation({"kind": "full_text_index", **index.model_dump(mode="json")})
                     await event(
@@ -1278,8 +1444,8 @@ class ResearchController:
                         action.start,
                         action.end,
                     )
-                    if ladder is not None:
-                        ladder.remember_identity((document,))
+                    if stage_state is not None:
+                        stage_state.remember_identity((document,))
                     document = _retain_source(sources, document)
                     observation(
                         {
@@ -1318,8 +1484,8 @@ class ResearchController:
                         or document.coverage != discovered[action.source_id].coverage
                     ):
                         raise ValueError("source_identity_mismatch")
-                    if ladder is not None:
-                        ladder.remember_identity((document,))
+                    if stage_state is not None:
+                        stage_state.remember_identity((document,))
                     document = _retain_source(sources, document)
                     observation(
                         {

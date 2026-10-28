@@ -13,11 +13,12 @@ from typing import Annotated
 from fastapi import APIRouter, Path, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.routing import APIRoute
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import Engine
 from starlette.exceptions import HTTPException
 
 from polymath.discovery_contracts import DiscoveryIntent
+from polymath.explore_collection_contracts import ExploreCollectionIntent
 from polymath.meta_probe_contracts import ProbeId, ProviderAccountAttestation
 from polymath.meta_readiness_contracts import ReadinessPolicy
 from polymath.meta_research_contracts import (
@@ -85,6 +86,14 @@ class PreviewResearch(BaseModel):
     provider_account_attestation: ProviderAccountAttestation
     discovery: DiscoveryIntent | None = None
     scientific_context: ScientificContextIntent | None = None
+    explore_collection: ExploreCollectionIntent | None = None
+
+    @field_validator("explore_collection", mode="before")
+    @classmethod
+    def explicit_explore_marker_is_not_null(cls, value):
+        if value is None:
+            raise ValueError("explore_collection_intent_invalid")
+        return value
 
 
 class ActivateResearch(BaseModel):
@@ -174,6 +183,11 @@ def create_meta_research_router(
                 **(
                     {"scientific_context": body.scientific_context}
                     if body.scientific_context is not None
+                    else {}
+                ),
+                **(
+                    {"explore_collection": body.explore_collection}
+                    if body.explore_collection is not None
                     else {}
                 ),
             )

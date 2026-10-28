@@ -31,6 +31,10 @@ from sqlalchemy.orm import Session
 
 from polymath.access_models import BrowserSession, ResearchRunAccess
 from polymath.discovery_contracts import DiscoveryIntent
+from polymath.explore_collection_contracts import (
+    ExploreCollectionIntent,
+    validate_explore_admission,
+)
 from polymath.jobs import JobNotFound, JobRepository, _event
 from polymath.lineage import LineageError, bind_parents, validate_parent_ids
 from polymath.meta_research_errors import (
@@ -90,6 +94,14 @@ class CreateRun(BaseModel):
     expected_activation_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     discovery_intent: DiscoveryIntent | None = None
     ask_overview_intent: AskOverviewIntent | None = None
+    explore_collection_intent: ExploreCollectionIntent | None = None
+
+    @field_validator("explore_collection_intent", mode="before")
+    @classmethod
+    def explicit_explore_protocol(cls, value):
+        if value is None:
+            raise ValueError("An explicit Explore collection protocol is required")
+        return value
 
     @field_validator("ask_overview_intent", mode="before")
     @classmethod
@@ -112,6 +124,15 @@ class CreateRun(BaseModel):
             self.mode != "ask" or self.discovery_intent is not None or self.parent_result_ids
         ):
             raise ValueError("A claim-bound overview requires an ordinary Ask investigation")
+        if self.explore_collection_intent is not None:
+            validate_explore_admission(
+                self.explore_collection_intent,
+                mode=self.mode,
+                task_kind="research",
+                parent_result_ids=self.parent_result_ids,
+            )
+            if self.ask_overview_intent is not None or self.discovery_intent is not None:
+                raise ValueError("An Explore collection requires its own scientific protocol")
         return self
 
 
@@ -260,6 +281,11 @@ def _summary(run: ResearchRun, *, session: Session | None = None) -> dict:
         intent = load_discovery_intent(session, run)
         if intent is not None:
             result["discovery_intent"] = intent.model_dump(mode="json")
+        from polymath.explore_collection_admission import load_explore_collection_intent
+
+        explore = load_explore_collection_intent(session, run)
+        if explore is not None:
+            result["explore_collection_intent"] = explore.model_dump(mode="json")
         controls = native_run_controls(session, run)
         if controls is not None:
             result["native_research"] = controls
@@ -391,6 +417,13 @@ def create_run_router(
                     session.flush()
                     bind_discovery_intent(session, run, body.discovery_intent)
                 bind_parents(session, run, owner.token_hash, body.parent_result_ids)
+                if body.explore_collection_intent is not None:
+                    from polymath.explore_collection_admission import (
+                        bind_explore_collection_intent,
+                    )
+
+                    session.flush()
+                    bind_explore_collection_intent(session, run, body.explore_collection_intent)
                 if body.ask_overview_intent is not None:
                     from polymath.scientific_context_store import (
                         ContextStoreError,

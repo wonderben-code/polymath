@@ -23,6 +23,7 @@ from polymath.budget_models import BudgetAccount, BudgetReservation, BudgetRunLi
 from polymath.discovery_admission import load_discovery_intent
 from polymath.dispatch import _call_key
 from polymath.evidence import _canonical, _hash
+from polymath.explore_collection_admission import load_explore_collection_intent
 from polymath.jobs import _clear_lease, _event, _owned
 from polymath.lineage_models import ResearchRunParent
 from polymath.meta_probe_models import (
@@ -95,6 +96,9 @@ def native_run_input_sha256(session, run):
     discovery = load_discovery_intent(session, run)
     if discovery is not None:
         value["discovery_intent"] = discovery.model_dump(mode="json")
+    explore = load_explore_collection_intent(session, run)
+    if explore is not None:
+        value["explore_collection_intent"] = explore.model_dump(mode="json")
     if artifact is not None:
         value["artifact"] = {
             "kind": artifact.kind,
@@ -418,7 +422,7 @@ def _activation(session, approval_id):
 
 
 def _original_input(session, run_id, *, check_input=False):
-    from polymath.meta_research_contracts import select_scientific_profile, task_profile_sha256
+    from polymath.meta_research_contracts import select_profile_with_explore, task_profile_sha256
     from polymath.public_research_contracts import PublicResearchManifest
     from polymath.public_research_models import PublicResearchRunAccess
     from polymath.scientific_context_store import load_scientific_intent
@@ -431,12 +435,13 @@ def _original_input(session, run_id, *, check_input=False):
     discovery = load_discovery_intent(session, run)
     public = isinstance(manifest, PublicResearchManifest)
     try:
-        profile = select_scientific_profile(
+        profile = select_profile_with_explore(
             manifest,
             binding.task_kind,
             run.mode,
             discovery=discovery,
             scientific_intent=load_scientific_intent(session, run),
+            explore_collection_intent=load_explore_collection_intent(session, run),
         )
     except ValueError:
         raise MetaResearchError("meta_research_storage_unavailable") from None
@@ -572,11 +577,19 @@ class MetaResearchStore:
         from polymath.meta_research_contracts import (
             derive_discovery_ladder_profile,
             derive_task_profiles,
+            validate_current_explore_collection_profile,
             validate_current_scientific_context_profiles,
         )
 
         if manifest.task_profiles != derive_task_profiles(proposal):
             raise MetaResearchError("meta_research_authority_expired")
+        if manifest.explore_collection_profile is not None:
+            try:
+                validate_current_explore_collection_profile(
+                    manifest.explore_collection_profile, proposal
+                )
+            except ValueError:
+                raise MetaResearchError("meta_research_authority_expired") from None
         if manifest.scientific_context_profiles is not None:
             try:
                 validate_current_scientific_context_profiles(
@@ -812,6 +825,7 @@ class MetaResearchStore:
         *,
         discovery=None,
         scientific_context=None,
+        explore_collection=None,
     ):
         from polymath.meta_probe_contracts import ProviderAccountAttestation
         from polymath.meta_readiness_contracts import MetaReadinessProposal
@@ -856,6 +870,7 @@ class MetaResearchStore:
                     valid_until=expiry,
                     discovery=discovery,
                     scientific_context=scientific_context,
+                    explore_collection=explore_collection,
                 )
             except ValueError:
                 raise MetaResearchError("meta_research_invalid_request") from None
@@ -1047,6 +1062,14 @@ class MetaResearchStore:
                 projection["discovery_ladder_profile"] = (
                     manifest.discovery_ladder_profile.model_dump(mode="json")
                 )
+            if manifest.scientific_context_profiles is not None:
+                projection["scientific_context_profiles"] = (
+                    manifest.scientific_context_profiles.model_dump(mode="json")
+                )
+            if manifest.explore_collection_profile is not None:
+                projection["explore_collection_profile"] = (
+                    manifest.explore_collection_profile.model_dump(mode="json")
+                )
             return {"activation": projection, "reason": None}
 
     def list_activations(self, request, *, limit=20, before=None):
@@ -1157,18 +1180,29 @@ class MetaResearchStore:
         self._approval_current(
             session, approval, manifest, proposal, admission.account, operator=operator
         )
-        from polymath.meta_research_contracts import select_scientific_profile, task_profile_sha256
+        from polymath.meta_research_contracts import (
+            select_profile_with_explore,
+            task_profile_sha256,
+        )
         from polymath.scientific_context_store import load_scientific_intent
 
         discovery = load_discovery_intent(session, run)
         intent = load_scientific_intent(session, run)
+        explore = load_explore_collection_intent(session, run)
         try:
-            profile = select_scientific_profile(
-                manifest, run.task_kind, run.mode, discovery=discovery, scientific_intent=intent
+            profile = select_profile_with_explore(
+                manifest,
+                run.task_kind,
+                run.mode,
+                discovery=discovery,
+                scientific_intent=intent,
+                explore_collection_intent=explore,
             )
         except ValueError:
             raise MetaResearchError(
-                "meta_research_scientific_protocol_unavailable"
+                "meta_research_explore_protocol_unavailable"
+                if explore is not None
+                else "meta_research_scientific_protocol_unavailable"
                 if intent is not None
                 else "meta_research_activation_required"
             ) from None

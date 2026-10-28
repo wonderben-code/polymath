@@ -1,3 +1,4 @@
+import type { ExploreCollectionIntent } from '../exploreCollection/types'
 import type { AskOverviewBinding, AskOverviewIntent, AskReassessmentOverviewIntent } from '../scientificContext/types'
 import type { DiscoveryIntent, DiscoveryStage, DiscoveryStageMetadata } from '../discovery/types'
 import type { AnswerFinding, BridgeFinding, FieldSelection, MemoryReadReference, ResearchActivityEvent, ResearchResult, VerifiedQuote } from '../research/types'
@@ -83,6 +84,7 @@ export interface FindingVersion {
     external_outcome_unknown: boolean
     native_research?: NativeRunControl
     discovery_intent?: DiscoveryIntent
+  explore_collection_intent?: ExploreCollectionIntent
     ask_overview_intent?: AskOverviewIntent
     assessment_overview_intent?: AskReassessmentOverviewIntent
   }

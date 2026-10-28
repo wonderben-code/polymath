@@ -257,3 +257,32 @@ The ordinary private app obtains the in-memory operator CSRF and owner-eligible 
 Explicit `POST /api/v1/runs/{id}/resume` accepts the exact original activation hash and decimal-string expected lease token, with owning browser/operator and both CSRFs. It requires the original live approval, unchanged input and no prepared/unknown/open charge. It renews no authority, budget or deadline; probe and unbound legacy jobs remain excluded. The app shows this control only for structurally recoverable native tasks with matching current context.
 
 Native HTTP uses the full reviewed timeout up to60seconds, with a separately pinned30second orchestration allowance (outer limit90). Unknown billing—including an observed response with unusable usage—stops paid work and remains visibly held. A known malformed action can use the existing bounded repair path only through another fresh grant. All current integration evidence uses mock HTTP; the owner still prohibits real paid calls. See [META_RESEARCH.md](META_RESEARCH.md).
+
+## Explore collections and schema 0025
+
+`explore_collection_intent` selects the new seeded Explore controller variant.
+It uses the same worker, recorded model/tools, ordinary Bridge/Ask memory and
+global ledger. Meta saves base bridges and authors ordered rankings/exclusions;
+the application verifies exact evidence, acknowledged receipt coverage and the
+original whole-run limits. Absent intent preserves the legacy path and hashes.
+See [EXPLORE_COLLECTION.md](EXPLORE_COLLECTION.md) and [API.md](API.md).
+
+Before upgrading a funded deployment to `0025_explore_collection`, persist the
+existing account epoch stop and stop the old API/worker generation. The migration
+backfills immutable stage owners and retargets three stage foreign keys; old
+processes cannot write the required registry. Start only the compatible new
+generation. Startup does not rearm funding. Downgrade refuses any Explore intent
+or ranking history, including a queued collection without findings.
+
+Every stage keeps its normal Explore result shape and exact source quotations.
+Explore memory leads do not become selected-parent premises. Literal scientific
+deduplication binds the protocol, finding and verified quotes; unused branch
+fields or memory leads cannot manufacture a second identical bridge. The old
+Surprise scientific-body/hash remains unchanged. Artifact context uses the same
+mode-specific origin check and retains the original model assessment.
+
+Collection capability metadata uses the separate owner-only
+`/api/v1/research/explore-protocols` route; existing access and SC-v1 DTOs remain
+unchanged. UI/SDK creation binds the same activation hash, while original Resume
+and billing-only recovery do not depend on that capability GET. Exact stage,
+ranking, finish and stop acknowledgements replay without new model sends.

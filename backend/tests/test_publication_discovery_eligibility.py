@@ -20,15 +20,15 @@ from test_publication import publication as publication_fixture
 from test_research_controller import source
 from test_run_api import bootstrap
 
+from polymath.discovery_admission import bind_discovery_intent
 from polymath.discovery_contracts import DiscoveryIntent
-from polymath.discovery_models import DiscoveryIntent as IntentRow
 from polymath.discovery_models import StageCommit
 from polymath.discovery_store import DiscoveryStore
 from polymath.evidence import EvidenceStore
 from polymath.jobs import JobRepository, LeaseLost, StateConflict
+from polymath.models import ResearchRun
 from polymath.publication_job_models import PublicationJob, PublicationOperation
 from polymath.research.models import SourceBibliography
-from polymath.worker import _digest
 
 artifacts_api = artifacts_api_fixture
 publication = publication_fixture
@@ -41,13 +41,7 @@ async def stage_result(original, monkeypatch, *, finish):
     assign(original.engine, run.id, original.owner_hash)
     intent = DiscoveryIntent()
     with Session(original.engine) as session, session.begin():
-        session.add(
-            IntentRow(
-                run_id=run.id,
-                **intent.model_dump(mode="json"),
-                config_sha256=_digest(intent.model_dump(mode="json")),
-            )
-        )
+        bind_discovery_intent(session, session.get(ResearchRun, run.id), intent)
     leases = []
     original_save = EvidenceStore.save_source
 

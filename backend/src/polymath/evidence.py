@@ -326,11 +326,11 @@ class EvidenceStore:
                 != request.basis.get("field_selections", [])
             ):
                 raise EvidenceError("invalid_reassessment_candidate")
-        from polymath.discovery_models import DiscoveryIntent
+        from polymath.stage_owners import has_stage_intent, load_stage_owner
 
-        ladder = session.get(DiscoveryIntent, run.id)
+        ladder = has_stage_intent(session, run.id)
         if (
-            ladder is not None
+            ladder
             and result.status in ("bridge", "answer")
             and (
                 type(_stage_validation) is not _StageValidation
@@ -339,10 +339,15 @@ class EvidenceStore:
         ):
             raise EvidenceError("discovery_stage_commit_required")
         if _stage_validation is not None:
+            try:
+                if load_stage_owner(session, run) is None:
+                    raise ValueError
+            except (ValueError, TypeError, AttributeError):
+                raise EvidenceError("invalid_stage_validation") from None
             if (
                 type(_stage_validation) is not _StageValidation
                 or _stage_validation.run_id != run.id
-                or ladder is None
+                or not ladder
             ):
                 raise EvidenceError("invalid_stage_validation")
             declared = {

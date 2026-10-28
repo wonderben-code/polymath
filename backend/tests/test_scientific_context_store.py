@@ -20,8 +20,8 @@ from polymath.access_models import BrowserSession, ResearchRunAccess
 from polymath.artifacts import bind_request
 from polymath.assessment_models import AssessmentRequest, FindingHead
 from polymath.budget_models import BudgetReservation
+from polymath.discovery_admission import bind_discovery_intent
 from polymath.discovery_contracts import DiscoveryIntent
-from polymath.discovery_models import DiscoveryIntent as DiscoveryIntentRow
 from polymath.evidence import EvidenceStore
 from polymath.evidence_models import EvidenceResult
 from polymath.ingestion import IngestionRepository
@@ -342,13 +342,8 @@ def test_ask_intent_cannot_be_added_after_dispatch_or_combined_with_ladder(datab
     engine = database
     token = owner(engine)
     with Session(engine) as session, session.begin():
-        value = run(session, token)
-        session.add(
-            DiscoveryIntentRow(
-                run_id=value.id, **DiscoveryIntent().model_dump(mode="json"), config_sha256="a" * 64
-            )
-        )
-        session.flush()
+        value = run(session, token, mode="surprise")
+        bind_discovery_intent(session, value, DiscoveryIntent())
         with pytest.raises(ContextStoreError, match="ask_overview_wrong_run"):
             bind_ask_overview_intent(
                 session, run=value, owner_hash=token, intent=AskOverviewIntent()

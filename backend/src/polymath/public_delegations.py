@@ -132,6 +132,7 @@ class PublicDelegationStore:
         *,
         discovery=None,
         scientific_context=None,
+        explore_collection=None,
     ):
         from polymath.meta_probe_contracts import ProviderAccountAttestation
         from polymath.meta_readiness_contracts import MetaReadinessProposal, _utc
@@ -167,6 +168,7 @@ class PublicDelegationStore:
                     now=_clock(session),
                     discovery=discovery,
                     scientific_context=scientific_context,
+                    explore_collection=explore_collection,
                 )
             except ValueError:
                 raise MetaResearchError("meta_research_invalid_request") from None
