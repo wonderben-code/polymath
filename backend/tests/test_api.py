@@ -58,6 +58,23 @@ def test_free_collection_setting_enables_no_model_or_publication_authority() -> 
         )
 
 
+@pytest.mark.parametrize("enabled", [False, True])
+def test_public_sharing_configuration_never_enables_paid_authority(enabled) -> None:
+    application = create_app(Settings(public_sharing_enabled=enabled, _env_file=None))
+    with TestClient(application) as client:
+        response = client.get("/api/v1/shares/capabilities")
+        assert response.status_code == 200
+        assert response.json()["sharing_available"] is enabled
+        assert client.get("/api/v1/capabilities").json()["research_available"] is False
+        assert (
+            client.get("/api/v1/publication-jobs/capabilities").json()["execution_available"]
+            is False
+        )
+        assert "set-cookie" not in response.headers
+        if not enabled:
+            assert client.get("/api/v1/public/library").status_code == 404
+
+
 def test_default_publication_routes_are_mounted_without_privileged_authority() -> None:
     application = create_app(Settings(_env_file=None))
     with TestClient(application) as client:
@@ -159,6 +176,20 @@ def test_built_frontend_serves_assets_and_never_masks_unknown_api(tmp_path: Path
         assert client.get("/api/v1/nonexistent").headers["Cache-Control"] == "no-store"
         assert client.get("/api").status_code == 404
         assert client.get("/api/v1/health").json()["status"] == "ok"
+
+
+@pytest.mark.parametrize("path", ["/library", "/shared", "/shared/" + "a" * 43])
+def test_public_html_has_privacy_headers_without_creating_owner_session(tmp_path, path) -> None:
+    (tmp_path / "index.html").write_text("<html>Public finding reader</html>")
+    application = create_app(Settings(STATIC_DIR=tmp_path, _env_file=None))
+    with TestClient(application) as client:
+        response = client.get(path)
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
+    assert response.headers["x-robots-tag"] == "noindex, nofollow"
+    assert response.headers["referrer-policy"] == "no-referrer"
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert "set-cookie" not in response.headers
 
 
 def test_invalid_static_directory_fails_configuration(tmp_path: Path) -> None:

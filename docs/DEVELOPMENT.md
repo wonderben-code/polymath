@@ -81,6 +81,12 @@ Replay protocol is now `polymath-worker-full-text-v8`. Its checkpoint fingerprin
 
 The research and reassessment controllers expose explicit `open_full_text` and `read_full_text_window` actions. Migration `0017_arxiv_full_text` stores exact versioned arXiv HTML snapshots and owned indexes. Only saved windows of at most 8,000 Unicode codepoints are source reads. Index metadata grants no quotation access; replay pins the original extraction. Coverage follows memory, reassessment, generated passages, map/source views and exports. See [FULL_TEXT.md](FULL_TEXT.md) for transport bounds, range semantics and recovery. Native arXiv HTML compatibility remains unverified.
 
+## Public finding snapshots
+
+`PUBLIC_SHARING_ENABLED=false` is independent of Meta execution, collection and Zenodo settings. The Compose app passes this server setting through explicitly. Enabling it allows an active owner to preview and explicitly share an exact current finding; it does not make existing investigations public. The public reader uses `/library` and `/shared/<public_id>` and calls only the public read API, without bootstrapping a private browser session.
+
+Owner routes under `/api/v1/shares` retain normal session/CSRF/origin controls. Preview returns the exact allowlisted projection and SHA-256; the Share action sends that hash and a new UUID idempotency key. A lost-response retry reuses the same key/body; owner history resolves the actual grant. Revocation remains available while sharing is disabled. Shares expire with the owner's current anonymous session and can be revoked earlier. Only short cited excerpts, model findings and scholarly metadata are exposed. Raw source bodies, private investigation history and ancestor findings stay private. Later reassessment can change the public status badge but never silently replaces the shared content. See [PUBLIC_SHARING.md](PUBLIC_SHARING.md) for the complete content/API and privacy contract. Local PostgreSQL, frontend and two-browser verification passed. Public deployment remains pending.
+
 ## Session-owned research API
 
 The application now mounts the following routes, while **new research submission remains disabled by default**:

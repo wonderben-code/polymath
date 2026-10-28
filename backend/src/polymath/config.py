@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     publication_approval_enabled: bool = False
     publication_execution_enabled: bool = False
     literature_ingestion_enabled: bool = False
+    public_sharing_enabled: bool = False
     zenodo_sandbox_token: SecretStr | None = None
     zenodo_production_token: SecretStr | None = None
     publication_publisher_id: str | None = Field(

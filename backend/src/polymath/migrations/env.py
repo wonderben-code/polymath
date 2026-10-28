@@ -15,6 +15,7 @@ from polymath import (  # noqa: F401
     operator_models,
     publication_job_models,
     publication_models,
+    sharing_models,
 )
 from polymath.config import Settings
 from polymath.database import Base

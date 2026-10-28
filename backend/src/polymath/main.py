@@ -31,6 +31,7 @@ from polymath.publication_runtime import (
     publication_execution_available,
 )
 from polymath.run_api import create_run_router
+from polymath.sharing_api import create_sharing_router
 
 
 def migration_heads() -> set[str]:
@@ -47,6 +48,7 @@ def create_app(
     publication_policy: PublicationPolicy | None = None,
     publication_availability: Callable[[], bool] | None = None,
     ingestion_availability: Callable[[], bool] | None = None,
+    sharing_availability: Callable[[], bool] | None = None,
 ) -> FastAPI:
     settings = settings or get_settings()
     configured_operator, configured_publication = configured_publication_policies(settings)
@@ -64,6 +66,11 @@ def create_app(
         def ingestion_availability() -> bool:
             return settings.literature_ingestion_enabled
 
+    if sharing_availability is None:
+
+        def sharing_availability() -> bool:
+            return settings.public_sharing_enabled
+
     @asynccontextmanager
     async def lifespan(application: FastAPI) -> AsyncIterator[None]:
         yield
@@ -78,6 +85,9 @@ def create_app(
         create_run_router(application.state.engine, availability=research_availability)
     )
     application.include_router(create_knowledge_router(application.state.engine))
+    application.include_router(
+        create_sharing_router(application.state.engine, availability=sharing_availability)
+    )
     application.include_router(
         create_ingestion_router(application.state.engine, availability=ingestion_availability)
     )
@@ -117,6 +127,16 @@ def create_app(
         response = await call_next(request)
         if request.url.path.startswith("/api/v1/"):
             response.headers["Cache-Control"] = "no-store"
+        if (
+            request.url.path.startswith("/api/v1/public/")
+            or request.url.path.startswith("/api/v1/shares")
+            or request.url.path.startswith("/shared/")
+            or request.url.path in ("/library", "/library/", "/shared")
+        ):
+            response.headers["Cache-Control"] = "no-store"
+            response.headers["X-Content-Type-Options"] = "nosniff"
+            response.headers["Referrer-Policy"] = "no-referrer"
+            response.headers["X-Robots-Tag"] = "noindex, nofollow"
         return response
 
     @application.get("/api/v1/health")

@@ -4,6 +4,7 @@ import type { FindingVersion } from './types'
 import { useFindingHead } from './useFindingHead'
 import { ResearchRunView } from '../research/ResearchRunView'
 import { ArtifactWorkspace } from '../artifacts/ArtifactWorkspace'
+import { ShareWorkspace } from '../sharing/ShareWorkspace'
 
 export function FindingVersionWorkspace({ resultId, enabled, csrfToken, canGenerate, refreshToken, onSessionExpired, onOpenFinding, onOpenRun, onBusyChange, onClose }: {
   resultId: string
@@ -45,6 +46,7 @@ export function FindingVersionWorkspace({ resultId, enabled, csrfToken, canGener
     {phase === 'error' && <div role="alert" className="assessment-warning"><p>{head.phase === 'expired' ? 'The browser session expired or changed. Private finding text and source versions have been cleared.' : 'This finding version is unavailable or could not be verified in this browser session. Unapplied candidates do not become current findings.'}</p><button type="button" disabled={blocked.current} onClick={() => setRefresh((previous) => previous + 1)}>Reload finding version</button></div>}
     {version && <><ResearchRunView run={version.run} result={version.payload} events={version.payload.events} connection="closed" onOpenRun={onOpenRun} findingVersion={{ head: head.head, phase: head.phase, pollPaused: head.pollPaused, onRefresh: head.refresh, onOpenFinding }} />
       {(version.payload.finding?.outcome === 'bridge' || version.payload.finding?.outcome === 'answer') && <ArtifactWorkspace key={version.id} sourceResultId={version.id} sourceKind={version.payload.finding.outcome} csrfToken={csrfToken} enabled={enabled} canGenerate={canGenerate && head.canGenerate} sourceCurrent={head.canGenerate} onSessionExpired={expire} onBusyChange={onBusyChange} />}
+      {(version.payload.finding?.outcome === 'bridge' || version.payload.finding?.outcome === 'answer') && <ShareWorkspace key={`share:${version.id}`} sourceResultId={version.id} enabled={enabled} csrfToken={csrfToken} sourceCurrent={head.canGenerate} refreshToken={refreshToken} onSessionExpired={expire} />}
     </>}
   </section>
 }
