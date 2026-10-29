@@ -5,7 +5,7 @@
 .artifact-heading > button { flex-shrink: 0; }
 .artifact-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 26px 0 16px; }
 .artifact-actions button { position: relative; text-align: left; border: 1px solid #b9c7b6; background: #f3f5ee; color: var(--ink); padding: 19px 18px; border-radius: 3px; }
-.artifact-actions button > span { color: #72826d; display: block; font: italic 12px Georgia, serif; margin-bottom: 16px; }
+.artifact-actions button > span { color: #5f6d5b; display: block; font: italic 12px Georgia, serif; margin-bottom: 16px; }
 .artifact-actions strong { display: block; font-size: 13px; font-weight: 550; }
 .artifact-actions small { display: block; font-size: 10px; line-height: 1.8; margin-top: 7px; color: var(--muted); }
 .artifact-actions button:hover:not(:disabled) { background: #e7eee2; border-color: var(--accent); }

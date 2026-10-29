@@ -6,7 +6,7 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   --ink: #253d38;
-  --muted: #65736b;
+  --muted: #5e6c64;
   --accent: #266b58;
   --line: #d9ddd2;
 }
@@ -40,7 +40,7 @@ button:focus-visible, a:focus-visible, textarea:focus-visible { outline: 3px sol
 .mode-switch button { border: 0; border-radius: 3px; padding: 10px 14px; font-size: 12px; background: transparent; color: var(--muted); transition: background .15s, color .15s; }
 .mode-switch button[aria-pressed='true'] { background: var(--ink); color: #fffef7; }
 .mode-switch button:hover:not([aria-pressed='true']) { background: #e9ede5; }
-.mode-number { font-size: 9px; opacity: .65; margin-right: 9px; }
+.mode-number { font-size: 10px; margin-right: 9px; }
 .research-intro { padding: 37px 0 29px; }
 .accent { color: var(--accent); }
 h1 { font-family: 'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', Georgia, serif; font-size: clamp(34px, 3.6vw, 51px); line-height: 1.09; font-weight: 400; letter-spacing: -1.8px; max-width: 590px; margin: 14px 0 18px; }
@@ -52,7 +52,7 @@ textarea { display: block; resize: vertical; min-height: 100px; max-height: 250p
 textarea::placeholder { color: #7b857d; }
 textarea:focus-visible { outline: none; }
 .prompt-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 12px 12px 18px; }
-.prompt-footer > span { font-family: Georgia, serif; font-style: italic; font-size: 11px; color: #6d7d71; }
+.prompt-footer > span { font-family: Georgia, serif; font-style: italic; font-size: 11px; color: #5f6d63; }
 .primary-button { display: inline-flex; align-items: center; justify-content: space-between; gap: 20px; min-height: 39px; padding: 10px 14px; background: var(--accent); color: white; border: 0; border-radius: 3px; font-size: 12px; }
 .primary-button:disabled { background: #e3e8df; color: #5a6a5e; }
 .primary-button .arrow-icon { width: 16px; height: 16px; }
@@ -64,9 +64,9 @@ textarea:focus-visible { outline: none; }
 .example-row button span { margin-left: 6px; color: var(--muted); }
 .availability-note { display: flex; align-items: flex-start; gap: 9px; padding-top: 24px; color: #677263; }
 .availability-note p { margin: 0; font-size: 12px; line-height: 1.6; }
-.small-star { color: #7c9171; font-size: 13px; }
+.small-star { color: #5e6e55; font-size: 13px; }
 .desk-sidebar { background: #eeeee5; border-left: 1px solid var(--line); padding: 29px 25px 24px; }
-.sidebar-heading { display: flex; justify-content: space-between; align-items: center; color: #6e7c69; }
+.sidebar-heading { display: flex; justify-content: space-between; align-items: center; color: #606d5c; }
 .sidebar-heading > span:last-child { font-size: 18px; }
 .empty-illustration { padding: 16px 0 27px; text-align: center; }
 .empty-illustration svg { width: 100%; height: 148px; color: #96a28d; }
@@ -87,18 +87,18 @@ textarea:focus-visible { outline: none; }
 .text-button { background: none; border: none; padding: 4px 0; color: #4e6b57; font-size: 11px; text-decoration: underline; text-underline-offset: 3px; }
 .text-button:disabled { color: #6d7868; text-decoration: none; }
 .system-status ul { list-style: none; padding: 0; margin: 11px 0 0; }
-.system-status li { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 13px; font-size: 11px; color: #6f7c67; }
+.system-status li { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 13px; font-size: 11px; color: #616d5a; }
 .status-name { display: inline-flex; align-items: center; gap: 7px; color: #4f614e; }
 .system-status li > span:last-child { text-align: right; }
 .approach-section { display: grid; grid-template-columns: 1.4fr 1fr 1fr 1fr; gap: 30px; padding: 43px 0 46px; }
 .approach-heading h2 { font-size: 21px; font-weight: 400; font-family: Georgia, serif; line-height: 1.4; margin: 11px 0 0; letter-spacing: -.4px; }
-.approach-heading h2 em { color: #72826d; font-weight: 400; }
+.approach-heading h2 em { color: #5f6d5b; font-weight: 400; }
 .principle { padding-top: 2px; }
-.principle-number { font-family: Georgia, serif; font-style: italic; font-size: 12px; color: #6c7c65; }
+.principle-number { font-family: Georgia, serif; font-style: italic; font-size: 12px; color: #5f6d58; }
 .principle h3 { font-size: 11px; font-weight: 600; margin: 15px 0 8px; }
 .principle p { margin: 0; font-size: 11px; color: var(--muted); line-height: 1.9; max-width: 225px; }
-.site-footer { border-top: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 21px 0 28px; font-size: 11px; color: #798473; }
-.footer-asterisk { color: #728366; margin-left: 11px; }
+.site-footer { border-top: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 21px 0 28px; font-size: 11px; color: #636c5e; }
+.footer-asterisk { color: #5f6e55; margin-left: 11px; }
 .research-history { border-top: 1px solid #d3d9ca; padding-top: 20px; margin-top: 25px; min-width: 0; }
 .research-history h3 { font-size: 11px; font-weight: 600; margin: 0; }
 .research-history .system-heading { align-items: baseline; flex-wrap: wrap; }
@@ -106,7 +106,7 @@ textarea:focus-visible { outline: none; }
 .research-history li + li { margin-top: 8px; }
 .research-history li button { width: 100%; text-align: left; background: #f8f8f0; border: 1px solid #d5dccd; border-radius: 3px; padding: 11px 12px; color: var(--ink); }
 .research-history li button:hover, .research-history li button[aria-pressed='true'] { border-color: #8da389; background: #e8eee1; }
-.history-mode { display: block; color: #71816a; font-size: 9px; text-transform: capitalize; margin-bottom: 7px; }
+.history-mode { display: block; color: #606d5a; font-size: 9px; text-transform: capitalize; margin-bottom: 7px; }
 .history-goal { font-family: Georgia, serif; font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .history-note { font-size: 11px; color: var(--muted); line-height: 1.8; }
 .history-error { font-size: 11px; color: #80623c; line-height: 1.8; margin: 16px 0 0; }
