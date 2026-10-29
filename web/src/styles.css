@@ -178,10 +178,11 @@ body { background: var(--paper); color: var(--ink); font-size: 16px; line-height
 /* Composer: one calm question, centred column. */
 .composer { max-width: 760px; margin: 56px auto 40px; }
 .composer-tagline { margin: 0 0 14px; font-size: 13px; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); }
+.composer h1, .place-heading h1 { text-wrap: balance; }
 .composer h1 { font-family: var(--serif); font-weight: 400; font-size: clamp(34px, 5vw, 48px); line-height: 1.12; letter-spacing: -1.2px; margin: 0 0 14px; max-width: none; }
 .composer-description { font-size: 17px; line-height: 1.6; color: var(--muted); margin: 0 0 32px; max-width: 620px; }
 .calm .mode-switch { margin: 0 0 20px; padding: 4px; border: 0; border-radius: 999px; background: #ebeae2; gap: 2px; }
-.calm .mode-switch button { border-radius: 999px; padding: 9px 18px; font-size: 14px; color: var(--muted); }
+.calm .mode-switch button { border-radius: 999px; padding: 9px 18px; font-size: 14px; color: var(--muted); white-space: nowrap; }
 .calm .mode-switch button[aria-pressed='true'] { background: #fffef9; color: var(--ink); box-shadow: 0 1px 3px rgba(31, 51, 44, .12); }
 .calm .mode-number { display: none; }
 .composer-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
@@ -210,7 +211,7 @@ body { background: var(--paper); color: var(--ink); font-size: 16px; line-height
 .recent-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
 .recent-heading h2 { font-family: var(--serif); font-weight: 400; font-size: 22px; margin: 0; }
 .calm .text-button { font-size: 13px; color: var(--muted); }
-.recent-empty { text-align: center; padding: 40px 16px; border-radius: 16px; background: #f0efe7; }
+.recent-empty { text-align: center; padding: 32px 16px 8px; }
 .recent-mark { width: 120px; height: 64px; overflow: visible; }
 .recent-mark path { fill: none; stroke: #a9bbb0; stroke-width: 1; stroke-dasharray: 700; animation: hero-draw 2.4s ease-out both; }
 .recent-mark circle { fill: #266b58; transform-box: fill-box; transform-origin: center; animation: hero-pop .8s cubic-bezier(.2, .8, .2, 1.3) both, hero-breathe 5s ease-in-out 1s infinite; }
@@ -236,7 +237,21 @@ body { background: var(--paper); color: var(--ink); font-size: 16px; line-height
 .about-points dt { font-weight: 600; font-size: 15px; margin-bottom: 6px; }
 .about-points dd { margin: 0; font-size: 15px; line-height: 1.65; color: var(--muted); }
 .frontier-composer { margin-bottom: 8px; }
-.calm .frontier-workspace { border: 0; background: transparent; padding: 0; margin-top: 0; }
+.calm .frontier-workspace { border: 0; background: transparent; padding: 0; margin: 0 auto 80px; max-width: 760px; }
+.frontier-title { font-family: var(--serif); font-weight: 400; font-size: 22px; margin: 40px 0 0; }
+.frontier-title .frontier-badge { font-family: Inter, -apple-system, 'Segoe UI', sans-serif; font-size: 10px; }
+.calm .knowledge-browser { max-width: 760px; margin: 0 auto 80px; }
+
+/* Library: quiet search, calm notices. */
+.calm .knowledge-search label { font-size: 14px; font-weight: 500; }
+.calm .knowledge-search input { border-radius: 999px; padding: 12px 20px; font-size: 16px; border-color: var(--hairline); background: #fffefb; }
+.calm .knowledge-search button { border-radius: 999px; padding: 0 20px; font-size: 14px; }
+.calm .knowledge-coverage, .calm .knowledge-message { font-size: 14px; color: var(--muted); }
+.calm .watch-workspace { border-top: 1px solid var(--hairline); }
+.calm .knowledge-browser .watch-heading h3 { font-family: var(--serif); font-weight: 400; font-size: 26px; }
+.calm .watch-heading p { font-size: 16px; color: var(--muted); line-height: 1.65; }
+.calm .watch-gate, .calm .watch-warning { border: 0; border-radius: 12px; background: #f3ecdc; font-size: 14px; }
+.calm .watch-create button, .calm .watch-heading button { border-radius: 999px; }
 
 /* Footer: the service status recedes into one quiet line. */
 .calm .site-footer { flex-wrap: wrap; gap: 12px 32px; border-top: 1px solid var(--hairline); padding: 22px 0 32px; font-size: 13px; color: var(--muted); }
@@ -252,9 +267,19 @@ body { background: var(--paper); color: var(--ink); font-size: 16px; line-height
 @media (max-width: 760px) {
   .page-shell.calm { padding: 0 18px; }
   .calm .site-header { height: auto; padding: 18px 0 8px; flex-wrap: wrap; gap: 12px; }
-  .place-navigation { gap: 16px; flex-wrap: wrap; font-size: 13px; }
+  .place-navigation { width: 100%; gap: 18px; font-size: 14px; overflow-x: auto; scrollbar-width: none; }
+  .place-navigation a { white-space: nowrap; }
+  .place-navigation { gap: 16px; }
+  .calm .mode-switch { display: flex; }
+  .calm .mode-switch button { flex: 1; padding: 9px 10px; }
+  .calm .example-row { flex-direction: row; flex-wrap: wrap; align-items: center; }
+  .calm .example-row > span { width: 100%; }
+  .footer-links { flex-wrap: wrap; gap: 8px 20px; }
   .composer, .place-heading { margin-top: 28px; }
   .recent-list, .about-points { grid-template-columns: 1fr; }
   .calm textarea { font-size: 17px; padding: 18px 18px 6px; }
 }
+@media (max-width: 420px) { .nav-badge { display: none; } }
+.calm .watch-heading { flex-wrap: nowrap; }
+.calm .watch-heading button { flex-shrink: 0; }
 @media (prefers-reduced-motion: reduce) { .recent-mark * { animation: none !important; } .place-navigation a, .calm .prompt-box { transition: none; } }

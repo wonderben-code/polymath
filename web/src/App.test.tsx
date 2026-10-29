@@ -55,7 +55,7 @@ describe('research workspace', () => {
     expect(await screen.findByText('No saved investigations in this browser session.')).toBeInTheDocument()
     expect(screen.getByText('No investigation started')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Explore connections' })).toBeDisabled()
-    expect(screen.getByText(/Live investigations are disabled or unavailable/)).toBeInTheDocument()
+    expect(screen.getByText(/Live investigations are paused right now/)).toBeInTheDocument()
     expect(requests.mock.calls.some(([, options]) => options?.method === 'POST')).toBe(false)
   })
 

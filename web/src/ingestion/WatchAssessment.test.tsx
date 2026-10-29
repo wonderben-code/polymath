@@ -57,7 +57,7 @@ describe('saved watch sources entering an explicit Meta reassessment', () => {
     await userEvent.click(await screen.findByRole('button', { name: /Synthetic watch/ }))
     await screen.findByRole('region', { name: 'Selected literature watch' })
     expect(screen.getByRole('button', { name: 'Check providers now' })).toBeDisabled()
-    expect(screen.getByText(/Free-provider reading is disabled/)).toBeVisible()
+    expect(screen.getByText(/Reading new papers is paused right now/)).toBeVisible()
     expect(screen.queryByRole('checkbox', { name: 'Reassess with source: Synthetic left source' })).not.toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Read saved source: Synthetic left source' }))
     const original = await screen.findByRole('region', { name: 'Saved source text' })

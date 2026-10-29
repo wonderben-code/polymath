@@ -128,12 +128,9 @@ export function FrontierWorkspace({ enabled, csrfToken, canSubmit, focusId, subm
 
   return (
     <section className="frontier-workspace" aria-labelledby="frontier-title">
-      <header className="frontier-heading">
-        <div><span className="eyebrow accent">FRONTIER RESEARCH <span className="frontier-badge">Experimental</span></span><h2 id="frontier-title">Frontier programmes</h2>
-          <p>Each programme turns an unsolved problem into a growing map: the literature is surveyed, gaps are named and attacked across fields, and stubborn gaps are broken into smaller steps. Every node shows how well it is supported.</p></div>
-      </header>
+      <h2 className="frontier-title" id="frontier-title">Your programmes</h2>
       {programmes.length > 0 && <ul className="frontier-list" aria-label="Your frontier programmes">{programmes.map((item) => <li key={item.id}><button type="button" aria-pressed={programme?.id === item.id} onClick={() => void open(item.id)}><span className="frontier-list-status">{item.status}</span><span>{item.question}</span></button></li>)}</ul>}
-      {programmes.length === 0 && !programme && <p className="frontier-empty">No programmes yet. Choose <strong>Frontier</strong> above, describe an unsolved problem and start one.</p>}
+      {programmes.length === 0 && !programme && <p className="frontier-empty">No programmes yet. Describe an unsolved problem to start one.</p>}
       {error && <p className="frontier-error" role="alert">{error}</p>}
       {programme && <div className="frontier-programme">
         <div className="frontier-programme-heading">
@@ -158,7 +155,7 @@ export function FrontierWorkspace({ enabled, csrfToken, canSubmit, focusId, subm
           {node.attempts.length > 0 && <ul className="frontier-attempts">{node.attempts.map((attempt) => <li key={attempt.run_id}><span>{ACTION_LABELS[attempt.action]}{attempt.outcome ? ` · ${attempt.outcome.replaceAll('_', ' ')}` : ' · in progress'}</span><button type="button" onClick={() => onOpenRun(attempt.run_id)}>Open investigation</button></li>)}</ul>}
           {node.kind !== 'question' && node.pending_action && <button type="button" onClick={() => void prune(node.id)}>Skip this branch</button>}
         </article>}
-        <p className="frontier-note">Experimental. Supported means exact quotations from saved sources; derived and conjectured steps are model reasoning, clearly labelled. A solve path is only as strong as its weakest step.</p>
+        <p className="frontier-note"><span className="frontier-badge">Experimental</span> Supported means exact quotations from saved sources; derived and conjectured steps are model reasoning, clearly labelled. A solve path is only as strong as its weakest step.</p>
       </div>}
     </section>
   )

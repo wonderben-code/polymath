@@ -196,7 +196,7 @@ export function App() {
   const researchConnected = researchReady && !artifactBusy && !assessmentBusy && (mode === 'surprise' || !!prompts[mode].trim())
   const unavailable = connection === 'offline'
     ? 'The research service could not be reached. Check the connection and try again.'
-    : mode === 'explore' && workspace.native.canSubmit && !workspace.canExplore ? workspace.native.explorePhase === 'loading' ? 'Checking the approved Explore features…' : 'Explore features could not be verified for this funding approval. Refresh research access before starting an investigation; saved findings remain readable.' : workspace.ownActiveResearch ? 'An investigation is active in this browser. Finish or cancel it before starting another model task.' : workspace.native.required && workspace.native.phase !== 'disabled' ? 'Current funding authority or this browser’s limits do not permit a new model task. Saved research remains readable.' : 'Live investigations are disabled or unavailable. Saved research remains readable.'
+    : mode === 'explore' && workspace.native.canSubmit && !workspace.canExplore ? workspace.native.explorePhase === 'loading' ? 'Checking the approved Explore features…' : 'Explore features could not be verified for this funding approval. Refresh research access before starting an investigation; saved findings remain readable.' : workspace.ownActiveResearch ? 'An investigation is active in this browser. Finish or cancel it before starting another model task.' : workspace.native.required && workspace.native.phase !== 'disabled' ? 'Current funding authority or this browser’s limits do not permit a new model task. Saved research remains readable.' : 'Live investigations are paused right now. Saved research and the public library remain open to read.'
 
   function handleFrontier(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -237,7 +237,6 @@ export function App() {
           </a>
           <nav className="place-navigation" aria-label="Polymath">
             {PLACES.map((item) => <a key={item.id} href={item.path} aria-current={place === item.id ? 'page' : undefined} onClick={(event) => { event.preventDefault(); go(item.id) }}>{item.label}{item.id === 'frontier' && <span className="nav-badge">Experimental</span>}</a>)}
-            <a href="/library">Public library</a>
           </nav>
         </header>
 
@@ -283,7 +282,7 @@ export function App() {
               </form>
               <p className="availability-note" id="research-availability" role="status">{statusText}</p>
               {notice && <p className="composer-alert" role="alert">{notice}</p>}
-              <NativeResearchNotice context={workspace.native} />
+              {!(workspace.native.phase === 'disabled' && !workspace.native.access) && <NativeResearchNotice context={workspace.native} />}
             </section>
 
             {workspace.selectedId && !workspace.activeRun && <p className="history-note" role="status">Opening the investigation…</p>}
@@ -315,7 +314,7 @@ export function App() {
           </>}
 
           {place === 'frontier' && <section className="composer frontier-composer" aria-labelledby="frontier-composer-title">
-            <p className="composer-tagline">Experimental</p>
+            <p className="composer-tagline">Frontier research · Experimental</p>
             <h1 id="frontier-composer-title">Take on a problem nobody has solved yet.</h1>
             <p className="composer-description">Polymath surveys the literature, names the gaps, looks for solutions in other fields and breaks stubborn gaps into smaller steps, mapping the path from question to answer.</p>
             <form onSubmit={handleFrontier}>
@@ -342,7 +341,7 @@ export function App() {
             <StatusLine label="Meta connection" state="unknown" value={!system ? 'Not checked' : system.metaConfigured ? 'Key present · unverified' : 'Not configured'} />
             <li><button type="button" className="text-button" disabled={connection === 'loading'} onClick={() => setRetry((value) => value + 1)}>Check again</button></li>
           </ul>
-          <span className="footer-links"><a href="/operator/budget">Operator desk</a><span>A personal project by Ekram Alam</span></span>
+          <span className="footer-links"><a href="/library">Public library</a><a href="/operator/budget">Operator desk</a><span>A personal project by Ekram Alam</span></span>
         </footer>
       </div>
     </NativeResearchProvider>

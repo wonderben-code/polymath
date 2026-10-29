@@ -93,7 +93,7 @@ describe('session-owned knowledge browser', () => {
     expect(fetch.mock.calls.every((call) => call[1]?.credentials === 'same-origin')).toBe(true)
     await userEvent.click(screen.getByRole('button', { name: /Open investigation: Synthetic fixture bridge/ }))
     expect(open).toHaveBeenCalledWith(RUN)
-    expect(screen.getByText(/Current browser session only/)).toBeVisible()
+    expect(screen.getByText(/In this browser · /)).toBeVisible()
     expect(screen.getByText(/do not establish scientific truth/)).toBeVisible()
   })
 
