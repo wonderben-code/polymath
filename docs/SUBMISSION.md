@@ -36,6 +36,12 @@ can read widely enough to find them systematically.
   watches collect new papers, and findings can be reassessed against them.
 - **Formalise and write**: findings become conjectures with bounded checks, plain
   summaries or full papers with exact citations.
+- **Frontier (experimental)**: give it an unsolved problem and it runs a research
+  programme. It surveys the literature, names the gaps, attacks each across
+  fields, breaks stubborn gaps into solve-path steps and looks for connections
+  between the bridges it finds. Every node on the live map shows whether it is
+  supported by quotations, solved in another field, derived by the model,
+  conjectured or still open.
 - **Publish**: Zenodo DOIs only after a human approves the exact document.
 - **Public API and library**: a documented HTTP API, a standalone client and a
   public library of findings their owners chose to share.
@@ -83,8 +89,9 @@ Model: `⟨muse-spark-1.3 or the verified model⟩` through
 | 0:15–0:45 | Press **Surprise me**; the live timeline shows the model choosing fields and searching | "Muse Spark chooses the fields itself and explains why. Every search, reading and hypothesis streams live." |
 | 0:45–1:15 | Open a bridge: mapping table, a source quote, the strongest objection | "Every claim links to the exact passage it came from. Polymath also argues against itself: here is the strongest objection, and why the bridge survives it." |
 | 1:15–1:40 | **Ask** result with Known / Postulated / Speculative labels | "Ask gives you an answer where every statement is labelled by how well it is supported." |
-| 1:40–2:00 | Knowledge map; select two bridges and start a higher-level investigation | "Saved findings become a map, and Polymath can look for connections between connections." |
-| 2:00–2:20 | A literature watch adds a paper; the reassessment marker | "It keeps reading new papers and re-checks what it found." *(Label a recorded example as recorded.)* |
+| 1:40–2:05 | Knowledge map; select two bridges and start a higher-level investigation | "Saved findings become a map, and Polymath can look for connections between connections." |
+| (optional) | A literature watch adds a paper; the reassessment marker | "It keeps reading new papers and re-checks what it found." *(Label a recorded example as recorded.)* |
+| 2:05–2:20 | Frontier: a programme map growing from an unsolved question into gaps and steps | "For problems nobody has solved, Frontier maps the path, labelling every step by its evidence." |
 | 2:20–2:40 | Formalise → conjecture; Write → paper; the exact approval screen | "Real connections become conjectures and papers. Nothing is published without a human approving the exact document." |
 | 2:40–2:50 | Public URL, "Powered by Meta Muse Spark", the GitHub repository | "Polymath: an open research partner for discoveries between fields." |
 
