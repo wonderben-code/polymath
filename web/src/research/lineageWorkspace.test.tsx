@@ -49,6 +49,7 @@ describe('higher-level research workspace submission', () => {
   it('sends selected immutable bridge IDs through the existing owned job path', async () => {
     const requests = fixtureServer()
     render(<App />)
+    await userEvent.click(screen.getByRole('link', { name: 'Your library' }))
     await userEvent.click(await screen.findByRole('checkbox', { name: 'Use bridge: Synthetic bridge 1' }))
     await userEvent.click(screen.getByRole('checkbox', { name: 'Use bridge: Synthetic bridge 2' }))
     await userEvent.dblClick(screen.getByRole('button', { name: 'Investigate these bridges' }))
@@ -64,6 +65,7 @@ describe('higher-level research workspace submission', () => {
   it('keeps higher-level launch disabled under the default unavailable capability', async () => {
     const requests = fixtureServer(false)
     render(<App />)
+    await userEvent.click(screen.getByRole('link', { name: 'Your library' }))
     expect(await screen.findByRole('checkbox', { name: 'Use bridge: Synthetic bridge 1' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Investigate these bridges' })).toBeDisabled()
     expect(requests.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(0)
@@ -72,6 +74,7 @@ describe('higher-level research workspace submission', () => {
   it('opens an owned map record beyond the current history page using server authorization', async () => {
     const requests = fixtureServer(false)
     render(<App />)
+    await userEvent.click(screen.getByRole('link', { name: 'Your library' }))
     const list = await screen.findByRole('list', { name: 'Saved knowledge records' })
     await userEvent.click(within(list).getByRole('button', { name: 'Finding Synthetic bridge 1' }))
     await userEvent.click(screen.getByRole('button', { name: 'Open research record' }))

@@ -56,8 +56,12 @@ describe('actual public App collection read composition', () => {
       throw new Error(`Unexpected App collection fixture route: ${path}`)
     }); vi.stubGlobal('fetch', fetch); vi.stubGlobal('EventSource', Stream)
     render(<App />); await flush(); await flush()
-    fireEvent.click(screen.getByRole('button', { name: /Synthetic bounded multi-bridge question/ })); await flush(); await flush()
+    // The watch lives in Your library and the investigation in Research; select
+    // the watch first, then return to follow the live collection.
+    fireEvent.click(screen.getByRole('link', { name: 'Your library' })); await flush(); await flush()
     fireEvent.click(screen.getByRole('button', { name: /Synthetic watch/ })); await flush(); await flush()
+    fireEvent.click(screen.getByRole('link', { name: 'Research' })); await flush(); await flush()
+    fireEvent.click(screen.getByRole('button', { name: /Synthetic bounded multi-bridge question/ })); await flush(); await flush()
     expect(screen.getByRole('region', { name: 'Explore investigation collection' })).toBeVisible(); const stream = Stream.instances[0]; act(() => stream.emit('open'))
     let sequence = 0
     for (let call = 0; call < 20; call++) {
