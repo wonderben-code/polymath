@@ -47,3 +47,13 @@
 .surprise-discovery-scope { font-size: 11px; line-height: 1.85; background: #eef1e5; padding: 14px; margin: 0 34px 23px; }
 @media (max-width: 900px) { .discovery-cards { grid-template-columns: minmax(0, 1fr); } .discovery-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 600px) { .discovery-heading, .discovery-row { flex-direction: column; gap: 15px; } .discovery-totals, .discovery-stage, .discovery-reader-heading { padding: 20px; } .discovery-reader > .artifact-workspace, .discovery-reader > .sharing-workspace { margin: 20px; } .surprise-discovery-scope { margin-right: 21px; margin-left: 21px; } .discovery-stage h3 { font-size: 25px; } }
+
+/* Experience refresh: discovery-ladder stages as lifted cards in the shared language. */
+.discovery-totals { border-radius: 12px; background: radial-gradient(130% 140% at 50% 0%, #f1f5ec, #e6ede0); }
+.discovery-stage { border-radius: 12px; border-top: 3px solid #c08a1e; transition: transform .18s ease, box-shadow .18s ease; }
+.discovery-stage:hover { transform: translateY(-1px); box-shadow: 0 10px 24px rgba(37, 61, 56, .08); }
+.discovery-state, .discovery-selected-final { border-radius: 12px; }
+.discovery-warning { border-radius: 0 8px 8px 0; }
+.discovery-note { color: #5b6657; }
+.discovery-metrics dt, .discovery-state, .discovery-selected-final { font-size: 11px; }
+@media (prefers-reduced-motion: reduce) { .discovery-stage { transition: none; } }
