@@ -72,3 +72,19 @@ elapsed time, all derived from events.
 
 Each phase keeps the existing tests green, adds tests for new behaviour and is
 checked with the axe audit at desktop and phone widths before it is pushed.
+
+## Progress (29 October 2026)
+
+| Phase | Status |
+|---|---|
+| 1. Tokens and the Observatory | Done: live star-chart map from recorded events, narration, stats, thinking timer |
+| 2. Notify when done | Done: browser notification while the tab is in the background, tab title status, completion toast |
+| 3. Waiting, loading and empty states | Done: boot mark, living desk illustration, Frontier and library empty states |
+| 4. Result visualisations | Done: bridge diagram and claim spectrum |
+| 5. Home, history, map and public pages | Done: investigation cards, knowledge map palette, library cards; Frontier Map in the same language |
+| 6. Accessibility and mobile | Done for audited views: axe WCAG 2.x A/AA reports zero violations at 1280 and 390 px for new and returning visitors |
+
+All checks used synthetic events and findings. The Observatory's thinking
+timer only appears for model calls this page saw start. Remaining polish
+candidates: Formalise/Write, discovery-ladder and Explore-collection panels,
+and the operator budget desk.

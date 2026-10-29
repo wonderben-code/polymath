@@ -124,6 +124,10 @@ the live activity and spend after each:
 3. Ask: a question about *phase transitions in learning*.
 4. A deliberately weak or misleading input, to confirm an honest rejection.
 
+Then try one small **Frontier** programme (experimental) with a low limit,
+for example 6 investigations at depth 3, and check that its map labels match
+the saved evidence.
+
 Record each run's sources, mapping, objection, outcome, latency and cost in
 [PROGRESS.md](PROGRESS.md). A useful rejection is a valid result; an invented
 discovery is not.
