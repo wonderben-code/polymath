@@ -101,7 +101,7 @@ describe('recorded research view', () => {
     rerender(<ResearchRunView {...props({ connection: 'reconnecting', events: [{ sequence: 4, kind: 'source_read', summary: 'Read a synthetic source.' }] })} />)
     expect(screen.getByText('Reconnecting · recorded activity is retained')).toBeInTheDocument()
     expect(screen.getByText('Read a synthetic source.')).toBeInTheDocument()
-    expect(screen.getAllByRole('listitem')).toHaveLength(1)
+    expect(within(screen.getByRole('list', { name: 'Recorded research activity' })).getAllByRole('listitem')).toHaveLength(1)
   })
 
   it('presents research actions and important outcomes without operational bookkeeping', () => {

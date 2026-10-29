@@ -17,7 +17,9 @@ import type {
   VerifiedQuote,
 } from './types'
 import './research.css'
+import { Observatory } from './observatory/Observatory'
 
+const terminalStatuses = new Set(['succeeded', 'failed', 'cancelled', 'interrupted'])
 const modeNames = { explore: 'Explore', ask: 'Ask', surprise: 'Surprise me' }
 const states: Record<string, { label: string; description: string }> = {
   queued: { label: 'Queued', description: 'The investigation is waiting to begin.' },
@@ -271,12 +273,14 @@ export function ResearchFindingView({ result, onOpenRun, mode = result.mode, pri
 export function ResearchRunView({ run, events, result, connection, onCancel, cancelling = false, onOpenRun, findingVersion, hideOutcome = false, primaryPaperGroups }: ResearchRunViewProps) {
   const state = states[run.status] ?? { label: 'Status unavailable', description: 'The investigation status could not be identified. Recorded material remains below.' }
   const activity = orderedEvents(events)
+  const timestamps = run as { created_at?: string; updated_at?: string }
   const canCancel = onCancel && ['queued', 'running', 'waiting_retry', 'interrupted'].includes(run.status)
   return (
     <section className="research-run-view" aria-labelledby="research-run-title">
       <header className="research-run-heading"><div><span className="eyebrow accent">{run.task_kind === 'reassess_finding' ? 'EVIDENCE REASSESSMENT' : modeNames[run.mode].toUpperCase()} / RESEARCH RECORD</span><h2 id="research-run-title">{run.goal || 'An open discovery'}</h2></div><span className={`research-run-state state-${run.status}`} role="status">{state.label}</span></header>
       <div className="research-run-summary"><p>{state.description}</p>{canCancel && <button type="button" className="research-cancel" onClick={onCancel} disabled={cancelling}>{cancelling ? 'Requesting cancellation…' : 'Cancel investigation'}</button>}</div>
       {findingVersion && <FindingVersionNotice {...findingVersion} />}
+      {(events.length > 0 || !terminalStatuses.has(run.status)) && <Observatory events={events} terminal={terminalStatuses.has(run.status)} createdAt={timestamps.created_at} updatedAt={timestamps.updated_at} result={hideOutcome ? null : result} />}
       <div className={`research-run-layout${hideOutcome ? ' research-run-layout-activity-only' : ''}`}>
         <section className="research-activity" aria-labelledby="research-activity-title"><div className="research-section-heading"><h3 id="research-activity-title">Research activity</h3><span className={`research-connection connection-${connection}`} aria-live="polite">{connectionNames[connection]}</span></div>{activity.length ? <ol className="research-timeline" aria-label="Recorded research activity" aria-live="polite" aria-relevant="additions">{activity.map((event, index) => { const step = stepKind(event.kind); return <li key={event.sequence} className={`research-step step-${step.tone}`}><span className="research-event-number" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span><p><span className="research-step-label">{step.label}</span>{event.summary}</p></li> })}</ol> : <p className="research-empty">No recorded activity yet.</p>}{run.status === 'running' && <p className="research-thinking"><span className="research-thinking-dots" aria-hidden="true"><span /><span /><span /></span>Thinking about the next step…</p>}</section>
         {!hideOutcome && <section className="research-results" aria-labelledby="research-outcome-title"><h3 className="research-sr-only" id="research-outcome-title">Research outcome</h3>{result ? <ResearchFindingView result={result} onOpenRun={onOpenRun} mode={run.mode} primaryPaperGroups={primaryPaperGroups} /> : <PendingOutcome status={run.status} />}</section>}
