@@ -387,3 +387,31 @@ body { background: var(--paper); color: var(--ink); font-size: 16px; line-height
   .hero-bridge-shared { margin-top: 8px; font-size: 14px; grid-column: 1 / -1; }
 }
 @media (prefers-reduced-motion: reduce) { .hero-bridge * { animation: none !important; stroke-dashoffset: 0 !important; } }
+
+/* Go deeper: connections between connections, explained without words first. */
+.deeper-diagram { width: 168px; height: 64px; flex-shrink: 0; overflow: visible; }
+.deeper-arc, .deeper-rise { fill: none; stroke: #9cbcae; stroke-width: 1.4; stroke-linecap: round; }
+.deeper-rise { stroke: var(--accent); stroke-dasharray: 220; stroke-dashoffset: 220; animation: deeper-draw 1.6s ease-out .3s forwards; }
+.deeper-rise.is-second { stroke-dasharray: 30; stroke-dashoffset: 30; animation-delay: 1.4s; animation-duration: .6s; }
+.deeper-field { fill: #9cbcae; }
+.deeper-knot { fill: var(--accent); }
+.deeper-knot.is-deeper, .deeper-knot.is-deepest { opacity: 0; animation: deeper-appear .5s ease-out forwards; }
+.deeper-knot.is-deeper { animation-delay: 1.3s; }
+.deeper-knot.is-deepest { fill: #b3872a; animation-delay: 1.9s; }
+@keyframes deeper-draw { to { stroke-dashoffset: 0; } }
+@keyframes deeper-appear { to { opacity: 1; } }
+.go-deeper { display: flex; gap: 28px; align-items: center; margin: 8px 48px 32px; padding: 24px 28px; border-radius: 16px; background: #eef2ec; }
+.go-deeper h3 { font-family: var(--serif); font-weight: 400; font-size: 22px; margin: 0 0 6px; }
+.go-deeper p { margin: 0 0 14px; font-size: 15px; line-height: 1.6; color: var(--muted); max-width: 520px; }
+.go-deeper button, .calm .knowledge-bridge-actions button { border: 0; border-radius: 999px; padding: 10px 18px; background: var(--accent); color: #fffef7; font-size: 14px; cursor: pointer; }
+.calm .knowledge-bridge-actions button:disabled { background: #c9d3cc; color: #3d4f47; cursor: not-allowed; }
+.calm .knowledge-bridge-selection { margin: 8px 0 40px; padding: 28px; border: 0; border-radius: 18px; background: #eef2ec; }
+.calm .knowledge-bridge-selection:focus { outline: none; }
+.calm .knowledge-bridge-selection:focus-visible { outline: 3px solid #af7942; outline-offset: 3px; }
+.calm .knowledge-bridge-selection legend { float: left; width: 100%; padding: 0; margin-bottom: 8px; font-family: var(--serif); font-size: 26px; }
+.calm .knowledge-bridge-selection .deeper-diagram { display: block; margin: 4px 0 12px; clear: both; }
+.calm .knowledge-bridge-selection > p { font-size: 15px; line-height: 1.65; color: var(--muted); max-width: 620px; }
+.calm .knowledge-bridge-choices label { font-size: 15px; }
+.calm .knowledge-bridge-actions p { font-size: 14px; }
+@media (max-width: 760px) { .go-deeper { flex-direction: column; align-items: flex-start; margin: 8px 20px 28px; padding: 20px; gap: 12px; } }
+@media (prefers-reduced-motion: reduce) { .deeper-diagram * { animation: none !important; stroke-dashoffset: 0 !important; opacity: 1 !important; } }

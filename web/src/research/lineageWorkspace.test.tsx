@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { App } from '../App'
 import { createResearchRun } from './client'
+import { KnowledgeBrowser } from '../knowledge/KnowledgeBrowser'
 
 const PRIOR_RUN = '11111111-1111-4111-8111-111111111111'
 const CREATED_RUN = '22222222-2222-4222-8222-222222222222'
@@ -46,13 +47,23 @@ function fixtureServer(available = true) {
 afterEach(() => vi.unstubAllGlobals())
 
 describe('higher-level research workspace submission', () => {
+  it('arrives from a finding with that connection already chosen for going deeper', async () => {
+    fixtureServer()
+    const shown = vi.fn()
+    render(<KnowledgeBrowser enabled canInvestigate onInvestigateBridges={vi.fn()} onOpenRun={vi.fn()} deeperFrom={PARENTS[0]} onDeeperShown={shown} />)
+    await waitFor(() => expect(screen.getByRole('checkbox', { name: 'Use connection: Synthetic bridge 1' })).toBeChecked())
+    expect(screen.getByRole('checkbox', { name: 'Use connection: Synthetic bridge 2' })).not.toBeChecked()
+    expect(screen.getByRole('group', { name: 'Go deeper' })).toHaveTextContent('as many levels deep as you like')
+    expect(shown).toHaveBeenCalled()
+  })
+
   it('sends selected immutable bridge IDs through the existing owned job path', async () => {
     const requests = fixtureServer()
     render(<App />)
     await userEvent.click(screen.getByRole('link', { name: 'Your library' }))
-    await userEvent.click(await screen.findByRole('checkbox', { name: 'Use bridge: Synthetic bridge 1' }))
-    await userEvent.click(screen.getByRole('checkbox', { name: 'Use bridge: Synthetic bridge 2' }))
-    await userEvent.dblClick(screen.getByRole('button', { name: 'Investigate these bridges' }))
+    await userEvent.click(await screen.findByRole('checkbox', { name: 'Use connection: Synthetic bridge 1' }))
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Use connection: Synthetic bridge 2' }))
+    await userEvent.dblClick(screen.getByRole('button', { name: 'Find the deeper connection' }))
     await screen.findByRole('heading', { name: GOAL })
     const posts = requests.mock.calls.filter(([, init]) => init?.method === 'POST')
     expect(posts).toHaveLength(1)
@@ -66,8 +77,8 @@ describe('higher-level research workspace submission', () => {
     const requests = fixtureServer(false)
     render(<App />)
     await userEvent.click(screen.getByRole('link', { name: 'Your library' }))
-    expect(await screen.findByRole('checkbox', { name: 'Use bridge: Synthetic bridge 1' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'Investigate these bridges' })).toBeDisabled()
+    expect(await screen.findByRole('checkbox', { name: 'Use connection: Synthetic bridge 1' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Find the deeper connection' })).toBeDisabled()
     expect(requests.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(0)
   })
 

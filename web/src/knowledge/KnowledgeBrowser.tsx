@@ -7,6 +7,7 @@ import { SourceCoverageNotice } from '../research/SourceCoverageNotice'
 import { Bibliography } from '../research/bibliography'
 import type { SourceCoverage } from '../research/sourceCoverage'
 import { sourceIdentityCount } from '../research/sourcePresentation'
+import { DeeperDiagram } from '../deeper/DeeperDiagram'
 import './knowledge.css'
 
 export interface KnowledgeBrowserProps {
@@ -21,6 +22,9 @@ export interface KnowledgeBrowserProps {
   onAssessmentApplied?: () => void
   onAssessmentBusyChange?: (busy: boolean) => void
   onOpenFinding?: (id: string) => void
+  /** A saved connection chosen from its result view, already ticked on arrival. */
+  deeperFrom?: string | null
+  onDeeperShown?: () => void
 }
 
 const kinds: Record<KnowledgeKind, string> = { field: 'Field', source: 'Source', finding: 'Finding' }
@@ -97,7 +101,7 @@ function MapView({ data, selected, onSelect, onOpenRun, onOpenSource, onOpenFind
   </>
 }
 
-export function KnowledgeBrowser({ enabled, onOpenRun, refreshToken, canInvestigate = false, investigating = false, onInvestigateBridges, csrfToken = null, onSessionExpired, onOpenFinding, onAssessmentApplied, onAssessmentBusyChange }: KnowledgeBrowserProps) {
+export function KnowledgeBrowser({ enabled, onOpenRun, refreshToken, canInvestigate = false, investigating = false, onInvestigateBridges, csrfToken = null, onSessionExpired, onOpenFinding, onAssessmentApplied, onAssessmentBusyChange, deeperFrom = null, onDeeperShown }: KnowledgeBrowserProps) {
   const inputId = useId()
   const [draft, setDraft] = useState('')
   const [query, setQuery] = useState('')
@@ -162,6 +166,18 @@ export function KnowledgeBrowser({ enabled, onOpenRun, refreshToken, canInvestig
   const hasExcerpts = sourceRecords.some((source) => source.coverage), paperCount = sourceIdentityCount(sourceRecords)
   const canChoose = enabled && phase === 'ready' && canInvestigate && !investigating && !!onInvestigateBridges
 
+  const deeperRef = useRef<HTMLFieldSetElement>(null)
+  useEffect(() => {
+    if (!deeperFrom || phase !== 'ready' || !data) return
+    if (canChoose && bridges.some((node) => node.result_id === deeperFrom && node.assessment?.is_current && node.assessment.is_supported)) setParentResultIds([deeperFrom])
+    const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    deeperRef.current?.scrollIntoView?.({ behavior: still ? 'auto' : 'smooth', block: 'start' })
+    deeperRef.current?.focus({ preventScroll: true })
+    onDeeperShown?.()
+    // Runs once per arrival; the bridge list is derived from data.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deeperFrom, phase, data])
+
   function chooseBridge(resultId: string) {
     if (!canChoose || !bridges.some((node) => node.result_id === resultId && node.assessment?.is_current && node.assessment.is_supported)) return
     setParentResultIds((previous) => previous.includes(resultId) ? previous.filter((id) => id !== resultId) : previous.length < 4 ? [...previous, resultId] : previous)
@@ -197,16 +213,17 @@ export function KnowledgeBrowser({ enabled, onOpenRun, refreshToken, canInvestig
     {enabled && phase === 'error' && <div className="knowledge-message" role="alert"><p>Saved knowledge could not be loaded. No records are shown until the connection is restored.</p><button type="button" onClick={() => setRefresh((version) => version + 1)}>Retry library connection</button></div>}
     {enabled && phase === 'ready' && data && <>
       <p className="knowledge-coverage">In this browser · {data.findingsConsidered} saved {data.findingsConsidered === 1 ? 'finding' : 'findings'} considered</p>
+      {bridges.length > 0 && <fieldset className="knowledge-bridge-selection" ref={deeperRef} tabIndex={-1}>
+        <legend>Go deeper</legend>
+        <DeeperDiagram />
+        <p>Every connection you save can become part of a bigger one. Choose two to four, and Polymath looks for the deeper structure they all share, tested against their original evidence. What it finds is a new connection, which you can choose again, as many levels deep as you like.</p>
+        <div className="knowledge-bridge-choices">{bridges.map((node) => <label key={node.result_id}><input type="checkbox" checked={parentResultIds.includes(node.result_id!)} onChange={() => chooseBridge(node.result_id!)} disabled={!canChoose || !node.assessment?.is_current || !node.assessment.is_supported || parentResultIds.length >= 4 && !parentResultIds.includes(node.result_id!)} aria-label={`Use connection: ${node.label}`} /><span>{node.label}</span></label>)}</div>
+        <div className="knowledge-bridge-actions"><p role="status">{investigating ? 'Queuing the deeper investigation…' : canChoose ? bridges.length < 2 ? 'Save one more connection to go deeper.' : `${parentResultIds.length} of 4 chosen. ${parentResultIds.length < 2 ? 'Choose at least two.' : 'Ready to look for what they share.'}` : 'New investigations are unavailable. You can still read saved research.'}</p><button type="button" onClick={investigateBridges} disabled={!canChoose || parentResultIds.length < 2}>{investigating ? 'Queuing investigation…' : 'Find the deeper connection'}</button></div>
+      </fieldset>}
       {data.truncated && <p className="knowledge-limit" role="status">This is a bounded view of your library. Narrow the search to inspect more specific records.</p>}
       {data.items.length === 0 && data.nodes.length === 0 ? <p className="knowledge-message">No saved knowledge matches this search. Completed investigations will build the library.</p> : <>
         <div className="knowledge-search-results"><h3>Matching records</h3>{data.items.length ? <ul aria-label="Matching saved research">{data.items.map((item) => <li key={item.id}><div><span className="knowledge-record-kind">{item.coverage ? 'Full text excerpt' : item.task_kind === 'ingest_literature' ? 'Unassessed source version' : item.type === 'source' ? sourceKind(item.content_kind, item.coverage) || 'Source' : 'Finding'}</span><h4>{item.title}</h4>{item.summary && <p>{item.summary}</p>}{item.discovery_stage && <p>Saved finding stage {item.discovery_stage.ordinal + 1} · local depth {item.discovery_stage.depth} · {stageStatus[item.discovery_stage.status]}</p>}{item.coverage && <p className="knowledge-map-note">Saved characters {item.coverage.start}–{item.coverage.end} of {item.coverage.total} (end excluded) · arXiv {item.coverage.arxiv_id}v{item.coverage.arxiv_version}</p>}</div>{item.discovery_stage && item.result_id && onOpenFinding ? <button type="button" aria-label={`Open exact saved stage: ${item.title}`} onClick={() => onOpenFinding(item.result_id!)}>Open exact saved stage</button> : item.task_kind === 'ingest_literature' && item.watch_id && item.source_version_id ? <button type="button" aria-label={`Read unassessed source: ${item.title}`} onClick={() => readWatchSource(item.watch_id!, item.source_version_id!)} disabled={!csrfToken}>Read unassessed source<span className="knowledge-sr-only">: {item.title}</span></button> : item.task_kind === 'reassess_finding' ? (item.assessment_result_id || item.type === 'finding' && item.result_id) && onOpenFinding ? <button type="button" aria-label={`Open saved finding version: ${item.title}`} onClick={() => onOpenFinding((item.assessment_result_id || item.result_id)!)}>Open saved finding version</button> : <span className="knowledge-record-kind">Unapplied reassessment material</span> : <button type="button" onClick={() => onOpenRun(item.run_id)}>Open investigation<span className="knowledge-sr-only">: {item.title}</span></button>}</li>)}</ul> : <p className="knowledge-message">No matching record summaries were returned. Saved relationships remain available below.</p>}</div>
         {data.nodes.length > 0 && <div className="knowledge-graph-section"><h3>Saved relationships</h3>{hasExcerpts && <p className="source-paper-count">{sourceRecords.length} saved source versions · {paperCount} paper {paperCount === 1 ? 'identity' : 'identities'}. Multiple excerpts of one paper are separate saved windows, not independent papers.</p>}<p className="knowledge-map-note">Field links describe a saved mapping or model-selected research direction. Source links identify evidence associated with a finding. Curved links show earlier bridges investigated by a follow-up; they do not provide independent support. Discovery-parent and revision links record conceptual ancestry separately from source-evidence associations. Collected sources without finding links remain unassessed.</p><MapView data={data} selected={selected} onSelect={setSelected} onOpenRun={onOpenRun} onOpenSource={readWatchSource} onOpenFinding={onOpenFinding} /></div>}
-        {bridges.length > 0 && <fieldset className="knowledge-bridge-selection">
-          <legend>Investigate connections between bridges</legend>
-          <p>Choose two to four saved bridges. Polymath will revisit their original evidence and test whether a shared structure holds up.</p>
-          <div className="knowledge-bridge-choices">{bridges.map((node) => <label key={node.result_id}><input type="checkbox" checked={parentResultIds.includes(node.result_id!)} onChange={() => chooseBridge(node.result_id!)} disabled={!canChoose || !node.assessment?.is_current || !node.assessment.is_supported || parentResultIds.length >= 4 && !parentResultIds.includes(node.result_id!)} aria-label={`Use bridge: ${node.label}`} /><span>{node.label}</span></label>)}</div>
-          <div className="knowledge-bridge-actions"><p role="status">{investigating ? 'Queuing the follow-up investigation…' : canChoose ? `${parentResultIds.length} of 4 bridges selected. ${parentResultIds.length < 2 ? 'Select at least two to continue.' : 'Ready to investigate the shared structure.'}` : 'New investigations are unavailable. You can still inspect saved research.'}</p><button type="button" onClick={investigateBridges} disabled={!canChoose || parentResultIds.length < 2}>{investigating ? 'Queuing investigation…' : 'Investigate these bridges'}</button></div>
-        </fieldset>}
       </>}
     </>}
     {csrfToken !== null && <WatchWorkspace enabled={enabled && phase !== 'expired'} csrfToken={csrfToken} findings={data ? [...new Map(data.nodes.filter((node) => node.kind === 'finding' && node.result_id && (node.finding_outcome === 'bridge' || node.finding_outcome === 'answer') && (!node.discovery_stage || node.discovery_stage.status === 'current_supported') && node.assessment?.is_current && node.assessment.is_supported).map((node) => [node.result_id!, { id: node.result_id!, title: node.label }])).values()] : []} onSessionExpired={expireSession} openSource={openWatchSource} onSourcesChanged={refreshCollectedSources} canReassess={canInvestigate && !investigating} onAssessmentApplied={assessmentChanged} onAssessmentBusyChange={onAssessmentBusyChange} onOpenFinding={onOpenFinding} />}
