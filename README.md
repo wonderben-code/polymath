@@ -4,7 +4,7 @@
 
 > Science's hardest open problems increasingly sit *between* disciplines. A result in condensed-matter physics may already answer a question in biology, and neither community knows. The literature is too large for any human to span, but not for an intelligent agent.
 
-Built by Ekram Alam for the **Meta Global AI Developer Hackathon 2026** (Indie Developer track). Meta Muse Spark is the target research intelligence; another verified capable Meta frontier model is allowed. Native access and billing remain unverified, and paid execution is disabled.
+Built by Ekram Alam, as a solo personal project, for the **Meta Global AI Developer Hackathon 2026** (Indie Developer track). Meta Muse Spark is the target research intelligence; another verified capable Meta frontier model is allowed. Native access and billing remain unverified, and paid execution is disabled.
 
 Created 27 October 2026. Every push to `main` is Bitcoin-timestamped through OpenTimestamps (`.github/workflows/bitcoin-timestamp.yml`, proofs in `timestamps/`).
 
@@ -86,8 +86,13 @@ Explore, Ask, and Surprise Me now share the worker, budget controls, immutable e
 
 Explicit owner sharing now creates an exact public finding snapshot with short cited excerpts, preserved uncertainty, an expiry date and a revoke control. A separate public library/search/map reads only those shared snapshots, without opening private investigations or starting research. Later reassessment updates the status badge while preserving the original shared content. This feature is separately disabled by default; enabling it never makes existing findings public automatically.
 
+## Ownership
+Polymath is a personal project, created, owned and developed solely by Ekram Alam as an individual. It is not affiliated with, owned by, sponsored by or developed on behalf of any company, employer or other organisation, and no organisation holds any rights in it. All rights in the project are held by Ekram Alam and are licensed under Apache 2.0.
+
+Some early commits carry an email address from a previous workplace. That address reflects only the git settings of the development environment used at the time; it implies no affiliation, sponsorship, contribution or ownership by that organisation.
+
 ## Licence
-Apache 2.0. See [LICENSE](LICENSE).
+Apache 2.0. Copyright 2026 Ekram Alam. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
 
 A separate, disabled one-call Meta verification lane now uses the actual adapter with exact human approval and the shared ledger. Its immutable receipt records protocol behavior and reported usage; it grants no research activation and proves no pricing, funding or scientific claim. All verification checks so far use mock HTTP. No paid Meta call has run.
 
