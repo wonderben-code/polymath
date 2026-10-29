@@ -262,7 +262,7 @@ export function WatchWorkspace({ enabled, csrfToken, findings = [], onSessionExp
   }
 
   return <section className="watch-workspace" aria-labelledby={`${uid}-title`} ref={workspaceElement}>
-    <header className="watch-heading"><div><span className="eyebrow accent">KEEP READING</span><h3 id={`${uid}-title`}>Literature watches</h3><p>Follow a question as new source versions arrive. Reading providers saves papers for inspection; it does not call the research model or reassess a finding.</p></div>{available && <button type="button" onClick={refresh} disabled={!!busy}>Refresh watches</button>}</header>
+    <header className="watch-heading"><div><span className="eyebrow accent">KEEP READING</span><h3 id={`${uid}-title`}>Literature watches</h3><p>Follow a question as new source versions arrive. Reading from providers saves papers for inspection; it does not call the research model or reassess a finding.</p></div>{available && <button type="button" onClick={refresh} disabled={!!busy}>Refresh watches</button>}</header>
     <p className="watch-scope">Watches belong to this browser session and stop when it expires, at most seven days after the session began. Keeping this page open does not extend that period.</p>
     {!enabled || !csrfToken ? <p>Connect to the research workspace to read this browser session’s watches.</p> : <>
       {phase === 'loading' && <p role="status">Loading literature watches…</p>}

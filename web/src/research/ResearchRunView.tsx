@@ -42,6 +42,36 @@ const connectionNames: Record<ResearchRunViewProps['connection'], string> = {
 // bookkeeping, rather than research activity to present in the workspace.
 const operationalEvents = new Set(['checkpoint', 'external_started', 'external_observed', 'external_reconciled'])
 
+// A short visible label per step makes the live record scannable. Unknown
+// kinds still render, labelled generically.
+const stepKinds: Record<string, { label: string; tone: string }> = {
+  search_completed: { label: 'Search', tone: 'search' },
+  source_read: { label: 'Reading', tone: 'read' },
+  full_text_opened: { label: 'Reading', tone: 'read' },
+  full_text_window_read: { label: 'Reading', tone: 'read' },
+  stage_source_read: { label: 'Reading', tone: 'read' },
+  memory_source_read: { label: 'Memory', tone: 'memory' },
+  memory_searched: { label: 'Memory', tone: 'memory' },
+  memory_finding_read: { label: 'Memory', tone: 'memory' },
+  stage_parent_read: { label: 'Memory', tone: 'memory' },
+  research_note: { label: 'Hypothesis', tone: 'idea' },
+  fields_selected: { label: 'Direction', tone: 'idea' },
+  parents_selected: { label: 'Direction', tone: 'idea' },
+  stage_committed: { label: 'Discovery', tone: 'finding' },
+  explore_ranked: { label: 'Ranking', tone: 'finding' },
+  concluded: { label: 'Conclusion', tone: 'finding' },
+  discovery_finished: { label: 'Conclusion', tone: 'finding' },
+  explore_finished: { label: 'Conclusion', tone: 'finding' },
+  tool_failed: { label: 'Setback', tone: 'setback' },
+  model_failed: { label: 'Setback', tone: 'setback' },
+  action_rejected: { label: 'Setback', tone: 'setback' },
+  stopped: { label: 'Stopped', tone: 'setback' },
+}
+
+function stepKind(kind: string) {
+  return stepKinds[kind] ?? { label: 'Step', tone: 'step' }
+}
+
 function orderedEvents(events: ResearchActivityEvent[]): ResearchActivityEvent[] {
   const distinct = new Map<number, ResearchActivityEvent>()
   for (const event of events) {
@@ -248,7 +278,7 @@ export function ResearchRunView({ run, events, result, connection, onCancel, can
       <div className="research-run-summary"><p>{state.description}</p>{canCancel && <button type="button" className="research-cancel" onClick={onCancel} disabled={cancelling}>{cancelling ? 'Requesting cancellation…' : 'Cancel investigation'}</button>}</div>
       {findingVersion && <FindingVersionNotice {...findingVersion} />}
       <div className={`research-run-layout${hideOutcome ? ' research-run-layout-activity-only' : ''}`}>
-        <section className="research-activity" aria-labelledby="research-activity-title"><div className="research-section-heading"><h3 id="research-activity-title">Research activity</h3><span className={`research-connection connection-${connection}`} aria-live="polite">{connectionNames[connection]}</span></div>{activity.length ? <ol className="research-timeline" aria-label="Recorded research activity" aria-live="polite" aria-relevant="additions">{activity.map((event, index) => <li key={event.sequence}><span className="research-event-number" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span><p>{event.summary}</p></li>)}</ol> : <p className="research-empty">No recorded activity yet.</p>}</section>
+        <section className="research-activity" aria-labelledby="research-activity-title"><div className="research-section-heading"><h3 id="research-activity-title">Research activity</h3><span className={`research-connection connection-${connection}`} aria-live="polite">{connectionNames[connection]}</span></div>{activity.length ? <ol className="research-timeline" aria-label="Recorded research activity" aria-live="polite" aria-relevant="additions">{activity.map((event, index) => { const step = stepKind(event.kind); return <li key={event.sequence} className={`research-step step-${step.tone}`}><span className="research-event-number" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span><p><span className="research-step-label">{step.label}</span>{event.summary}</p></li> })}</ol> : <p className="research-empty">No recorded activity yet.</p>}{run.status === 'running' && <p className="research-thinking"><span className="research-thinking-dots" aria-hidden="true"><span /><span /><span /></span>Thinking about the next step…</p>}</section>
         {!hideOutcome && <section className="research-results" aria-labelledby="research-outcome-title"><h3 className="research-sr-only" id="research-outcome-title">Research outcome</h3>{result ? <ResearchFindingView result={result} onOpenRun={onOpenRun} mode={run.mode} primaryPaperGroups={primaryPaperGroups} /> : <PendingOutcome status={run.status} />}</section>}
       </div>
     </section>

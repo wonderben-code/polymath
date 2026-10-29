@@ -331,4 +331,20 @@ describe('recorded research view', () => {
     expect(screen.getByText('<script>window.pwned=true</script>')).toBeInTheDocument()
     expect(document.querySelector('script')).toBeNull()
   })
+
+  it('labels each step by kind and shows a thinking indicator only while running', () => {
+    const events = [
+      { sequence: 1, kind: 'search_completed', summary: 'Searched literature.' },
+      { sequence: 2, kind: 'research_note', summary: 'proposed: A shared structure.' },
+      { sequence: 3, kind: 'tool_failed', summary: 'A source could not be read.' },
+      { sequence: 4, kind: 'future_kind', summary: 'A newer kind of step.' },
+    ]
+    const { rerender } = render(<ResearchRunView {...props({ events })} />)
+    const steps = within(screen.getByRole('list', { name: 'Recorded research activity' })).getAllByRole('listitem')
+    expect(steps.map((step) => step.querySelector('.research-step-label')?.textContent)).toEqual(['Search', 'Hypothesis', 'Setback', 'Step'])
+    expect(steps[3]).toHaveTextContent('A newer kind of step.')
+    expect(screen.getByText('Thinking about the next step…')).toBeInTheDocument()
+    rerender(<ResearchRunView {...props({ events, run: { ...props().run, status: 'succeeded' } })} />)
+    expect(screen.queryByText('Thinking about the next step…')).not.toBeInTheDocument()
+  })
 })

@@ -159,6 +159,7 @@ export function App() {
             <span className="eyebrow">THE RESEARCH DESK</span>
             <span className="edition">01 / An open beginning</span>
           </div>
+          <p className="workspace-lede">Polymath is an AI research partner that reads across disciplines at once. It looks for places where distant fields describe the same hidden structure in different words, tries hard to break every connection it finds, and links each claim to the exact source passage.</p>
           <NativeResearchNotice context={workspace.native} />
 
           <div className="workspace-grid">

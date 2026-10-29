@@ -113,3 +113,18 @@
 .research-memory-list dd { margin: 0; overflow-wrap: anywhere; }
 
 .research-run-layout.research-run-layout-activity-only { grid-template-columns: minmax(0, 1fr); }
+
+.research-step-label { display: inline-block; margin-right: 8px; padding: 1px 7px; border-radius: 10px; font-size: 10px; font-weight: 650; letter-spacing: .06em; text-transform: uppercase; vertical-align: 1px; background: #e2e5d8; color: #3d5546; }
+.step-search .research-step-label { background: #dde8ea; color: #2c5560; }
+.step-read .research-step-label { background: #e4e9dc; color: #3b5a3c; }
+.step-memory .research-step-label { background: #ebe4d6; color: #6a5532; }
+.step-idea .research-step-label { background: #efe2c9; color: #7a5520; }
+.step-finding .research-step-label { background: #266b58; color: #fffef7; }
+.step-setback .research-step-label { background: #f1dfd8; color: #8a3f2a; }
+.research-thinking { display: flex; align-items: center; gap: 10px; margin: 16px 0 0; font-size: 12px; font-style: italic; color: var(--muted, #65736b); }
+.research-thinking-dots { display: inline-flex; gap: 4px; }
+.research-thinking-dots span { width: 6px; height: 6px; border-radius: 50%; background: #266b58; animation: research-thinking 1.2s ease-in-out infinite; }
+.research-thinking-dots span:nth-child(2) { animation-delay: .2s; }
+.research-thinking-dots span:nth-child(3) { animation-delay: .4s; }
+@keyframes research-thinking { 0%, 80%, 100% { opacity: .25; transform: scale(.8); } 40% { opacity: 1; transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) { .research-thinking-dots span { animation: none; opacity: .7; } }

@@ -83,4 +83,15 @@ describe('complete allowlisted public finding presentation', () => {
     expect(within(detail).getByText('Saved citation association')).toBeVisible()
     expect(fetch).toHaveBeenCalledTimes(2)
   })
+  it('explains a switched-off library instead of reporting a connection failure', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json({ detail: 'sharing_not_found' }, { status: 404 })))
+    render(<PublicLibraryPage />)
+    expect(await screen.findByRole('heading', { name: 'The public library is not open yet.' })).toBeVisible()
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+  it('still reports a genuine failure as a connection problem', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json({ detail: 'internal' }, { status: 500 })))
+    render(<PublicLibraryPage />)
+    expect(await screen.findByRole('alert')).toHaveTextContent('could not be loaded')
+  })
 })
