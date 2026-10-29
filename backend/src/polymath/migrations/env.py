@@ -9,6 +9,7 @@ from polymath import (  # noqa: F401
     discovery_models,
     evidence_models,
     explore_collection_models,
+    frontier_models,
     full_text_models,
     ingestion_models,
     lineage_models,
