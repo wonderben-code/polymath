@@ -1,7 +1,7 @@
 import { ExploreWorkspace } from './exploreCollection/ExploreWorkspace'
 import { DiscoveryWorkspace } from './discovery/DiscoveryWorkspace'
 import { NativeResumeControl } from './research/NativeResumeControl'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { loadSystemStatus } from './api'
 import type { SystemStatus } from './api'
@@ -155,9 +155,20 @@ export function App() {
   const discoveryChanged = useCallback(() => setDiscoveryRefresh((previous) => previous + 1), [])
   const assessmentChanged = useCallback(() => setAssessmentRefresh((previous) => previous + 1), [])
   const openFinding = useCallback((id: string) => { if (/^[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}$/.test(id)) setSelectedFindingId(id) }, [])
-  const openRun = useCallback((id: string) => { setSelectedFindingId(null); workspace.selectRun(id); go('research') }, [workspace.selectRun, go])
-  const openFindingHere = useCallback((id: string) => { openFinding(id); go('research') }, [openFinding, go])
-  const investigateBridges = useCallback(async (ids: string[]) => { go('research'); await workspace.investigateBridges(ids) }, [workspace.investigateBridges, go])
+  // Opening or starting an investigation glides to it, so the result is
+  // never hidden below the composer.
+  const focusAnchor = useRef<HTMLDivElement>(null)
+  const pendingFocus = useRef(false)
+  const openRun = useCallback((id: string) => { pendingFocus.current = true; setSelectedFindingId(null); workspace.selectRun(id); go('research') }, [workspace.selectRun, go])
+  const openFindingHere = useCallback((id: string) => { pendingFocus.current = true; openFinding(id); go('research') }, [openFinding, go])
+  const investigateBridges = useCallback(async (ids: string[]) => { pendingFocus.current = true; go('research'); await workspace.investigateBridges(ids) }, [workspace.investigateBridges, go])
+  const focusedId = selectedFindingId ?? workspace.activeRun?.id
+  useEffect(() => {
+    if (!pendingFocus.current || !focusedId) return
+    pendingFocus.current = false
+    const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    window.requestAnimationFrame(() => focusAnchor.current?.scrollIntoView?.({ behavior: still ? 'auto' : 'smooth', block: 'start' }))
+  }, [focusedId])
   useEffect(() => { if (workspace.phase !== 'ready') { setSelectedFindingId(null); setAssessmentBusy(false) } }, [workspace.phase])
   useEffect(() => setSelectedFindingId(null), [workspace.selectedId])
 
@@ -219,6 +230,7 @@ export function App() {
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!researchConnected) { setNotice(unavailable); return }
+    pendingFocus.current = true
     setNotice('')
     void workspace.submit(mode, prompts[mode])
   }
@@ -285,6 +297,7 @@ export function App() {
               {!(workspace.native.phase === 'disabled' && !workspace.native.access) && <NativeResearchNotice context={workspace.native} />}
             </section>
 
+            <div ref={focusAnchor} className="focus-anchor" />
             {workspace.selectedId && !workspace.activeRun && <p className="history-note" role="status">Opening the investigation…</p>}
             {workspace.detailError && <div className="research-detail-error" role="alert"><p>{workspace.detailError}</p>{workspace.selectedId && <button type="button" className="text-button" onClick={() => workspace.selectRun(workspace.selectedId!)}>Reload investigation</button>}</div>}
             {!selectedFindingId && workspace.activeRun && <ResearchRunView notifyControl={<NotifyToggle notifier={notifier} />} hideOutcome={!!workspace.activeRun.discovery_intent || !!workspace.activeRun.explore_collection_intent} run={workspace.activeRun} events={workspace.events} result={workspace.result} connection={workspace.connection} onCancel={workspace.canCancel ? () => void workspace.cancel() : undefined} cancelling={workspace.cancelling} onOpenRun={openRun} findingVersion={findingResultId ? { head: findingHead.head, phase: findingHead.phase, pollPaused: findingHead.pollPaused, onRefresh: findingHead.refresh, onOpenFinding: openFinding } : undefined} />}

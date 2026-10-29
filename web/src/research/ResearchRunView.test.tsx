@@ -100,7 +100,7 @@ describe('recorded research view', () => {
     expect(screen.getByText('Connecting to saved activity')).toBeInTheDocument()
     rerender(<ResearchRunView {...props({ connection: 'reconnecting', events: [{ sequence: 4, kind: 'source_read', summary: 'Read a synthetic source.' }] })} />)
     expect(screen.getByText('Reconnecting · recorded activity is retained')).toBeInTheDocument()
-    expect(screen.getByText('Read a synthetic source.')).toBeInTheDocument()
+    expect(within(screen.getByRole('list', { name: 'Recorded research activity' })).getByText('Read a synthetic source.')).toBeInTheDocument()
     expect(within(screen.getByRole('list', { name: 'Recorded research activity' })).getAllByRole('listitem')).toHaveLength(1)
   })
 
@@ -167,7 +167,7 @@ describe('recorded research view', () => {
     expect(screen.getByText('The underlying mechanisms differ.')).toBeInTheDocument()
     expect(screen.getByText('Synthetic fixtures cannot establish scientific novelty.')).toBeInTheDocument()
     expect(screen.getByText(/Model assessments are not independent scientific verification/)).toBeInTheDocument()
-    const summaries = document.querySelectorAll('summary')
+    const summaries = document.querySelectorAll('.research-results summary')
     expect(summaries).toHaveLength(2)
     expect(screen.getByText(leftQuote)).not.toBeVisible()
     await user.click(summaries[0])

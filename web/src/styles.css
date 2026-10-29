@@ -283,3 +283,56 @@ body { background: var(--paper); color: var(--ink); font-size: 16px; line-height
 .calm .watch-heading { flex-wrap: nowrap; }
 .calm .watch-heading button { flex-shrink: 0; }
 @media (prefers-reduced-motion: reduce) { .recent-mark * { animation: none !important; } .place-navigation a, .calm .prompt-box { transition: none; } }
+
+/* Investigation focus view: one column, result first, journey one tap away. */
+.calm .research-run-view { max-width: 880px; margin: 0 auto 48px; background: #fbfaf6; }
+.calm .research-run-heading { padding: 36px 48px 8px; }
+.calm .research-run-heading h2 { font-family: var(--serif); font-weight: 400; font-size: clamp(28px, 4vw, 38px); line-height: 1.2; letter-spacing: -.6px; }
+.calm .research-run-summary { padding: 0 48px 24px; }
+.calm .research-run-summary p { font-size: 15px; color: var(--muted); }
+.calm .research-results { border: 0; padding: 8px 48px 40px; }
+.research-journey { margin: 0 48px 40px; border-top: 1px solid var(--hairline); }
+.research-journey > summary { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 20px 0; cursor: pointer; list-style: none; font-size: 15px; color: var(--accent); }
+.research-journey > summary::-webkit-details-marker { display: none; }
+.research-journey > summary::after { content: ''; width: 8px; height: 8px; margin-left: 4px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(45deg); transition: transform .2s; }
+.research-journey[open] > summary::after { transform: rotate(-135deg); }
+.research-journey > summary span:first-child { flex: 1; }
+.research-journey-count { font-size: 13px; color: var(--muted); }
+.calm .research-journey .research-activity { background: transparent; padding: 8px 0 16px; }
+.calm .research-journey .observatory { margin: 0 -48px; }
+.calm .research-run-view .eyebrow { font-size: 12px; }
+.calm .research-scope-note, .calm .research-run-view .research-count, .calm .research-source-kind, .calm .research-source-list p { font-size: 13px; line-height: 1.6; }
+.calm .research-mapping th, .calm .research-mapping td, .calm .research-mapping caption { font-size: 14px; }
+.calm .research-question p, .calm .research-scrutiny p, .calm .research-novelty p, .calm .research-explanation { font-size: 16px; line-height: 1.65; }
+.calm .research-scrutiny { border: 0; border-radius: 14px; background: #f1efe7; }
+.calm .research-mapping-wrap { border-radius: 12px; overflow: hidden; }
+.calm .research-quote { border-radius: 12px; border-color: var(--hairline); }
+.calm .research-quote summary { font-size: 15px; }
+
+/* The ordinary finding status is one quiet line. */
+.finding-version-quiet { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin: 0 48px 24px !important; padding: 0 0 0 16px !important; border: 0 !important; border-left: 2px solid #9cbcae !important; background: transparent !important; }
+.finding-version-quiet p { margin: 0; font-size: 14px; color: var(--muted); }
+.finding-version-quiet strong { color: var(--ink); font-weight: 600; }
+.focus-anchor { scroll-margin-top: 24px; }
+.calm .finding-version-quiet button { flex-shrink: 0; border: 0; background: none; padding: 0; font-size: 13px; color: var(--muted); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+
+/* Panels below a finding share the same soft card language. */
+.calm .artifact-workspace, .calm .sharing-workspace { max-width: 880px; margin: 0 auto 32px; border: 1px solid var(--hairline); border-radius: 20px; background: #fbfaf6; }
+
+@media (max-width: 760px) {
+  .calm .research-run-heading { padding: 24px 20px 8px; }
+  .calm .research-run-summary, .calm .research-results { padding-left: 20px; padding-right: 20px; }
+  .research-journey { margin: 0 20px 28px; }
+  .calm .research-journey .observatory { margin: 0 -20px; }
+  .finding-version-quiet { margin: 0 20px 20px !important; flex-direction: column; gap: 6px; }
+}
+@media (prefers-reduced-motion: reduce) { .research-journey > summary::after { transition: none; } }
+
+/* Readable small text inside a finding. */
+.calm .research-bridge-heading p { font-size: 14px; }
+.calm .research-run-view h4 { font-size: 14px; letter-spacing: 0; }
+.calm .research-source-link { font-size: 15px; }
+.calm .research-evidence-label { font-size: 12px; }
+.calm .artifact-workspace, .calm .sharing-workspace { padding: 40px 48px; }
+.calm .artifact-workspace p, .calm .sharing-workspace p { font-size: 15px; }
+@media (max-width: 760px) { .calm .artifact-workspace, .calm .sharing-workspace { padding: 28px 20px; } }
