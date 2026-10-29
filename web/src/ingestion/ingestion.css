@@ -3,7 +3,8 @@
 .watch-heading { align-items: flex-start; }
 .watch-heading > div { max-width: 49rem; }
 .knowledge-browser .watch-heading h3 { margin: .5rem 0; font: 2rem/1.2 Georgia, serif; }
-.watch-workspace p { line-height: 1.65; }
+.watch-workspace p { line-height: 1.65; font-size: 13px; }
+.watch-workspace .watch-gate { font-size: 13px; }
 .watch-scope,.watch-note,.watch-workspace small { color: #52635a; font-size: .86rem; line-height: 1.55; }
 .watch-gate,.watch-warning { padding: .85rem 1rem; background: #f5eddb; border-left: 3px solid #a87736; }
 .watch-form { display: grid; gap: 1rem; padding: 1.3rem; background: #f7f7ee; border: 1px solid #d5d8cb; border-radius: 5px; margin: 1.2rem 0 1.7rem; }

@@ -87,6 +87,28 @@ async def test_openalex_continuation_uses_frozen_dates_and_exact_opaque_cursor()
     assert first.window_precision == "day"
 
 
+async def test_feed_openalex_key_is_a_header_only_for_openalex():
+    from pydantic import SecretStr
+
+    secret = "fixture-feed-secret"
+    requests = []
+
+    def capture(request):
+        requests.append(request)
+        if request.url.host == "api.openalex.org":
+            return httpx.Response(200, json={"results": [], "meta": {"next_cursor": None}})
+        return httpx.Response(200, text=arxiv_feed(total=0, start=0, per_page=5))
+
+    feed = OpenLiteratureFeed(
+        transport=httpx.MockTransport(capture), openalex_api_key=SecretStr(secret)
+    )
+    await feed.fetch_page("openalex", "fixture concept", since=SINCE, until=UNTIL)
+    await feed.fetch_page("arxiv", "fixture concept", since=SINCE, until=UNTIL)
+    assert requests[0].headers["authorization"] == f"Bearer {secret}"
+    assert secret not in str(requests[0].url)
+    assert "authorization" not in requests[1].headers
+
+
 async def test_arxiv_short_page_with_more_results_does_not_skip_or_reset_offset():
     def handler(request):
         if request.url.params["start"] == "0":

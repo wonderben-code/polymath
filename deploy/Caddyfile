@@ -1,0 +1,26 @@
+# Public HTTPS entry point. Caddy obtains and renews certificates automatically.
+# POLYMATH_DOMAIN must resolve to this host before the first start.
+{$POLYMATH_DOMAIN} {
+	# Never compress or buffer: research activity streams as Server-Sent Events.
+	reverse_proxy app:8000 {
+		flush_interval -1
+		# Caddy replaces any client-supplied X-Forwarded-For because no upstream
+		# proxy is trusted here; the app trusts only this container's address.
+		header_up X-Forwarded-Proto https
+		transport http {
+			read_timeout 0
+		}
+	}
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		Referrer-Policy no-referrer
+		-Server
+	}
+	log {
+		# Caddy redacts Cookie, Authorization and Set-Cookie headers in access logs
+		# by default; never enable log_credentials.
+		output stdout
+		format console
+	}
+}

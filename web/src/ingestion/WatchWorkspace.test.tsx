@@ -38,7 +38,7 @@ describe('scheduled literature reading', () => {
   it('keeps saved reads and pause available while default collection is disabled', async () => {
     const fetch = server({ available: false })
     render(<WatchWorkspace enabled csrfToken="csrf" onSessionExpired={vi.fn()} />)
-    await screen.findByText(/Free-provider reading is disabled/)
+    await screen.findByText(/Reading new papers is paused right now/)
     await openCreate()
     expect(screen.getByRole('button', { name: 'Create literature watch' })).toBeDisabled()
     await choose()
@@ -64,8 +64,8 @@ describe('scheduled literature reading', () => {
     expect(posts).toHaveLength(1)
     expect(JSON.parse(String(posts[0][1]?.body))).toEqual({ label: 'My literature question', query: 'A&B %_ model-free reading', interval_seconds: 21600, source_result_id: RESULT })
     expect(fetch.mock.calls.every(([path]) => String(path).includes('/knowledge/watches'))).toBe(true)
-    expect(screen.getByText(/at most seven days/)).toBeVisible()
-    expect(screen.getByText(/does not call the research model/)).toBeVisible()
+    expect(screen.getByText(/up to seven days/)).toBeVisible()
+    expect(screen.getByText(/never runs the research model/)).toBeVisible()
   })
   it('shows actual additions, incomplete provider coverage and owned original source text as unassessed', async () => {
     const fetch = server({ initial: [watch({ source_count: 1 })] })

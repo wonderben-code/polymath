@@ -16,6 +16,7 @@ from typing import Literal
 from xml.etree import ElementTree
 
 import httpx
+from pydantic import SecretStr
 
 from polymath.literature.clients import (
     ATOM,
@@ -176,10 +177,19 @@ def _minute(value: datetime) -> str:
 
 
 class OpenLiteratureFeed:
-    def __init__(self, *, transport: httpx.AsyncBaseTransport | None = None, provider_slot=None):
+    def __init__(
+        self,
+        *,
+        transport: httpx.AsyncBaseTransport | None = None,
+        provider_slot=None,
+        openalex_api_key: SecretStr | None = None,
+    ):
         # These existing clients enforce fixed HTTPS endpoints, wall-clock and
-        # byte caps, no redirects, sanitized failures, and no credential lookup.
-        self._openalex = OpenAlexClient(transport=transport, provider_slot=provider_slot)
+        # byte caps, no redirects and sanitized failures. An optional OpenAlex
+        # key is supplied explicitly by the server; clients never look one up.
+        self._openalex = OpenAlexClient(
+            api_key=openalex_api_key, transport=transport, provider_slot=provider_slot
+        )
         self._arxiv = ArxivClient(transport=transport, provider_slot=provider_slot)
 
     async def fetch_page(

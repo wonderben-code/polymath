@@ -4,7 +4,7 @@
 
 > Science's hardest open problems increasingly sit *between* disciplines. A result in condensed-matter physics may already answer a question in biology, and neither community knows. The literature is too large for any human to span, but not for an intelligent agent.
 
-Built by Ekram Alam for the **Meta Global AI Developer Hackathon 2026** (Indie Developer track). Meta Muse Spark is the target research intelligence; another verified capable Meta frontier model is allowed. Native access and billing remain unverified, and paid execution is disabled.
+Built by Ekram Alam, as a solo personal project, for the **Meta Global AI Developer Hackathon 2026** (Indie Developer track). Meta Muse Spark is the target research intelligence; another verified capable Meta frontier model is allowed. Native access and billing remain unverified, and paid execution is disabled.
 
 Created 27 October 2026. Every push to `main` is Bitcoin-timestamped through OpenTimestamps (`.github/workflows/bitcoin-timestamp.yml`, proofs in `timestamps/`).
 
@@ -17,6 +17,7 @@ Created 27 October 2026. Every push to `main` is Bitcoin-timestamped through Ope
 - **Turn hunches into maths.** Conjectures, with proof attempts.
 - **Write and publish.** Plain summary or formal paper → approve → DOI on Zenodo.
 - **Surprise me**. Polymath picks the fields itself and goes hunting for convergences, and you watch it think.
+- **Frontier (experimental).** Give it an unsolved problem: it surveys the literature, names the gaps, searches other fields for solutions, breaks stubborn gaps into smaller steps and maps the path, with every node labelled by how well it is supported.
 
 ## Docs
 | Doc | What's in it |
@@ -26,6 +27,7 @@ Created 27 October 2026. Every push to `main` is Bitcoin-timestamped through Ope
 | [docs/ROADMAP.md](docs/ROADMAP.md) | Full-product milestones and release targets to the 5 Nov deadline |
 | [docs/BUILD_PLAN.md](docs/BUILD_PLAN.md) | Development tasks, dependencies, and acceptance gates |
 | [docs/PROGRESS.md](docs/PROGRESS.md) | Verified progress, blockers, evidence log, and the next task |
+| [docs/KEY_DAY.md](docs/KEY_DAY.md) | Key-day checklist: verified Meta facts, free preflight and the path to the first real investigation |
 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Local development, tests, PostgreSQL migrations, and container startup |
 | [docs/FULL_TEXT.md](docs/FULL_TEXT.md) | Model-selected arXiv HTML indexes, exact saved excerpts, citation scope and recovery |
 | [docs/PUBLIC_SHARING.md](docs/PUBLIC_SHARING.md) | Explicit public snapshots, short cited excerpts, expiry, revocation and public-library API |
@@ -36,6 +38,10 @@ Created 27 October 2026. Every push to `main` is Bitcoin-timestamped through Ope
 | [docs/DISCOVERY_LADDER.md](docs/DISCOVERY_LADDER.md) | Model-directed multi-bridge Surprise runs, exact parent evidence, partial discoveries and recovery |
 | [docs/EXPLORE_COLLECTION.md](docs/EXPLORE_COLLECTION.md) | Model-ranked Explore collections, exact replay and remaining release verification |
 | [docs/PUBLIC_RESEARCH_ACCESS.md](docs/PUBLIC_RESEARCH_ACCESS.md) | Controlled visitor access, explicit durable owner funding, shared-ledger quotas and resource controls; disabled by default |
+| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Production stack, host comparison, launch, backups and quarantined restore |
+| [docs/FRONTIER.md](docs/FRONTIER.md) | Experimental Frontier mode specification (draft for review) |
+| [docs/EXPERIENCE.md](docs/EXPERIENCE.md) | End-to-end experience and visualisation plan |
+| [docs/SUBMISSION.md](docs/SUBMISSION.md) | Submission descriptions, how Polymath uses Meta AI, demo script and release checklist |
 | [docs/HACKATHON.md](docs/HACKATHON.md) | Dates, judging, setup checklist, IP notes |
 | [CLAUDE.md](CLAUDE.md) | Instructions for any coding agent picking this up |
 
@@ -68,14 +74,25 @@ The implementation baseline is recorded in `docs/ARCHITECTURE.md`. The target is
 - [x] SC1–SC6 implementation: pinned scientific provenance, claim-linked Ask/reassessment, exact exports and public/client readers; saved as `a95011a` with 3,939 passing tests
 - [x] EC1–EC6: Explore collection registry/admission, model-ranked atomic stages, native profiles/runtime and downstream provenance; focused mock verification
 - [x] Explore release verification: 4,423 tests pass (2,194 unit + 1,311 PostgreSQL + 918 frontend), with connected browser/client journeys
-- [ ] H: complete-product validation, polish, and submission
+- [x] Key-day kit: free `make preflight`, verified Meta API facts and the path to the first investigation ([KEY_DAY.md](docs/KEY_DAY.md))
+- [x] Live free source checks: arXiv search/full text fixed for real responses; optional OpenAlex key
+- [x] Production stack, HTTPS proxy, backups and restore quarantine prepared ([DEPLOYMENT.md](docs/DEPLOYMENT.md)); not yet hosted
+- [x] Term and claim-level search of saved research
+- [x] Experience upgrade: live research Observatory, notify-when-done, bridge diagram, claim spectrum, boot mark; axe WCAG AA audit clean ([EXPERIENCE.md](docs/EXPERIENCE.md))
+- [x] Frontier (experimental) v1: programme engine, schema 0026, Frontier Map, convergence, report ([FRONTIER.md](docs/FRONTIER.md)); synthetic verification only
+- [ ] H: complete-product validation, polish, and submission ([SUBMISSION.md](docs/SUBMISSION.md))
 
 Explore, Ask, and Surprise Me now share the worker, budget controls, immutable evidence, and session-owned activity/history APIs. Ask shows classified, individually cited claims; Surprise Me records model-chosen fields. A private knowledge search/map opens saved findings and evidence relationships. The intelligence can search those saved findings and reread their original sources, with immutable provenance and safe restart replay. Selecting 2–4 bridges launches a higher-level investigation whose citations must trace to original evidence from every selected bridge. Saved findings can become model-generated conjectures, summaries, and papers with original citations, bounded mathematical checks, preview/history, and exact Markdown exports. These paths are tested with synthetic models/sources. Exact publication previews and approvals require a separate publisher login; changed versions need fresh approval. A separate publishing worker verifies exact file bytes and metadata before and after publication, records every mutation grant, and reconciles uncertain outcomes without automatically resending. Scheduled literature watches now preserve bounded provider cursors and add original unassessed source versions to the knowledge map. Exact source inspection and provider-declared bibliography distinguish new reading from a scientific finding. Explicit Meta-led reassessment now compares exact new versions, preserves historical findings and applies cited revisions through the same budgeted worker. Stale or unsupported findings cannot silently become fresh writing/publication inputs. Meta can explicitly open versioned arXiv HTML indexes and choose exact saved excerpts; citation coverage follows those windows through research, memory, reassessment and writing. Native provider/Zenodo/Meta verification, scientific evaluation, real publication and public deployment remain incomplete; paid calls stay disabled. See the [development guide](docs/DEVELOPMENT.md) and [progress tracker](docs/PROGRESS.md).
 
 Explicit owner sharing now creates an exact public finding snapshot with short cited excerpts, preserved uncertainty, an expiry date and a revoke control. A separate public library/search/map reads only those shared snapshots, without opening private investigations or starting research. Later reassessment updates the status badge while preserving the original shared content. This feature is separately disabled by default; enabling it never makes existing findings public automatically.
 
+## Ownership
+Polymath is a personal project, created, owned and developed solely by Ekram Alam as an individual. It is not affiliated with, owned by, sponsored by or developed on behalf of any company, employer or other organisation, and no organisation holds any rights in it. All rights in the project are held by Ekram Alam and are licensed under Apache 2.0.
+
+Some early commits carry an email address from a previous workplace. That address reflects only the git settings of the development environment used at the time; it implies no affiliation, sponsorship, contribution or ownership by that organisation.
+
 ## Licence
-Apache 2.0. See [LICENSE](LICENSE).
+Apache 2.0. Copyright 2026 Ekram Alam. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
 
 A separate, disabled one-call Meta verification lane now uses the actual adapter with exact human approval and the shared ledger. Its immutable receipt records protocol behavior and reported usage; it grants no research activation and proves no pricing, funding or scientific claim. All verification checks so far use mock HTTP. No paid Meta call has run.
 

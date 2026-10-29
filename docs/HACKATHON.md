@@ -77,8 +77,9 @@ $150 in Meta Model API credits (claim via form), **Muse Code** (Meta's agentic c
 **Billing note:** adding a card triggers a temporary pre-authorisation charge. The "Spend Limit" on the Billing page is described as a *notification*, so don't assume it's a hard cap.
 
 ## Still to confirm
-- Model API supports `tools`? `____` · `response_format`? `____` · images? `____` · streaming? `____`
-- Current Muse Spark model ID available to the account (third-party guides mention `muse-spark-1.3`): `____`
+- Model API supports `tools`? **yes** · `response_format` (json_schema/json_object)? **yes** · images? **yes (Muse Spark input)** · streaming? **yes**. Read from dev.meta.ai docs on 29 Oct; see [KEY_DAY.md](KEY_DAY.md).
+- Current Muse Spark model ID available to the account (the developer documentation names `muse-spark-1.3`): confirm with `make preflight PREFLIGHT_ARGS=--check-key` on key day.
+- What SAM 3.1 and the open-weights models offer, and whether either is useful here: `____`
 
 ## Meta Model API quick reference
 
@@ -86,7 +87,7 @@ $150 in Meta Model API credits (claim via form), **Muse Code** (Meta's agentic c
 
 - Base URL: `https://api.meta.ai/v1` (OpenAI-compatible)
 - Auth: `Authorization: Bearer $MODEL_API_KEY`
-- Model: `muse-spark-1.1` (check whether `muse-spark-1.2` is available)
+- Models (docs, 29 Oct): `muse-spark-1.3` recommended; `muse-spark-1.2` and `muse-spark-1.1` also listed
 - Reported price: $1.25 / $4.25 per million input/output tokens
 - At launch the hosted API was a US public preview. If access from Thailand fails, ask in Discord. The fallback is open-weights Meta models.
 

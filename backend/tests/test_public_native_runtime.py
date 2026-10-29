@@ -77,7 +77,7 @@ def test_default_source_factory_pins_context_lease_and_real_pacing_bounds(monkey
     authorized = []
     monkeypatch.setattr(runtime, "_authorize_provider", lambda *args: authorized.append(args))
     tools = worker["tools_context_factory"](SimpleNamespace(lease=lease), snapshot)
-    assert tools == {"provider_slot": "provider-slot"}
+    assert tools == {"openalex_api_key": None, "provider_slot": "provider-slot"}
     assert captured["max_wait_seconds"] == 10
     session = object()
     captured["authorize"](session)
@@ -143,7 +143,9 @@ async def test_enabled_cli_composes_public_flag_without_changing_private_configu
     assert (
         await runtime.run(
             SimpleNamespace(
-                paid_meta_research_enabled=True, public_meta_research_enabled=public_enabled
+                paid_meta_research_enabled=True,
+                public_meta_research_enabled=public_enabled,
+                openalex_api_key=None,
             ),
             once=True,
             worker_id="synthetic-runtime",
@@ -151,6 +153,7 @@ async def test_enabled_cli_composes_public_flag_without_changing_private_configu
         == 0
     )
     assert captured[0]["public_policy"].enabled is public_enabled
+    assert captured[0]["openalex_api_key"] is None
     assert captured[0]["research_policy"].paid_research_enabled is True
     assert captured[1] == "disposed"
 

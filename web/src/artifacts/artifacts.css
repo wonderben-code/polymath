@@ -5,7 +5,7 @@
 .artifact-heading > button { flex-shrink: 0; }
 .artifact-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 26px 0 16px; }
 .artifact-actions button { position: relative; text-align: left; border: 1px solid #b9c7b6; background: #f3f5ee; color: var(--ink); padding: 19px 18px; border-radius: 3px; }
-.artifact-actions button > span { color: #72826d; display: block; font: italic 12px Georgia, serif; margin-bottom: 16px; }
+.artifact-actions button > span { color: #5f6d5b; display: block; font: italic 12px Georgia, serif; margin-bottom: 16px; }
 .artifact-actions strong { display: block; font-size: 13px; font-weight: 550; }
 .artifact-actions small { display: block; font-size: 10px; line-height: 1.8; margin-top: 7px; color: var(--muted); }
 .artifact-actions button:hover:not(:disabled) { background: #e7eee2; border-color: var(--accent); }
@@ -114,3 +114,16 @@
   .artifact-activity summary > span { float: none; display: block; margin: 7px 0 0 15px; }
   .artifact-references dl, .artifact-export dl { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* Experience refresh: tactile action cards and readable small text. */
+.artifact-workspace { background: linear-gradient(180deg, #fbfaf6, #f5f4ed); }
+.artifact-actions button { border-radius: 12px; padding: 20px 20px 18px; background: #fffef9; border-color: #d5dbcf; box-shadow: 0 1px 0 rgba(37, 61, 56, .04); transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease, background .18s ease; }
+.artifact-actions button::before { content: ''; position: absolute; left: 0; top: 14px; bottom: 14px; width: 3px; border-radius: 0 3px 3px 0; background: #266b58; opacity: .7; }
+.artifact-actions button:nth-child(2)::before { background: #3f7f9c; }
+.artifact-actions button:nth-child(3)::before { background: #c08a1e; }
+.artifact-actions button:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 10px 24px rgba(37, 61, 56, .09); background: #fffef9; }
+.artifact-actions button:disabled::before { opacity: .25; }
+.artifact-actions small, .artifact-include-conjecture small, .artifact-history span { font-size: 11px; }
+.artifact-history button { border-radius: 8px; }
+.artifact-job-status button { font-size: 11px; border-radius: 6px; }
+@media (prefers-reduced-motion: reduce) { .artifact-actions button { transition: none; } }

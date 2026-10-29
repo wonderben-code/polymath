@@ -128,6 +128,7 @@ export interface ResearchResult {
 }
 
 export interface ResearchRunViewProps {
+  notifyControl?: import('react').ReactNode
   run: ResearchRunSummary
   events: ResearchActivityEvent[]
   result: ResearchResult | null

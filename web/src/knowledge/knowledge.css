@@ -68,3 +68,24 @@
 
 .knowledge-edge.edge-discovered_from { stroke: #708f6f; stroke-width: 1.7; stroke-dasharray: 6 4; }
 .knowledge-edge.edge-revised_from { stroke: #9b886a; stroke-width: 1.7; stroke-dasharray: 2 4; }
+
+/* Experience refresh: the same signal colours as the Observatory and Frontier. */
+.knowledge-browser { border-radius: 2px; background: linear-gradient(180deg, #fbfaf6, #f6f5ee); }
+.knowledge-search input { border-radius: 8px; padding: 13px 16px; font-size: 13px; transition: border-color .2s, box-shadow .2s; }
+.knowledge-search input:focus { border-color: #266b58; box-shadow: 0 0 0 3px #266b5822; }
+.knowledge-search button { border-radius: 8px; }
+.knowledge-search-results li { padding: 16px 18px; margin-top: 8px; border: 1px solid #e3e6dc; border-radius: 10px; background: #fffef9; transition: transform .18s ease, box-shadow .18s ease; }
+.knowledge-search-results li:first-child { border-top: 1px solid #e3e6dc; }
+.knowledge-search-results li:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(37, 61, 56, .07); }
+.knowledge-record-kind { display: inline-block; padding: 2px 8px; border-radius: 10px; background: #e7ece2; color: #3d5546; font-size: 10px; letter-spacing: .04em; }
+.knowledge-map { background: radial-gradient(130% 120% at 30% 40%, #fbfaf5 0%, #eeeee5 75%); }
+.knowledge-edge { stroke: #b8c4b0; stroke-width: 1.2; transition: stroke .2s; }
+.knowledge-map-node circle { transition: stroke-width .2s, fill .2s; }
+.knowledge-map-node.node-field circle { fill: #fffef8; stroke: #266b58; stroke-width: 2; }
+.knowledge-map-node.node-finding circle { fill: #c08a1e; stroke: #9c7016; }
+.knowledge-map-node.node-source circle { fill: #3f7f9c; stroke: #326a83; }
+.knowledge-map-node:hover circle, .knowledge-map-node[aria-pressed='true'] circle, .knowledge-map-node:focus-visible circle { stroke: #1d3d33; stroke-width: 3; }
+.knowledge-map-node.node-finding:hover circle, .knowledge-map-node.node-finding[aria-pressed='true'] circle { fill: #d9a33a; }
+.knowledge-map-node.node-source:hover circle, .knowledge-map-node.node-source[aria-pressed='true'] circle { fill: #5b98b4; }
+.knowledge-map-node text { fill: #22382f; }
+@media (prefers-reduced-motion: reduce) { .knowledge-search-results li, .knowledge-edge, .knowledge-map-node circle { transition: none; } }

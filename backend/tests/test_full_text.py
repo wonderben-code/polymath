@@ -906,3 +906,91 @@ async def test_reusable_fixture_adaptively_reads_two_windows_and_an_independent_
     assert model.calls == 8
     assert sum(request.url.host == "arxiv.org" for request in requests) == 1
     assert len([source for source in result.sources if source.coverage is not None]) == 2
+
+
+def live_shaped_html(body="<h1>Findings</h1><p>Exact synthetic evidence appears here.</p>"):
+    """Mirrors live arXiv pages: no head identity tags and a chrome duplicate attribute."""
+    return (
+        '<!DOCTYPE html><html lang="en"><head><title>Synthetic</title></head><body>'
+        '<header><a class="header-button" title="Report" href="#" title="Report an issue">'
+        'Report</a></header><article class="ltx_document">' + body + "</article></body></html>"
+    ).encode()
+
+
+def live_handler(link_headers, *, body=None):
+    def handler(request):
+        headers = [("content-type", "text/html; charset=utf-8")]
+        headers += [("link", value) for value in link_headers]
+        return httpx.Response(200, content=body or live_shaped_html(), headers=headers)
+
+    return handler
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "link",
+    [
+        "<https://arxiv.org/html/2401.01234>; rel='canonical'",
+        '<https://arxiv.org/html/2401.01234v2>; rel="canonical"',
+    ],
+)
+async def test_live_shaped_page_is_identified_by_exact_request_and_canonical_header(link):
+    client = ArxivHtmlClient(transport=httpx.MockTransport(live_handler([link])))
+    result = await client.fetch(LOCATOR)
+    assert "Exact synthetic evidence appears here." in result.text
+    assert "Report" not in result.text
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "links",
+    [
+        [],
+        ["<https://arxiv.org/html/2401.99999>; rel='canonical'"],
+        ["<https://arxiv.org/html/2401.01234v1>; rel='canonical'"],
+        ["<https://evil.test/html/2401.01234>; rel='canonical'"],
+        ["<https://arxiv.org/html/2401.01234>; rel='alternate'"],
+        [
+            "<https://arxiv.org/html/2401.01234>; rel='canonical'",
+            "<https://arxiv.org/html/2401.01234>; rel='canonical'",
+        ],
+    ],
+)
+async def test_missing_or_mismatched_canonical_header_stays_unverified(links):
+    client = ArxivHtmlClient(transport=httpx.MockTransport(live_handler(links)))
+    with pytest.raises(FullTextError, match="full_text_version_unverified"):
+        await client.fetch(LOCATOR)
+
+
+@pytest.mark.asyncio
+async def test_canonical_header_cannot_override_conflicting_document_identity():
+    body = html(version="2401.01234v1")
+    link = "<https://arxiv.org/html/2401.01234>; rel='canonical'"
+    client = ArxivHtmlClient(transport=httpx.MockTransport(live_handler([link], body=body)))
+    with pytest.raises(FullTextError, match="full_text_version_mismatch"):
+        await client.fetch(LOCATOR)
+
+
+def test_duplicate_attributes_inside_the_article_are_still_rejected():
+    body = '<p class="a" class="b">Ambiguous.</p>'
+    with pytest.raises(FullTextError, match="full_text_invalid_html"):
+        extract_arxiv_html(live_shaped_html(body), LOCATOR, NOW, transport_identified=True)
+
+
+@pytest.mark.parametrize(
+    "head",
+    [
+        '<meta name="citation_arxiv_id" name="x" content="2401.01234v2">',
+        '<link rel="canonical" rel="x" href="https://arxiv.org/html/2401.01234v2">',
+    ],
+)
+def test_duplicate_attributes_on_identity_tags_are_still_rejected(head):
+    with pytest.raises(FullTextError, match="full_text_invalid_html"):
+        extract_arxiv_html(html(head=head), LOCATOR, NOW)
+
+
+def test_document_without_identity_is_unverified_unless_transport_identified():
+    with pytest.raises(FullTextError, match="full_text_version_unverified"):
+        extract_arxiv_html(live_shaped_html(), LOCATOR, NOW)
+    result = extract_arxiv_html(live_shaped_html(), LOCATOR, NOW, transport_identified=True)
+    assert result.text.endswith("Exact synthetic evidence appears here.")

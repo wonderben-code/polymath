@@ -1,6 +1,6 @@
 # Deployment and recovery
 
-Status: D1/D4 release design, 28 October 2026. Local containers, native-adapter
+Status: D1/D4 release design, 28 October 2026; production Compose, proxy, backup and restore quarantine added 29 October. Local containers, native-adapter
 mock tests and browser journeys are verified separately in [PROGRESS.md](PROGRESS.md).
 No host, paid plan, domain, public URL or safe production restore is established.
 The owner still forbids paid Meta calls. This document grants no spending or
@@ -108,23 +108,111 @@ The old deployment must be fenced and stopped before any restored deployment
 could acquire mutation authority. A new login, rotated key, fresh approval or
 unfreezing SQL statement is not reconciliation of lost facts.
 
-## Reviewable work before public deployment
+## Host recommendation
 
-Prepare a production Compose/host configuration, explicit epoch-stop rollout,
-protected backup export and quarantine-only restore tooling. Keep them separate
-from the current local startup and default-off controls. Test with a populated
-disposable database containing settled/unknown charges, cancelled stages, expired
-and revoked public funding, and previously granted publication work.
+Prices read from the providers' pricing pages on 29 October 2026; confirm
+them at checkout. The stack needs about 2 GB of memory, persistent disk, a public
+IPv4 address and long-lived HTTPS streams.
 
-Required evidence includes zero new Meta/publisher sends from a restored stale
-snapshot, unchanged retained science/export bytes, safe known-call accounting,
-rejected old cookies/approvals, and explicit refusal to rearm without reconciled
-external facts. Then verify actual host persistence/restarts, HTTPS/proxy identity,
-SSE reconnects, funding Stop and source-to-claim journeys. Record the release
-commit, image digest, schema and public URL; do not mark hosted deployment or
-restoration complete from a local build.
+| Option | Monthly | Notes |
+|---|---|---|
+| **DigitalOcean Basic Droplet, 2 GiB, Singapore (recommended)** | USD 12 | 1 vCPU, 50 GiB SSD, 2 TB transfer, IPv4 included; weekly backups +20% |
+| AWS Lightsail 2 GB | USD 12 | 2 vCPU, 60 GB SSD, 3 TB transfer, IPv4 included |
+| Hetzner Cloud CPX12, Singapore | EUR 15.99 + VAT | Stock was shown as unavailable when checked |
+| Fly.io machine + Managed Postgres | about USD 50 | Managed database alone starts at USD 38 |
+| Railway Hobby | USD 5 + usage | 2 GB held all month is roughly USD 20 of memory alone |
 
-The remaining owner inputs are hosting/account access, domain choice and a
-reviewed hosting budget. Provider funding and real-publication approval remain
-their own prerequisites. No general user-account/payment system or paid edge
-service is assumed for this release.
+A single Singapore virtual machine running `deploy/compose.production.yaml` is the
+simplest fit: it is close to Bangkok, keeps the existing Compose topology and
+needs no platform-specific changes. Add a 2 GB swap file so image builds have
+headroom. Hosting spend still needs the owner's explicit approval.
+
+## Launch (read-only public site first)
+
+On the server, with Docker Engine and Compose v2 installed and a DNS `A` record
+for the chosen domain pointing at the server:
+
+1. Clone the repository and create the private settings file:
+   `cp deploy/production.env.example deploy/production.env`, then
+   `chmod 600 deploy/production.env`. Fill in `POLYMATH_DOMAIN`,
+   `POSTGRES_PASSWORD` and `OPERATOR_BOOTSTRAP_TOKEN` (`openssl rand -hex 32`).
+   Leave every execution gate false.
+2. Allow inbound ports 22, 80 and 443 only.
+3. Start the stack:
+   `docker compose -f deploy/compose.production.yaml --env-file deploy/production.env up -d --build --wait`.
+   Migrations run as a one-shot step before the API starts. Caddy obtains the
+   certificate automatically.
+   On a small server, prefer pulling the image that
+   `.github/workflows/image.yml` builds on every push to `main`: set
+   `POLYMATH_IMAGE` to its digest-pinned `ghcr.io/wonderben-code/polymath` reference
+   and start with `up -d --no-build --wait`.
+4. Verify `https://<domain>/api/v1/readiness`, the research desk, `/library`, a
+   Secure session cookie and an SSE reconnect against the real HTTPS endpoint.
+5. Workers start only by profile once their gates are reviewed, for example
+   `--profile literature` or, after [KEY_DAY.md](KEY_DAY.md), `--profile research`.
+
+**Local rehearsal, 29 October.** The production image built from this tree and
+the full stack started healthy under Docker with `POLYMATH_DOMAIN=localhost`
+(Caddy's internal certificate). Verified through HTTPS: readiness, HTTP→HTTPS 308
+redirect, HSTS/nosniff/no-referrer headers, a `Secure` session cookie, a
+client-supplied `X-Forwarded-For` ignored in favour of the real peer, no published
+database port, read-only non-root app containers, and research activity SSE
+streaming through Caddy unbuffered (a newly written event arrived within
+seconds; heartbeats continued). This is not a hosted deployment: a public domain,
+real certificate issuance and the chosen host remain to be verified.
+
+The API trusts forwarding headers only from the proxy's fixed address
+(`172.30.0.10`), so visitor identity, the https scheme, Secure cookies and Origin
+checks come from Caddy and cannot be spoofed by a client header. This was checked
+locally with uvicorn: forwarded headers from the trusted address produced a Secure
+cookie, and the same headers from an untrusted address were ignored.
+
+## Backups and quarantined restore
+
+`scripts/production-backup.sh` writes a private, checksummed `pg_dump` into
+`backups/`. Copy each dump off the host.
+
+To restore, never reuse the running stack. `R` below is
+`docker compose -p polymath-restore -f deploy/compose.production.yaml --env-file deploy/production.env`.
+
+1. Stop the old stack's workers and record the stopped state. If it is still
+   reachable, use the budget desk's **Disable** first.
+2. Start only the isolated database with every gate false:
+   `R up -d --wait db`, then restore the dump:
+   `R exec -T db pg_restore -U polymath -d polymath --no-owner < backups/<file>.dump`.
+3. Migrate and quarantine through the `migrate` service, which uses only the
+   private database network (the proxy network's fixed address cannot exist
+   twice on one host): `R run --rm migrate`, then
+   `R run --rm migrate /app/backend/.venv/bin/python -m polymath.restore_quarantine --confirm-restored-database`.
+4. Only then serve the restored copy for read-only access, after the old stack
+   has been stopped on this host or on a separate host.
+
+Rehearsed on 29 October against the real production stack under Docker: a dump
+containing an armed research account and live sessions restored into an
+isolated project. The quarantine disabled, killed, froze and re-epoched the
+account (epoch 7 → 8, scope cleared) and expired both sessions. It refused with
+an enabled gate. The rehearsal also found that the fixed proxy subnet prevents a
+second full copy on the same host, which is why step 3 uses `migrate`.
+
+`polymath.restore_quarantine` refuses to run while any execution gate is on or
+the schema is not at head. In one transaction it disables, kills and freezes
+every budget account, clears its native scope and advances its control epoch.
+Advancing the epoch invalidates restored activations, probe approvals and public
+delegations. It also revokes operator sessions, expires browser sessions and
+freezes active publication jobs for manual reconciliation. Monetary, scientific
+and audit rows are kept, and nothing is re-armed. Two PostgreSQL tests cover it
+with a populated database, including idempotence and refusal on an unmigrated
+schema.
+
+Paid or publication work after a restore still requires the reconciliation
+above: independent evidence of provider billing, unknown calls and remote
+deposits, then fresh approval. A frozen account cannot be unfrozen from the
+application, by design.
+
+## Remaining before hosted release
+
+Owner inputs: host account and budget approval, domain choice, provider funding
+and real-publication approval. Engineering checks on the real host: persistence
+across restarts, HTTPS/proxy identity, SSE reconnects through Caddy, funding Stop
+and source-to-claim journeys. Record the release commit, image digest, schema and
+public URL; a local build is not evidence of hosted deployment.

@@ -38,6 +38,7 @@ from polymath.explore_collection_models import (
     ResearchStageOwner,
 )
 from polymath.explore_collection_store import ExploreCollectionStore
+from polymath.frontier_models import FrontierAttempt, FrontierNode, FrontierProgramme
 from polymath.jobs import JobRepository
 from polymath.meta_research import native_run_input_sha256
 from polymath.meta_research_errors import MetaResearchError
@@ -95,7 +96,10 @@ async def test_populated_surprise_migration_round_trip_changes_only_three_owner_
         store.list_stages(complete_owner, complete_id),
         store.list_stages(partial_owner, partial_id),
     )
-    excluded = {model.__tablename__ for model in MODELS} | {"alembic_version"}
+    # Tables created after 0024 cannot exist at that revision: 0025's own
+    # tables and the later experimental Frontier tables (0026).
+    later = {model.__tablename__ for model in (FrontierProgramme, FrontierNode, FrontierAttempt)}
+    excluded = {model.__tablename__ for model in MODELS} | later | {"alembic_version"}
     with engine.connect() as connection:
         tables = tuple(
             table for table in inspect(connection).get_table_names() if table not in excluded

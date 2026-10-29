@@ -24,6 +24,8 @@ class Settings(BaseSettings):
     model_api_key: SecretStr | None = None
     meta_model: str | None = None
     meta_api_base_url: str = "https://api.meta.ai/v1"
+    # Optional free OpenAlex key, sent only as a Bearer header for source search.
+    openalex_api_key: SecretStr | None = None
     operator_bootstrap_token: SecretStr | None = None
     operator_actor_id: str = Field(
         default="publisher", pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}$"
@@ -33,6 +35,9 @@ class Settings(BaseSettings):
     publication_execution_enabled: bool = False
     literature_ingestion_enabled: bool = False
     public_sharing_enabled: bool = False
+    # Experimental Frontier programmes record a tree of ordinary owned research
+    # runs; they never spend directly, so the feature itself defaults on.
+    frontier_enabled: bool = True
     budget_readiness_enabled: bool = False
     budget_admin_actor_ids: tuple[str, ...] = ()
     budget_max_hard_cap_microdollars: int = Field(default=150_000_000, ge=1, le=150_000_000)

@@ -401,6 +401,9 @@ class _BoundedClient:
         self._transport = transport
         self._provider_slot = provider_slot
 
+    def _auth_headers(self) -> dict[str, str]:
+        return {}
+
     async def _request(self, params: dict[str, str | int]) -> tuple[bytes, datetime]:
         try:
             async with asyncio.timeout(REQUEST_TIMEOUT_SECONDS):
@@ -418,6 +421,7 @@ class _BoundedClient:
                         headers={
                             "User-Agent": "Polymath/0.1 (open-literature research)",
                             "Accept-Encoding": "identity",
+                            **self._auth_headers(),
                         },
                     ) as response:
                         if response.status_code in (401, 403):
@@ -465,10 +469,17 @@ class OpenAlexClient(_BoundedClient):
         provider_slot: ProviderSlot | None = None,
     ) -> None:
         super().__init__(transport=transport, provider_slot=provider_slot)
-        if api_key is not None:
-            # OpenAlex's query-key route is not enabled: httpx request logs can
-            # include full URLs. Verify a safe authentication route before use.
-            raise ValueError("OpenAlex credential transport is not verified")
+        # OpenAlex documents a Bearer header as an alternative to its query-key
+        # route. Only the header is used: httpx request logs can include full
+        # URLs, and provider errors retain sanitized codes, never headers.
+        if api_key is not None and not api_key.get_secret_value().strip():
+            raise ValueError("OpenAlex API key is empty")
+        self._api_key = api_key
+
+    def _auth_headers(self) -> dict[str, str]:
+        if self._api_key is None:
+            return {}
+        return {"Authorization": f"Bearer {self._api_key.get_secret_value().strip()}"}
 
     async def search(self, query: str, *, limit: int = 5) -> list[DiscoveredSource]:
         query = validate_query(query)
@@ -485,10 +496,12 @@ class ArxivClient(_BoundedClient):
     async def search(self, query: str, *, limit: int = 5) -> list[DiscoveredSource]:
         query = validate_query(query)
         validate_result_limit(limit)
-        # Quote user input as a phrase; it cannot become URL parameters or API operators.
-        phrase = query.replace('"', " ").replace("\\", " ")
+        # Quote every term separately and require all of them. Quoted terms cannot
+        # become URL parameters or API operators. A single exact phrase was too
+        # strict on the live API: "error-correcting codes genetics" matched nothing.
+        terms = query.replace('"', " ").replace("\\", " ").split()
         params: dict[str, str | int] = {
-            "search_query": f'all:"{phrase}"',
+            "search_query": " AND ".join(f'all:"{term}"' for term in terms),
             "start": 0,
             "max_results": limit,
         }

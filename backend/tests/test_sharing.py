@@ -397,7 +397,9 @@ def test_expired_share_stays_in_owner_history_and_never_extends_with_browser(dat
         connection.execute(
             update(BrowserSession)
             .where(BrowserSession.token_hash == token)
-            .values(expires_at=func.clock_timestamp() + text("interval '2 seconds'"))
+            # Preview and share must both finish inside this window; a busy
+            # machine took longer than two seconds, so leave generous room.
+            .values(expires_at=func.clock_timestamp() + text("interval '6 seconds'"))
         )
     preview = store.preview(token, prior.id)
     saved = store.share(token, prior.id, preview.projection_sha256, uuid.uuid4())
@@ -409,7 +411,7 @@ def test_expired_share_stays_in_owner_history_and_never_extends_with_browser(dat
             .where(BrowserSession.token_hash == token)
             .values(expires_at=func.clock_timestamp() + text("interval '1 day'"))
         )
-    Event().wait(2.05)
+    Event().wait(6.05)
     assert store.list_owned(token)[0].status == "expired"
     retried = store.share(token, prior.id, saved.projection_sha256, saved.idempotency_key)
     assert retried.public_id == saved.public_id and retried.status == "expired"

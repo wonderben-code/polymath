@@ -12,6 +12,13 @@ export interface FindingVersionNoticeProps {
 export function FindingVersionNotice({ head, phase, pollPaused = false, onRefresh, onOpenRun, onOpenFinding }: FindingVersionNoticeProps) {
   if (phase === 'idle') return null
   const current = phase === 'ready' && !!head && !pollPaused
+  // The ordinary case (the latest, supported version) is one quiet line;
+  // anything that needs attention keeps the full notice.
+  const quiet = current && head.can_generate && head.state !== 'unsupported' && !head.is_historical && head.discovery_stage?.status !== 'needs_review' && head.current_result_id === head.requested_result_id
+  if (quiet) return <section className="finding-version-notice finding-version-quiet" aria-label="Finding version status">
+    <p><strong>Current supported model assessment</strong> · the latest version of this finding. “Supported” is the model’s reading of the cited evidence, not proof.</p>
+    <button type="button" onClick={onRefresh}>Refresh finding status</button>
+  </section>
   return <section className={`finding-version-notice${!current || !head?.can_generate ? ' finding-version-warning' : ''}`} aria-label="Finding version status">
     <div className="assessment-row"><strong>{phase === 'loading' ? 'Checking finding version…' : !current ? 'Current finding status unavailable' : head.discovery_stage?.status === 'needs_review' ? 'Saved discovery evidence needs review' : head.state === 'unsupported' ? 'Unsupported by the latest model assessment' : head.is_historical ? 'Historical finding · a newer version is current' : 'Current supported model assessment'}</strong><button type="button" onClick={onRefresh} disabled={phase === 'loading' || phase === 'expired'}>Refresh finding status</button></div>
     {!current ? <p>{phase === 'expired' ? 'This browser session has expired or changed. Reload saved research to inspect private versions.' : pollPaused ? 'Automatic version checks have paused. Refresh this finding’s status before generating or publishing new work.' : phase === 'loading' ? 'New writing, formalisation, and publication wait for the saved version check.' : 'The current finding head could not be verified. New writing, formalisation, and publication are unavailable until it can be checked.'}</p> : <>

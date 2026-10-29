@@ -19,3 +19,5 @@ coverage/
 playwright-report/
 test-results/
 .polymath-client/
+deploy/production.env
+backups/

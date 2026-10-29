@@ -584,3 +584,46 @@ async def test_wall_deadline_cancellation_and_default_disabled_state_are_honest(
 
     with pytest.raises(asyncio.CancelledError):
         await adapter(policy, cancelled).observe(manifest.request)
+
+
+@pytest.mark.asyncio
+async def test_documented_meta_chat_completion_shape_is_observed_with_inclusive_usage():
+    """Mirrors the response fields Meta documents (read 29 October 2026).
+
+    Reasoning tokens are reported inside completion_tokens, so the inclusive
+    two-counter billing contract must accept the extra detail objects as-is.
+    """
+    proposal, policy, _, manifest = probe_fixture()
+
+    def handler(request):
+        return httpx.Response(
+            200,
+            json={
+                "id": "chatcmpl-synthetic",
+                "object": "chat.completion",
+                "created": 1793274015,
+                "model": manifest.request.payload.model,
+                "choices": [
+                    {
+                        "index": 0,
+                        "finish_reason": "stop",
+                        "message": {"role": "assistant", "content": json.dumps(ACTION)},
+                    }
+                ],
+                "usage": {
+                    "prompt_tokens": 12,
+                    "completion_tokens": 5,
+                    "total_tokens": 17,
+                    "prompt_tokens_details": {"cached_tokens": 0},
+                    "completion_tokens_details": {"reasoning_tokens": 3},
+                },
+            },
+            headers={"x-ratelimit-remaining-requests": "2999"},
+        )
+
+    observed = await adapter(policy, handler).observe(manifest.request)
+    assert observed.error_code is None
+    assert observed.input_tokens == 12 and observed.output_tokens == 5
+    assert observed.finish_reason == "stop" and observed.content == json.dumps(ACTION)
+    assessment = assess_probe_observation(manifest, proposal, observed)
+    assert assessment.actual_microdollars == 22

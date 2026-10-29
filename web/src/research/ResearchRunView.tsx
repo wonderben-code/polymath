@@ -17,15 +17,17 @@ import type {
   VerifiedQuote,
 } from './types'
 import './research.css'
+import { Observatory } from './observatory/Observatory'
 
+const terminalStatuses = new Set(['succeeded', 'failed', 'cancelled', 'interrupted'])
 const modeNames = { explore: 'Explore', ask: 'Ask', surprise: 'Surprise me' }
 const states: Record<string, { label: string; description: string }> = {
   queued: { label: 'Queued', description: 'The investigation is waiting to begin.' },
-  running: { label: 'Investigating', description: 'Follow the recorded research activity below.' },
+  running: { label: 'Investigating', description: 'Polymath is working. Watch each step as it happens, or ask to be told when it is done.' },
   waiting_retry: { label: 'Waiting', description: 'The investigation is waiting before its next permitted attempt.' },
   cancel_requested: { label: 'Cancellation requested', description: 'Further research is being stopped. An operation already in progress may still finish.' },
   cancelled: { label: 'Cancelled', description: 'This investigation has stopped. Completed evidence is retained; an operation already sent may still incur usage.' },
-  succeeded: { label: 'Complete', description: 'Review the recorded outcome and its supporting material below.' },
+  succeeded: { label: 'Complete', description: 'Here is what Polymath found, with every source you can check.' },
   failed: { label: 'Could not complete', description: 'The investigation stopped before completing. Any saved evidence remains available.' },
   interrupted: { label: 'Interrupted', description: 'The investigation paused unexpectedly. Saved evidence is retained, and research will not restart automatically.' },
 }
@@ -41,6 +43,36 @@ const connectionNames: Record<ResearchRunViewProps['connection'], string> = {
 // These records remain persisted and drive the SSE cursor. They are operational
 // bookkeeping, rather than research activity to present in the workspace.
 const operationalEvents = new Set(['checkpoint', 'external_started', 'external_observed', 'external_reconciled'])
+
+// A short visible label per step makes the live record scannable. Unknown
+// kinds still render, labelled generically.
+const stepKinds: Record<string, { label: string; tone: string }> = {
+  search_completed: { label: 'Search', tone: 'search' },
+  source_read: { label: 'Reading', tone: 'read' },
+  full_text_opened: { label: 'Reading', tone: 'read' },
+  full_text_window_read: { label: 'Reading', tone: 'read' },
+  stage_source_read: { label: 'Reading', tone: 'read' },
+  memory_source_read: { label: 'Memory', tone: 'memory' },
+  memory_searched: { label: 'Memory', tone: 'memory' },
+  memory_finding_read: { label: 'Memory', tone: 'memory' },
+  stage_parent_read: { label: 'Memory', tone: 'memory' },
+  research_note: { label: 'Hypothesis', tone: 'idea' },
+  fields_selected: { label: 'Direction', tone: 'idea' },
+  parents_selected: { label: 'Direction', tone: 'idea' },
+  stage_committed: { label: 'Discovery', tone: 'finding' },
+  explore_ranked: { label: 'Ranking', tone: 'finding' },
+  concluded: { label: 'Conclusion', tone: 'finding' },
+  discovery_finished: { label: 'Conclusion', tone: 'finding' },
+  explore_finished: { label: 'Conclusion', tone: 'finding' },
+  tool_failed: { label: 'Setback', tone: 'setback' },
+  model_failed: { label: 'Setback', tone: 'setback' },
+  action_rejected: { label: 'Setback', tone: 'setback' },
+  stopped: { label: 'Stopped', tone: 'setback' },
+}
+
+function stepKind(kind: string) {
+  return stepKinds[kind] ?? { label: 'Step', tone: 'step' }
+}
 
 function orderedEvents(events: ResearchActivityEvent[]): ResearchActivityEvent[] {
   const distinct = new Map<number, ResearchActivityEvent>()
@@ -160,7 +192,8 @@ function Answer({ finding, result }: { finding: AnswerFinding; result: ResearchR
   return <article className="research-answer" aria-labelledby="answer-title">
     <span className="eyebrow accent">EVIDENCE-LINKED ANSWER</span>
     <h3 id="answer-title">{finding.question}</h3>
-    <div className="research-answer-labels"><h4>How to read the claim labels</h4><p><strong>Known</strong> is the model’s source-supported classification. <strong>Postulated</strong> is an inference across sources. <strong>Speculative</strong> is a tentative possibility.</p><p className="research-scope-note">These are model assessments, not guarantees of truth. Matched quotations do not independently verify the interpretation.</p></div>
+    <ClaimSpectrum claims={finding.claims} />
+    <details className="research-answer-labels"><summary>How to read the claim labels</summary><p><strong>Known</strong> is the model’s source-supported classification. <strong>Postulated</strong> is an inference across sources. <strong>Speculative</strong> is a tentative possibility.</p><p className="research-scope-note">These are model assessments, not guarantees of truth. Matched quotations do not independently verify the interpretation.</p></details>
     {result.overview_binding ? <ClaimBoundOverview finding={finding} binding={result.overview_binding} claimAnchor={claimAnchor} /> : <div className="research-answer-overview"><h4>Model overview</h4><p className="research-answer-summary">{finding.summary}</p><p className="research-scope-note">This overview is the model’s assessment. The classified claims below carry the source quotations.</p></div>}
     <ol className="research-answer-claims" aria-label="Answer claims">{finding.claims.map((claim, index) => <li key={claim.id} id={claimAnchor(claim.id)} tabIndex={-1}>
       <div className="research-answer-claim-heading"><span className={`research-claim-label label-${claim.label}`}>{claimLabels[claim.label]}</span><span className="research-claim-number">Claim {index + 1}</span></div>
@@ -200,12 +233,33 @@ function ResearchMemory({ result, onOpenRun }: { result: ResearchResult; onOpenR
   </section>
 }
 
+// A visual reading of the mapping table, which stays the accessible record.
+function BridgeDiagram({ finding }: { finding: BridgeFinding }) {
+  return <div className="bridge-diagram" aria-hidden="true">
+    <div className="bridge-diagram-fields"><span>{finding.field_left}</span><svg className="bridge-diagram-arc" viewBox="0 0 200 40" preserveAspectRatio="none"><path d="M 4 36 Q 100 -14 196 36" pathLength={1} /></svg><span>{finding.field_right}</span></div>
+    {finding.mappings.map((mapping, index) => <div className="bridge-diagram-row" key={index} style={{ animationDelay: `${index * 120}ms` }}>
+      <span className="bridge-diagram-term is-left">{mapping.left}</span>
+      <svg viewBox="0 0 100 20" preserveAspectRatio="none"><path d="M 0 10 C 35 0, 65 20, 100 10" pathLength={1} /><circle cx="0" cy="10" r="3" /><circle cx="100" cy="10" r="3" /></svg>
+      <span className="bridge-diagram-term is-right">{mapping.right}</span>
+    </div>)}
+  </div>
+}
+
+function ClaimSpectrum({ claims }: { claims: AnswerClaim[] }) {
+  const counts = (['known', 'postulated', 'speculative'] as const).map((label) => [label, claims.filter((claim) => claim.label === label).length] as const)
+  return <figure className="claim-spectrum" aria-label={`${claims.length} claims: ${counts.map(([label, count]) => `${count} ${claimLabels[label].toLowerCase()}`).join(', ')}.`}>
+    <div className="claim-spectrum-bar">{counts.filter(([, count]) => count).map(([label, count]) => <span key={label} className={`is-${label}`} style={{ flexGrow: count }} />)}</div>
+    <figcaption>{counts.map(([label, count]) => <span key={label}><i className={`is-${label}`} aria-hidden="true" />{claimLabels[label]} <strong>{count}</strong></span>)}</figcaption>
+  </figure>
+}
+
 function Bridge({ finding }: { finding: BridgeFinding }) {
   return (
     <article className="research-bridge" aria-labelledby="bridge-title">
       <div className="research-bridge-heading"><span className="eyebrow accent">CANDIDATE CONNECTION</span><p>{finding.field_left}<span aria-hidden="true"> ↔ </span><span className="research-sr-only"> and </span>{finding.field_right}</p></div>
       <h3 id="bridge-title">{finding.title}</h3>
       <p className="research-explanation">{finding.explanation}</p>
+      <BridgeDiagram finding={finding} />
       <div className="research-mapping-wrap" role="region" aria-label="Structural mapping" tabIndex={0}>
         <table className="research-mapping"><caption>Proposed structural mapping</caption><thead><tr><th scope="col">{finding.field_left}</th><th scope="col">{finding.field_right}</th><th scope="col">Assumption</th></tr></thead><tbody>{finding.mappings.map((mapping, index) => <tr key={index}><td>{mapping.left}</td><td>{mapping.right}</td><td>{mapping.assumption}</td></tr>)}</tbody></table>
       </div>
@@ -238,19 +292,28 @@ export function ResearchFindingView({ result, onOpenRun, mode = result.mode, pri
   return <>{mode === 'surprise' && <SelectedFields selections={result.field_selections ?? []} />}<Outcome result={result} /><ResearchMemory result={result} onOpenRun={onOpenRun} /><Evidence result={result} primaryPaperGroups={primaryPaperGroups} /></>
 }
 
-export function ResearchRunView({ run, events, result, connection, onCancel, cancelling = false, onOpenRun, findingVersion, hideOutcome = false, primaryPaperGroups }: ResearchRunViewProps) {
+export function ResearchRunView({ run, events, result, connection, onCancel, cancelling = false, onOpenRun, findingVersion, hideOutcome = false, primaryPaperGroups, notifyControl }: ResearchRunViewProps) {
   const state = states[run.status] ?? { label: 'Status unavailable', description: 'The investigation status could not be identified. Recorded material remains below.' }
   const activity = orderedEvents(events)
+  const timestamps = run as { created_at?: string; updated_at?: string }
   const canCancel = onCancel && ['queued', 'running', 'waiting_retry', 'interrupted'].includes(run.status)
+  const terminal = terminalStatuses.has(run.status)
+  // A live run leads with the Observatory; a finished one leads with its
+  // result and keeps the journey one tap away.
+  const observatory = (events.length > 0 || !terminal) && <Observatory events={events} terminal={terminal} createdAt={timestamps.created_at} updatedAt={timestamps.updated_at} result={hideOutcome ? null : result} />
+  const timeline = <section className="research-activity" aria-labelledby="research-activity-title"><div className="research-section-heading"><h3 id="research-activity-title">Research activity</h3><span className={`research-connection connection-${connection}`} aria-live="polite">{connectionNames[connection]}</span></div>{activity.length ? <ol className="research-timeline" aria-label="Recorded research activity" aria-live="polite" aria-relevant="additions">{activity.map((event, index) => { const step = stepKind(event.kind); return <li key={event.sequence} className={`research-step step-${step.tone}`}><span className="research-event-number" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span><p><span className="research-step-label">{step.label}</span>{event.summary}</p></li> })}</ol> : <p className="research-empty">No recorded activity yet.</p>}{run.status === 'running' && <p className="research-thinking"><span className="research-thinking-dots" aria-hidden="true"><span /><span /><span /></span>Thinking about the next step…</p>}</section>
   return (
-    <section className="research-run-view" aria-labelledby="research-run-title">
+    <section className={`research-run-view ${terminal ? 'is-finished' : 'is-live'}`} aria-labelledby="research-run-title">
       <header className="research-run-heading"><div><span className="eyebrow accent">{run.task_kind === 'reassess_finding' ? 'EVIDENCE REASSESSMENT' : modeNames[run.mode].toUpperCase()} / RESEARCH RECORD</span><h2 id="research-run-title">{run.goal || 'An open discovery'}</h2></div><span className={`research-run-state state-${run.status}`} role="status">{state.label}</span></header>
-      <div className="research-run-summary"><p>{state.description}</p>{canCancel && <button type="button" className="research-cancel" onClick={onCancel} disabled={cancelling}>{cancelling ? 'Requesting cancellation…' : 'Cancel investigation'}</button>}</div>
+      <div className="research-run-summary"><p>{state.description}</p>{!terminalStatuses.has(run.status) && notifyControl}{canCancel && <button type="button" className="research-cancel" onClick={onCancel} disabled={cancelling}>{cancelling ? 'Requesting cancellation…' : 'Cancel investigation'}</button>}</div>
       {findingVersion && <FindingVersionNotice {...findingVersion} />}
-      <div className={`research-run-layout${hideOutcome ? ' research-run-layout-activity-only' : ''}`}>
-        <section className="research-activity" aria-labelledby="research-activity-title"><div className="research-section-heading"><h3 id="research-activity-title">Research activity</h3><span className={`research-connection connection-${connection}`} aria-live="polite">{connectionNames[connection]}</span></div>{activity.length ? <ol className="research-timeline" aria-label="Recorded research activity" aria-live="polite" aria-relevant="additions">{activity.map((event, index) => <li key={event.sequence}><span className="research-event-number" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span><p>{event.summary}</p></li>)}</ol> : <p className="research-empty">No recorded activity yet.</p>}</section>
-        {!hideOutcome && <section className="research-results" aria-labelledby="research-outcome-title"><h3 className="research-sr-only" id="research-outcome-title">Research outcome</h3>{result ? <ResearchFindingView result={result} onOpenRun={onOpenRun} mode={run.mode} primaryPaperGroups={primaryPaperGroups} /> : <PendingOutcome status={run.status} />}</section>}
-      </div>
+      {!terminal && observatory}
+      {!hideOutcome && <section className="research-results" aria-labelledby="research-outcome-title"><h3 className="research-sr-only" id="research-outcome-title">Research outcome</h3>{result ? <ResearchFindingView result={result} onOpenRun={onOpenRun} mode={run.mode} primaryPaperGroups={primaryPaperGroups} /> : <PendingOutcome status={run.status} />}</section>}
+      <details className="research-journey" open={hideOutcome || undefined}>
+        <summary><span>{terminal ? 'How Polymath worked' : 'Step-by-step record'}</span><span className="research-journey-count">{activity.length} {activity.length === 1 ? 'step' : 'steps'}</span></summary>
+        {terminal && observatory}
+        {timeline}
+      </details>
     </section>
   )
 }

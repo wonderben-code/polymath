@@ -73,3 +73,12 @@
 @media(max-width: 760px) { .public-shell main { padding-top: 28px; } .public-navigation { gap: 14px; font-size: 11px; } .sharing-workspace, .public-snapshot { padding: 21px; } .public-snapshot h2 { font-size: 27px; } .public-library-list, .public-map-layout { grid-template-columns: 1fr; } .public-controls { flex-wrap: wrap; } .public-controls label { flex-basis: 100%; } .public-mappings th, .public-mappings td { padding: 8px; } .sharing-meta { grid-template-columns: 1fr; gap: 3px; } .sharing-meta dd { margin-bottom: 7px; } }
 
 .sharing-status[data-state='needs_review'] { color: #775e35; border-color: #d9cba9; }
+
+/* Experience refresh for public pages. */
+.public-notice, .sharing-warning { border-radius: 0 8px 8px 0; }
+.public-library-card { border-radius: 12px; border-top: 3px solid #266b58; transition: transform .18s ease, box-shadow .18s ease; }
+.public-library-card:hover { transform: translateY(-2px); box-shadow: 0 10px 26px rgba(37, 61, 56, .09); }
+.public-library-card h2 a { color: inherit; text-decoration: none; background-image: linear-gradient(currentColor, currentColor); background-size: 0 1px; background-repeat: no-repeat; background-position: 0 100%; transition: background-size .25s ease; }
+.public-library-card h2 a:hover, .public-library-card h2 a:focus-visible { background-size: 100% 1px; }
+.public-empty { padding: 34px 30px; border: 1px dashed #c9d0c2; border-radius: 12px; background: radial-gradient(120% 140% at 50% 0%, #fbfaf5, #f1f1e9); }
+@media (prefers-reduced-motion: reduce) { .public-library-card, .public-library-card h2 a { transition: none; } }

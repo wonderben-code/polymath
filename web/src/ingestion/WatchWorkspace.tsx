@@ -262,12 +262,12 @@ export function WatchWorkspace({ enabled, csrfToken, findings = [], onSessionExp
   }
 
   return <section className="watch-workspace" aria-labelledby={`${uid}-title`} ref={workspaceElement}>
-    <header className="watch-heading"><div><span className="eyebrow accent">KEEP READING</span><h3 id={`${uid}-title`}>Literature watches</h3><p>Follow a question as new source versions arrive. Reading providers saves papers for inspection; it does not call the research model or reassess a finding.</p></div>{available && <button type="button" onClick={refresh} disabled={!!busy}>Refresh watches</button>}</header>
-    <p className="watch-scope">Watches belong to this browser session and stop when it expires, at most seven days after the session began. Keeping this page open does not extend that period.</p>
+    <header className="watch-heading"><div><h3 id={`${uid}-title`}>Literature watches</h3><p>Polymath keeps reading new papers on a topic for you. New papers are saved for you to look at. Watching never runs the research model or changes a finding on its own.</p></div>{available && <button type="button" onClick={refresh} disabled={!!busy}>Refresh watches</button>}</header>
+    <p className="watch-scope">Watches last as long as this browser session, up to seven days.</p>
     {!enabled || !csrfToken ? <p>Connect to the research workspace to read this browser session’s watches.</p> : <>
       {phase === 'loading' && <p role="status">Loading literature watches…</p>}
       {phase === 'expired' && <p role="alert">Your browser session has expired or changed. Private watches and sources have been cleared. Reload saved research in the workspace.</p>}
-      {capabilities && !capabilities.execution_available && <p className="watch-gate" role="status">Free-provider reading is disabled. New watches, resumed reading, and checks are unavailable. Existing saved watches and sources can still be inspected or paused.</p>}
+      {capabilities && !capabilities.execution_available && <p className="watch-gate" role="status">Reading new papers is paused right now. Saved watches and sources stay open to read or pause.</p>}
       {error && <p className="watch-warning" role="alert">{error}</p>}
       {uncertain && <p className="watch-warning" role="alert">The last request’s outcome is unknown. Refresh watches before making another change. It may already have been saved.</p>}
       {pollStopped && <p role="status">Automatic status refresh has paused after ten minutes. Refresh watches to retrieve the latest saved state.</p>}

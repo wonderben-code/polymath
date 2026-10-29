@@ -18,6 +18,7 @@ from contextlib import suppress
 from dataclasses import asdict, dataclass
 from typing import Protocol
 
+from pydantic import SecretStr
 from sqlalchemy import Engine, func, select
 from sqlalchemy.orm import Session
 
@@ -341,6 +342,7 @@ def build_native_research_worker(
     public_policy: PublicResearchPolicy | None = None,
     model_factory: Callable[[NativeResearchInput, NativeResearchGrant], _NativeModel] | None = None,
     tools_factory=None,
+    openalex_api_key: SecretStr | None = None,
 ) -> ResearchWorker:
     """Compose the existing worker; the native adapter stays lazy until its grant."""
     store = MetaResearchStore(
@@ -379,17 +381,19 @@ def build_native_research_worker(
 
     def source_tools(context: _RunContext, snapshot: RunSnapshot):
         return OpenLiteratureTools(
+            openalex_api_key=openalex_api_key,
             provider_slot=DatabaseProviderPacer(
                 engine,
                 authorize=lambda session: _authorize_provider(session, context.lease),
                 max_wait_seconds=10,
-            )
+            ),
         )
 
     return ResearchWorker(
         engine,
         model_factory=forbidden_legacy_model,
-        tools_factory=tools_factory or (lambda _: OpenLiteratureTools()),
+        tools_factory=tools_factory
+        or (lambda _: OpenLiteratureTools(openalex_api_key=openalex_api_key)),
         tools_context_factory=source_tools if tools_factory is None else None,
         policy=None,
         runtime_profile_resolver=resolve,
@@ -443,6 +447,7 @@ async def run(
             readiness_policy=readiness,
             operator_policy=operator,
             public_policy=PublicResearchPolicy(enabled=settings.public_meta_research_enabled),
+            openalex_api_key=settings.openalex_api_key,
         )
         if once:
             result = await worker.run_once(worker_id)

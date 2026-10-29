@@ -1,0 +1,150 @@
+# Production stack for one host: PostgreSQL (private), migrations, API/UI, an
+# HTTPS proxy and optional workers. Every spending/publication gate stays off
+# unless deploy/production.env turns it on. See docs/DEPLOYMENT.md.
+#
+#   docker compose -f deploy/compose.production.yaml --env-file deploy/production.env up -d --wait
+#
+# Workers are opt-in profiles: add `--profile literature`, `--profile research`
+# or `--profile publication` only after their gates are reviewed.
+name: polymath-production
+
+x-app: &app
+  build:
+    context: ..
+  # Set POLYMATH_IMAGE to a digest-pinned ghcr.io/wonderben-code/polymath image
+  # to pull a CI-built release instead of building on the server.
+  image: ${POLYMATH_IMAGE:-polymath:production}
+  env_file: production.env
+  environment: &app-environment
+    DATABASE_URL: postgresql+psycopg://polymath:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in deploy/production.env}@db:5432/polymath
+    POLYMATH_ENVIRONMENT: production
+    STATIC_DIR: /app/web/dist
+  networks: [internal]
+  read_only: true
+  tmpfs: [/tmp]
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: [ALL]
+
+services:
+  db:
+    image: postgres:17-alpine@sha256:266d3c257594e195b309ae9d1805e54c788f1d7b375f56bf6c367aac6c917e7b
+    environment:
+      POSTGRES_USER: polymath
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in deploy/production.env}
+      POSTGRES_DB: polymath
+    # No published port: only containers on the internal network reach it.
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks: [internal]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U polymath -d polymath"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  migrate:
+    <<: *app
+    command: ["/app/backend/.venv/bin/alembic", "-c", "/app/backend/alembic.ini", "upgrade", "head"]
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  app:
+    <<: *app
+    # Trust forwarding headers only from the proxy's fixed address so visitor
+    # identity, https scheme, Secure cookies and Origin checks are correct and
+    # cannot be spoofed by a client-supplied header.
+    command:
+      - /app/backend/.venv/bin/uvicorn
+      - polymath.main:app
+      - --host=0.0.0.0
+      - --port=8000
+      - --proxy-headers
+      - --forwarded-allow-ips=172.30.0.10
+      - --no-server-header
+      - --timeout-graceful-shutdown=20
+    networks:
+      internal:
+      edge:
+        ipv4_address: 172.30.0.20
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "/app/backend/.venv/bin/python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/readiness', timeout=3)"]
+      interval: 10s
+      timeout: 4s
+      retries: 12
+      start_period: 15s
+
+  proxy:
+    image: caddy:2.11.7-alpine@sha256:eb4d35b7452d1ab6171fbdbe8d9275b2301dad6dad92115d91e19fb9b24d510f
+    environment:
+      POLYMATH_DOMAIN: ${POLYMATH_DOMAIN:?set POLYMATH_DOMAIN in deploy/production.env}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      edge:
+        ipv4_address: 172.30.0.10
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+
+  literature-worker:
+    <<: *app
+    profiles: [literature]
+    command: ["/app/backend/.venv/bin/python", "-m", "polymath.ingestion_runtime"]
+    networks: [internal, egress]
+    restart: on-failure:3
+    depends_on:
+      app:
+        condition: service_healthy
+
+  research-worker:
+    <<: *app
+    profiles: [research]
+    command: ["/app/backend/.venv/bin/python", "-m", "polymath.native_research_worker"]
+    networks: [internal, egress]
+    restart: on-failure:3
+    stop_grace_period: 120s
+    depends_on:
+      app:
+        condition: service_healthy
+
+  publication-worker:
+    <<: *app
+    profiles: [publication]
+    command: ["/app/backend/.venv/bin/python", "-m", "polymath.publication_runtime"]
+    networks: [internal, egress]
+    restart: on-failure:3
+    stop_grace_period: 120s
+    depends_on:
+      app:
+        condition: service_healthy
+
+networks:
+  # The database network has no route to the internet.
+  internal:
+    internal: true
+  # Public HTTPS traffic between the proxy and the API only.
+  edge:
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+  # Outbound access for workers that call Meta, literature providers or Zenodo.
+  egress: {}
+
+volumes:
+  postgres_data:
+  caddy_data:
+  caddy_config:
