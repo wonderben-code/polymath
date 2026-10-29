@@ -30,6 +30,7 @@ export interface KnowledgeBrowserProps {
 const kinds: Record<KnowledgeKind, string> = { field: 'Field', source: 'Source', finding: 'Finding' }
 const stageStatus = { current_supported: 'current model-supported', superseded: 'historical / superseded', unsupported: 'unsupported', needs_review: 'current evidence or ancestry needs review' }
 const DIAGRAM_RECORDS_PER_KIND = 8
+const DEEPER_SHOWN = 8
 
 function shortLabel(label: string): string {
   const characters = Array.from(label)
@@ -217,7 +218,14 @@ export function KnowledgeBrowser({ enabled, onOpenRun, refreshToken, canInvestig
         <legend>Go deeper</legend>
         <DeeperDiagram />
         <p>Every connection you save can become part of a bigger one. Choose two to four, and Polymath looks for the deeper structure they all share, tested against their original evidence. What it finds is a new connection, which you can choose again, as many levels deep as you like.</p>
-        <div className="knowledge-bridge-choices">{bridges.map((node) => <label key={node.result_id}><input type="checkbox" checked={parentResultIds.includes(node.result_id!)} onChange={() => chooseBridge(node.result_id!)} disabled={!canChoose || !node.assessment?.is_current || !node.assessment.is_supported || parentResultIds.length >= 4 && !parentResultIds.includes(node.result_id!)} aria-label={`Use connection: ${node.label}`} /><span>{node.label}</span></label>)}</div>
+        {(() => {
+          const ordered = [...bridges.filter((node) => parentResultIds.includes(node.result_id!)), ...bridges.filter((node) => !parentResultIds.includes(node.result_id!))]
+          const choice = (node: KnowledgeNode) => <label key={node.result_id}><input type="checkbox" checked={parentResultIds.includes(node.result_id!)} onChange={() => chooseBridge(node.result_id!)} disabled={!canChoose || !node.assessment?.is_current || !node.assessment.is_supported || parentResultIds.length >= 4 && !parentResultIds.includes(node.result_id!)} aria-label={`Use connection: ${node.label}`} /><span>{node.label}</span></label>
+          return <>
+            <div className="knowledge-bridge-choices">{ordered.slice(0, DEEPER_SHOWN).map(choice)}</div>
+            {ordered.length > DEEPER_SHOWN && <details className="knowledge-bridge-more"><summary>Show all {ordered.length} connections</summary><div className="knowledge-bridge-choices">{ordered.slice(DEEPER_SHOWN).map(choice)}</div></details>}
+          </>
+        })()}
         <div className="knowledge-bridge-actions"><p role="status">{investigating ? 'Queuing the deeper investigation…' : canChoose ? bridges.length < 2 ? 'Save one more connection to go deeper.' : `${parentResultIds.length} of 4 chosen. ${parentResultIds.length < 2 ? 'Choose at least two.' : 'Ready to look for what they share.'}` : 'New investigations are unavailable. You can still read saved research.'}</p><button type="button" onClick={investigateBridges} disabled={!canChoose || parentResultIds.length < 2}>{investigating ? 'Queuing investigation…' : 'Find the deeper connection'}</button></div>
       </fieldset>}
       {data.truncated && <p className="knowledge-limit" role="status">This is a bounded view of your library. Narrow the search to inspect more specific records.</p>}
