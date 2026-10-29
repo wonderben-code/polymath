@@ -41,7 +41,7 @@ $150 in Meta Model API credits (claim via form), **Muse Code** (Meta's agentic c
 - Video length limit: `________________`
 - Live URL required? `________________`
 - Public repo required? `________________`
-- Model API supports `tools`? `____` · `response_format`? `____` · images? `____` · streaming? `____`
+- Model API supports `tools`? **yes** · `response_format` (json_schema/json_object)? **yes** · images? **yes (Muse Spark input)** · streaming? **yes**. Read from dev.meta.ai docs on 29 Oct; see [KEY_DAY.md](KEY_DAY.md).
 - What SAM 3 and Glimmer offer, and whether either is useful here: `________________`
 
 ## Meta Model API quick reference
@@ -50,7 +50,7 @@ $150 in Meta Model API credits (claim via form), **Muse Code** (Meta's agentic c
 
 - Base URL: `https://api.meta.ai/v1` (OpenAI-compatible)
 - Auth: `Authorization: Bearer $MODEL_API_KEY`
-- Model: `muse-spark-1.1` (check whether `muse-spark-1.2` is available)
+- Models (docs, 29 Oct): `muse-spark-1.3` recommended; `muse-spark-1.2` and `muse-spark-1.1` also listed
 - Reported price: $1.25 / $4.25 per million input/output tokens
 - At launch the hosted API was a US public preview. If access from Thailand fails, ask in Discord. The fallback is open-weights Meta models.
 
