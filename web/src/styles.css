@@ -341,3 +341,23 @@ body { background: var(--paper); color: var(--ink); font-size: 16px; line-height
 .calm .research-run-summary { display: flex; flex-direction: column; align-items: flex-start; gap: 14px; }
 .calm .research-run-summary > p { margin: 0; max-width: 620px; }
 .calm .research-cancel { border-radius: 999px; padding: 8px 16px; font-size: 13px; }
+
+/* Answer: label guide folds away; supporting text stays readable. */
+.calm .research-answer-labels { border: 0; border-radius: 12px; background: #eef1e9; padding: 0; }
+.calm .research-answer-labels > summary { padding: 14px 18px; cursor: pointer; font-size: 14px; font-weight: 600; color: var(--accent); }
+.calm .research-answer-labels > p { padding: 0 18px; font-size: 14px; line-height: 1.65; }
+.calm .research-answer-labels > p:last-child { padding-bottom: 16px; }
+.calm .research-derivation > p, .calm .research-unanswered > p, .calm .research-answer-caveats li, .calm .research-answer-limits li, .calm .research-unanswered li { font-size: 14px; line-height: 1.65; }
+.calm .research-answer-overview .research-answer-summary { font-size: 17px; line-height: 1.65; }
+
+/* Frontier: calm controls, the map gets a little more room. */
+.calm .frontier-workspace { max-width: 860px; }
+.calm .frontier-controls button, .calm .frontier-detail button, .calm .frontier-attempts button { border-radius: 999px; padding: 8px 16px; font-size: 13px; }
+.calm .frontier-map { border-color: var(--hairline); border-radius: 16px; }
+.calm .frontier-list button { font-size: 14px; border-color: var(--hairline); }
+.calm .frontier-progress, .calm .frontier-legend { font-size: 13px; }
+.frontier-outline-toggle { margin-top: 12px; }
+.frontier-outline-toggle > summary { cursor: pointer; font-size: 14px; color: var(--accent); padding: 8px 0; }
+.calm .frontier-note { font-size: 14px; }
+.calm .research-answer .research-scope-note { font-size: 13px; }
+.calm .research-claim-number, .calm .research-claim-label { font-size: 12px; }

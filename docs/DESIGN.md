@@ -70,7 +70,20 @@ the result summary, then evidence and the step-by-step record behind
    visitor experience; keep them in operator pages and Details.
 4. Labels are nouns people use: "Your library", "Saved investigations", "Paused".
 
+## What changed
+
+- **Places:** Research, Your library, Frontier and About replace the long single page. The public library and operator desk sit quietly in the footer.
+- **Research:** a centred composer with one primary button and one availability line. Opening or starting an investigation glides to it.
+- **Focus view:** a finished investigation leads with its result. The Observatory and the step-by-step record fold into "How Polymath worked". A live run leads with the Observatory and offers "Notify me when it's done".
+- **Calm honesty:** the ordinary current-finding status is one quiet line, and the claim-label guide folds away. The funded-access details fold away too. Anything that needs attention (a superseded or unsupported finding, a paused service) keeps its full notice.
+- **Frontier:** Experimental is stated once at the top and once beside the result note. Map edges start after each label, the legend shows only the statuses present, and the list view folds away.
+
 ## Verification
 
 Every view: web tests green, axe WCAG 2.x A/AA clean at 1280px and 390px,
 screenshots reviewed against the principles above. Backend behaviour unchanged.
+
+29 October 2026: 934 web tests pass; zero axe violations across 18 views
+(home, bridge result, answer result, live run, library, Frontier with an open
+programme and its list, About, public library and budget desk, each at 1280
+and 390 px).

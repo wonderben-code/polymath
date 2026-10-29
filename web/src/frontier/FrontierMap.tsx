@@ -14,7 +14,7 @@ export const STATUS_LABELS: Record<FrontierNodeStatus, string> = {
 }
 
 const KIND_LABELS = { question: 'Question', gap: 'Gap', step: 'Step', convergence: 'Convergence' } as const
-const COLUMN = 230, ROW = 74, PAD_X = 40, PAD_Y = 44
+const COLUMN = 290, ROW = 74, PAD_X = 24, PAD_Y = 44, CLIP = 30
 
 interface Placed { node: FrontierNode; x: number; y: number }
 
@@ -34,7 +34,14 @@ export function layout(nodes: FrontierNode[]): { placed: Placed[]; width: number
     return y
   }
   for (const root of children.get(null) ?? []) visit(root, 0)
-  return { placed: [...placed.values()], width: PAD_X * 2 + maxDepth * COLUMN + 200, height: Math.max(140, PAD_Y * 2 + ROW * Math.max(0, row - 1)) }
+  return { placed: [...placed.values()], width: PAD_X * 2 + maxDepth * COLUMN + 220, height: Math.max(140, PAD_Y * 2 + ROW * Math.max(0, row - 1)) }
+}
+
+// Edges leave a node after its label, so lines never cross the text.
+function labelEnd(node: FrontierNode): number {
+  const kind = `${KIND_LABELS[node.kind]} · ${STATUS_LABELS[node.resolved_status]}`.length * 6.2
+  const text = Math.min(node.statement.length, CLIP) * 6.6
+  return 22 + Math.max(kind, text) + 10
 }
 
 function clip(value: string, length: number): string {
@@ -61,8 +68,9 @@ export function FrontierMap({ nodes, selectedId, onSelect }: { nodes: FrontierNo
         {placed.map(({ node, x, y }) => {
           const parent = node.parent_id ? byId.get(node.parent_id) : undefined
           if (!parent) return null
-          const middle = (parent.x + x) / 2
-          return <path key={`edge-${node.id}`} className={`frontier-edge${node.status === 'skipped' ? ' is-skipped' : ''}`} d={`M ${parent.x + 12} ${parent.y} C ${middle} ${parent.y}, ${middle} ${y}, ${x - 12} ${y}`} />
+          const start = Math.min(parent.x + labelEnd(parent.node), x - 40)
+          const middle = (start + x) / 2
+          return <path key={`edge-${node.id}`} className={`frontier-edge${node.status === 'skipped' ? ' is-skipped' : ''}`} d={`M ${start} ${parent.y} C ${middle} ${parent.y}, ${middle} ${y}, ${x - 14} ${y}`} />
         })}
         {placed.map(({ node, x, y }) => {
           const status = node.resolved_status
@@ -73,7 +81,7 @@ export function FrontierMap({ nodes, selectedId, onSelect }: { nodes: FrontierNo
                 {node.status === 'running' && <circle className="frontier-pulse" r="14" />}
                 <Shape kind={node.kind} status={node.status === 'decomposed' ? status : node.status} />
                 <text x="22" y="-4" className="frontier-node-kind">{KIND_LABELS[node.kind].toUpperCase()} · {STATUS_LABELS[status]}</text>
-                <text x="22" y="13" className="frontier-node-text">{clip(node.statement, 34)}</text>
+                <text x="22" y="13" className="frontier-node-text">{clip(node.statement, CLIP)}</text>
                 <title>{label}</title>
               </g>
             </g>

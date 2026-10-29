@@ -145,9 +145,9 @@ export function FrontierWorkspace({ enabled, csrfToken, canSubmit, focusId, subm
         </div>
         <p className="frontier-progress" role="status">{running ? <span className="frontier-live-dot" aria-hidden="true" /> : null}{status || (programme.status === 'active' ? 'Ready. Run the programme to research one step at a time; keep this tab open.' : `Programme ${programme.status}.`)} <span className="frontier-usage">{programme.attempts_used} of {programme.limits.max_attempts} investigations used · depth up to {programme.limits.max_depth}</span></p>
         {running && notifyControl}
-        <ul className="frontier-legend" aria-label="Frontier status legend">{counts.map(([key, count]) => <li key={key}><span className={`frontier-swatch status-${key}`} aria-hidden="true" />{STATUS_LABELS[key]} <strong>{count}</strong></li>)}</ul>
+        <ul className="frontier-legend" aria-label="Frontier status legend">{counts.filter(([, count]) => count > 0).map(([key, count]) => <li key={key}><span className={`frontier-swatch status-${key}`} aria-hidden="true" />{STATUS_LABELS[key]} <strong>{count}</strong></li>)}</ul>
         <FrontierMap nodes={programme.nodes} selectedId={selectedNode} onSelect={setSelectedNode} />
-        <FrontierOutline nodes={programme.nodes} selectedId={selectedNode} onSelect={setSelectedNode} />
+        <details className="frontier-outline-toggle"><summary>Read the map as a list</summary><FrontierOutline nodes={programme.nodes} selectedId={selectedNode} onSelect={setSelectedNode} /></details>
         {node && <article className="frontier-detail" aria-label="Selected frontier node">
           <span className="eyebrow accent">{node.kind.toUpperCase()} · {STATUS_LABELS[node.resolved_status]}</span>
           <p className="frontier-detail-statement">{node.statement}</p>
