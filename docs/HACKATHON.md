@@ -36,13 +36,49 @@ $150 in Meta Model API credits (claim via form), **Muse Code** (Meta's agentic c
 - [ ] Problem statement chosen: `________________`
 - [ ] Official Rules read (IP clause)
 
-## To confirm from the details page / Official Rules (fill in)
-- Submission fields: `________________`
-- Video length limit: `________________`
-- Live URL required? `________________`
-- Public repo required? `________________`
+## Official participant guide and submission form (read 29 Oct 2026, signed in)
+
+**Problem statements (pick one in the submission form):**
+- **Build for Your World:** bring Meta's models into your domain and solve a problem you know firsthand.
+- **Push the Frontier:** use Meta's models on challenges in software, robotics, manufacturing, energy, materials and beyond; "accelerate a scientific experiment". *This is the natural fit for Polymath. The owner makes the final choice.*
+
+**Allowed Meta models:** Muse Spark series, Muse Wonder, Muse Image, Muse Voice Transcribe and SAM 3.1 via the Meta Model API; open-weights Muse Glimmer and Muse Spark Open; the Muse Code coding agent.
+
+**Rules:**
+- **Repositories must be public.**
+- **New work only:** everything shown must be built during the event (building period 27 Oct – 4 Nov), and judges must be able to clearly identify what was built during the hackathon, or the project is disqualified at the judges' discretion.
+- Anti-projects to avoid looking like: **basic RAG applications**, simple image analysers, medical advice, education chatbots, job screeners, nutrition/sports coaches, personality analysers, political/war topics. Polymath must clearly come across as an agentic discovery system, not a RAG search box.
+
+**Submission form fields (Cerebral Valley "Submit Project" dialog):**
+1. Team name
+2. Team members (Ekram Alam / jackson2045 pre-filled)
+3. Track: Indie Developer / Startups
+4. Problem statement: Build for Your World / Push the Frontier
+5. X post link (optional, for Most Viral)
+6. Project description
+7. Public GitHub repository URL
+8. **3-minute demo video** URL (YouTube), showing only features built during the hackathon. It's one of the primary judging artefacts, along with the code and the **live product**
+9. How you used Meta products
+10. Why Meta's models are important to your solution
+11. Feedback on Meta products
+12. Feedback on partner technologies (Fireworks, Modal, Baseten)
+13. Consent checkbox (Meta/CV may use, publish and share)
+
+**Deadline:** Wed 4 Nov, 9:00 PM ET (= Thu 5 Nov, 09:00 Bangkok). Late submissions are not considered. Tue 3 Nov is the last full day for submission questions.
+
+**Judging:** Stage 1 is pass/fail (fits a theme and genuinely uses Meta models). Stage 2 scores 0–10 on the rubric above. Stage 3: top 5 per track, with finalists' videos watched live on Mon 9 Nov.
+
+**Bonus prizes:** Most Viral on X ($20k, engagement until 8 Nov EOD), Best Build on Meta Open Weight Models ($10k), Community Vote ($10k, winner 16 Nov), **Best Agentic Use-Case ($5k, a strong fit)**, Best Creative Build with Muse Image/Wonder ($5k).
+
+**Partner credits (optional, not guaranteed):** Baseten $100 + 2M TPM for open-weights (use model id `meta-models/muse-spark-open-1026`); Modal $100 (first 1,000); Fireworks $100 (shortlisted teams).
+
+**Sessions (ET):** Agents 101 (Tue 27 Oct), **Agents 102: Best Practices for Verifiable Agents** (Wed 28 Oct, relevant to evidence integrity), Fireworks open-models session (Fri 30 Oct). Discord #office-hours runs 10–11 AM ET on weekdays.
+
+**Billing note:** adding a card triggers a temporary pre-authorisation charge. The "Spend Limit" on the Billing page is described as a *notification*, so don't assume it's a hard cap.
+
+## Still to confirm
 - Model API supports `tools`? `____` · `response_format`? `____` · images? `____` · streaming? `____`
-- What SAM 3 and Glimmer offer, and whether either is useful here: `________________`
+- Current Muse Spark model ID available to the account (third-party guides mention `muse-spark-1.3`): `____`
 
 ## Meta Model API quick reference
 
