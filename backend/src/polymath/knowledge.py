@@ -13,7 +13,7 @@ import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Request
-from sqlalchemy import Engine, case, cast, func, or_, select
+from sqlalchemy import Engine, and_, case, cast, func, or_, select
 from sqlalchemy.dialects.postgresql import JSONPATH
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, aliased
@@ -240,26 +240,72 @@ def _sources(owner_hash: str, query: str = ""):
     )
 
 
-def _finding_match(query: str):
+MAX_QUERY_TERMS = 8
+# Claim, mapping and field text is searched as well as the finding's headline
+# text, so a question can find the individual claim that answers it.
+_SEARCHED_PATHS = (
+    "$.result.field_selections[*].fields[*]",
+    "$.result.finding.claims[*].text",
+    "$.result.finding.mappings[*].left",
+    "$.result.finding.mappings[*].right",
+    "$.result.finding.mappings[*].assumption",
+)
+_SEARCHED_KEYS = (
+    "title",
+    "explanation",
+    "field_left",
+    "field_right",
+    "question",
+    "summary",
+    "open_question",
+    "strongest_objection",
+)
+
+
+def query_terms(query: str) -> tuple[str, ...]:
+    """Distinct whitespace-separated terms, compared case-insensitively."""
+    terms: dict[str, str] = {}
+    for term in query.split():
+        terms.setdefault(term.casefold(), term)
+    return tuple(terms.values())[:MAX_QUERY_TERMS]
+
+
+def _path_match(path: str, term: str):
+    element = func.jsonb_array_elements_text(
+        func.jsonb_path_query_array(EvidenceResult.payload, cast(path, JSONPATH))
+    ).column_valued("searched_text")
+    return (
+        select(1).where(element.icontains(term, autoescape=True)).correlate(EvidenceResult).exists()
+    )
+
+
+def _term_match(term: str):
     finding = EvidenceResult.payload["result"]["finding"]
-    selected_field = func.jsonb_array_elements_text(
-        func.jsonb_path_query_array(
-            EvidenceResult.payload, cast("$.result.field_selections[*].fields[*]", JSONPATH)
+    quoted_source = (
+        select(EvidenceQuote.result_id)
+        .join(SourceVersion, SourceVersion.id == EvidenceQuote.version_id)
+        .join(SourceRetrieval, SourceRetrieval.id == EvidenceQuote.retrieval_id)
+        .where(
+            or_(
+                SourceRetrieval.title.icontains(term, autoescape=True),
+                SourceVersion.source_id.icontains(term, autoescape=True),
+            )
         )
-    ).column_valued("selected_field")
-    selection_match = (
-        select(1)
-        .where(selected_field.icontains(query, autoescape=True))
-        .correlate(EvidenceResult)
-        .exists()
     )
     return or_(
-        selection_match,
-        *(
-            finding[key].astext.icontains(query, autoescape=True)
-            for key in ("title", "explanation", "field_left", "field_right", "question", "summary")
-        ),
+        *(_path_match(path, term) for path in _SEARCHED_PATHS),
+        *(finding[key].astext.icontains(term, autoescape=True) for key in _SEARCHED_KEYS),
+        EvidenceResult.id.in_(quoted_source),
     )
+
+
+def result_match(query: str):
+    """Every term must appear somewhere in the finding or a quoted source's title or ID.
+
+    Terms match literally (LIKE wildcards are escaped) but need not be adjacent,
+    so "criticality neurons" finds a finding that mentions both words apart.
+    """
+    return and_(*(_term_match(term) for term in query_terms(query)))
 
 
 def _findings(owner_hash: str, query: str = "", *, current_only: bool = True):
@@ -276,21 +322,8 @@ def _findings(owner_hash: str, query: str = "", *, current_only: bool = True):
     )
     if current_only:
         statement = statement.where(current_supported_condition())
-    if query:
-        matching_quotes = (
-            select(EvidenceQuote.result_id)
-            .join(SourceVersion, SourceVersion.id == EvidenceQuote.version_id)
-            .join(SourceRetrieval, SourceRetrieval.id == EvidenceQuote.retrieval_id)
-            .where(
-                or_(
-                    SourceRetrieval.title.icontains(query, autoescape=True),
-                    SourceVersion.source_id.icontains(query, autoescape=True),
-                )
-            )
-        )
-        statement = statement.where(
-            or_(_finding_match(query), EvidenceResult.id.in_(matching_quotes))
-        )
+    if query_terms(query):
+        statement = statement.where(result_match(query))
     return statement.order_by(EvidenceResult.created_at.desc(), EvidenceResult.id)
 
 

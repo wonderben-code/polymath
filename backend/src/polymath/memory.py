@@ -13,7 +13,7 @@ import json
 import uuid
 
 from pydantic import ValidationError
-from sqlalchemy import Engine, func, or_, select
+from sqlalchemy import Engine, func, select
 from sqlalchemy.orm import Session
 
 from polymath.access_models import BrowserSession, ResearchRunAccess
@@ -25,7 +25,7 @@ from polymath.assessment_eligibility import (
 from polymath.evidence import _canonical, _document, _hash
 from polymath.evidence_models import EvidenceQuote, EvidenceResult, SourceRetrieval, SourceVersion
 from polymath.jobs import JobLease, _owned
-from polymath.knowledge import _finding_match
+from polymath.knowledge import result_match
 from polymath.memory_models import ResearchMemoryRead
 from polymath.models import ResearchRun
 from polymath.research.models import (
@@ -204,20 +204,9 @@ class ResearchMemory:
             owner = _session_hash(session, run.id)
             if owner is None:
                 return MemorySearchResults(findings=(), truncated=False)
-            source_match = (
-                select(EvidenceQuote.result_id)
-                .join(SourceRetrieval, SourceRetrieval.id == EvidenceQuote.retrieval_id)
-                .join(SourceVersion, SourceVersion.id == EvidenceQuote.version_id)
-                .where(
-                    or_(
-                        SourceRetrieval.title.icontains(query, autoescape=True),
-                        SourceVersion.source_id.icontains(query, autoescape=True),
-                    )
-                )
-            )
             records = session.scalars(
                 _eligible(run, owner)
-                .where(or_(_finding_match(query), EvidenceResult.id.in_(source_match)))
+                .where(result_match(query))
                 .order_by(EvidenceResult.created_at.desc(), EvidenceResult.id)
                 .limit(MAX_MEMORY_FINDINGS + 1)
             ).all()
