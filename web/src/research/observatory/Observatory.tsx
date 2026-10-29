@@ -72,17 +72,21 @@ export function Observatory({ events, terminal, createdAt, updatedAt, result }: 
 
   // Found papers settle onto the literature ring in search order; read papers
   // take the next slots and are threaded to the core.
-  const dots: { key: string; point: Point; purpose: SearchPurpose; read: boolean }[] = []
+  // Golden-angle placement spreads papers evenly around the whole ring, like
+  // seeds in a sunflower, however many searches have run.
+  const dots: { key: string; point: Point; purpose: SearchPurpose; read: boolean; search: number }[] = []
   let slot = 0
   for (const search of state.searches) {
     for (let index = 0; index < search.found && slot < SLOTS; index += 1, slot += 1) {
-      dots.push({ key: `${search.sequence}:${index}`, point: polar(RING, (slot * 360) / SLOTS + (search.sequence % 5)), purpose: search.purpose, read: false })
+      dots.push({ key: `${search.sequence}:${index}`, point: polar(RING + ((slot * 7) % 3) * 5 - 5, slot * 137.508), purpose: search.purpose, read: false, search: search.sequence })
     }
   }
-  const threads = state.reads.slice(-SLOTS).map((read, index) => {
-    const target = dots[index] ?? { point: polar(RING, angleFor(read.sequence, 3)) }
-    if (dots[index]) dots[index].read = true
-    return { read, point: target.point }
+  // Each read links to an unread paper from the latest search before it.
+  const threads = state.reads.slice(-SLOTS).map((read) => {
+    const before = state.searches.filter((search) => search.sequence < read.sequence).at(-1)?.sequence
+    const target = dots.find((dot) => !dot.read && dot.search === before) ?? dots.find((dot) => !dot.read)
+    if (target) target.read = true
+    return { read, point: target?.point ?? polar(RING, angleFor(read.sequence, 3)) }
   })
   const latestSearch = state.searches.at(-1)
   const bridge = result?.finding?.outcome === 'bridge' ? result.finding : null
@@ -125,11 +129,6 @@ export function Observatory({ events, terminal, createdAt, updatedAt, result }: 
             </g>
           })}
 
-          {state.hypotheses.map((hypothesis) => {
-            const point = polar(48 + (angleFor(hypothesis.sequence, 5) % 60), angleFor(hypothesis.sequence, 9))
-            const size = hypothesis.state === 'discarded' ? 4 : 7
-            return <path key={hypothesis.sequence} className={`obs-hypothesis obs-arrive is-${hypothesis.state}`} d={`M ${point.x} ${point.y - size} L ${point.x + size * 0.3} ${point.y - size * 0.3} L ${point.x + size} ${point.y} L ${point.x + size * 0.3} ${point.y + size * 0.3} L ${point.x} ${point.y + size} L ${point.x - size * 0.3} ${point.y + size * 0.3} L ${point.x - size} ${point.y} L ${point.x - size * 0.3} ${point.y - size * 0.3} Z`} />
-          })}
 
           {latestSearch && !terminal && <circle key={`ripple-${latestSearch.sequence}`} className={`obs-ripple obs-${purposeClass[latestSearch.purpose]}`} cx={CX} cy={CY} r={RING} />}
           {state.lastSetback !== null && !terminal && <circle key={`setback-${state.lastSetback}`} className="obs-setback" cx={CX} cy={CY} r="44" />}
@@ -151,6 +150,11 @@ export function Observatory({ events, terminal, createdAt, updatedAt, result }: 
           {thinking && <circle className="obs-think-ring" cx={CX} cy={CY} r="30" />}
           <circle className="obs-core" cx={CX} cy={CY} r="26" fill="url(#obs-core)" />
           <circle className="obs-core-light" cx={CX - 8} cy={CY - 9} r="7" filter="url(#obs-soft)" />
+          {state.hypotheses.map((hypothesis) => {
+            const point = polar(72 + (angleFor(hypothesis.sequence, 5) % 40), angleFor(hypothesis.sequence, 9))
+            const size = hypothesis.state === 'discarded' ? 7 : 12
+            return <path key={hypothesis.sequence} className={`obs-hypothesis obs-arrive is-${hypothesis.state}`} d={`M ${point.x} ${point.y - size} L ${point.x + size * 0.3} ${point.y - size * 0.3} L ${point.x + size} ${point.y} L ${point.x + size * 0.3} ${point.y + size * 0.3} L ${point.x} ${point.y + size} L ${point.x - size * 0.3} ${point.y + size * 0.3} L ${point.x - size} ${point.y} L ${point.x - size * 0.3} ${point.y - size * 0.3} Z`} />
+          })}
         </svg>
       </div>
       <figcaption>

@@ -28,9 +28,9 @@
 .obs-memory { fill: var(--obs-memory); opacity: .85; }
 .obs-field circle { fill: #fffef8; stroke: var(--obs-finding); stroke-width: 1.5; }
 .obs-field text, .obs-bridge text { font: 600 12px Inter, -apple-system, 'Segoe UI', sans-serif; fill: #22382f; paint-order: stroke; stroke: #f6f5ef; stroke-width: 4px; }
-.obs-hypothesis { fill: var(--obs-hypothesis); }
+.obs-hypothesis { fill: var(--obs-hypothesis); stroke: #fff6dd; stroke-width: 1; filter: drop-shadow(0 0 4px rgba(192, 138, 30, .55)); }
 .obs-hypothesis.is-revised { fill: #d9a33a; }
-.obs-hypothesis.is-discarded { fill: #a9a99f; opacity: .55; }
+.obs-hypothesis.is-discarded { fill: #a9a99f; opacity: .55; filter: none; }
 
 .obs-ripple { fill: none; stroke: var(--obs-search); stroke-width: 1.4; transform-box: fill-box; transform-origin: center; animation: obs-ripple 1.8s ease-out both; }
 .obs-ripple.obs-counter { stroke: var(--obs-counter); }
