@@ -11,7 +11,9 @@ name: polymath-production
 x-app: &app
   build:
     context: ..
-  image: polymath:production
+  # Set POLYMATH_IMAGE to a digest-pinned ghcr.io/wonderben-code/polymath image
+  # to pull a CI-built release instead of building on the server.
+  image: ${POLYMATH_IMAGE:-polymath:production}
   env_file: production.env
   environment: &app-environment
     DATABASE_URL: postgresql+psycopg://polymath:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in deploy/production.env}@db:5432/polymath

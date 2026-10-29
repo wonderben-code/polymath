@@ -142,6 +142,10 @@ for the chosen domain pointing at the server:
    `docker compose -f deploy/compose.production.yaml --env-file deploy/production.env up -d --build --wait`.
    Migrations run as a one-shot step before the API starts. Caddy obtains the
    certificate automatically.
+   On a small server, prefer pulling the image that
+   `.github/workflows/image.yml` builds on every push to `main`: set
+   `POLYMATH_IMAGE` to its digest-pinned `ghcr.io/wonderben-code/polymath` reference
+   and start with `up -d --no-build --wait`.
 4. Verify `https://<domain>/api/v1/readiness`, the research desk, `/library`, a
    Secure session cookie and an SSE reconnect against the real HTTPS endpoint.
 5. Workers start only by profile once their gates are reviewed, for example
