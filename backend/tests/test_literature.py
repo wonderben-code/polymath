@@ -111,8 +111,19 @@ async def test_query_is_encoded_to_fixed_https_hosts_and_never_dereferenced():
     assert "api_key" not in openalex.url.params
     arxiv = next(request for request in requests if request.url.host == "export.arxiv.org")
     assert arxiv.url.params["max_results"] == "5"
-    assert arxiv.url.params["search_query"].startswith('all:"http://169.254.169.254/')
+    assert arxiv.url.params["search_query"] == (
+        'all:"http://169.254.169.254/latest?secret=yes&max_results=999" AND all:"OR" '
+        'AND all:"all:anything"'
+    )
     assert len(requests) == 2
+
+
+async def test_arxiv_search_requires_every_quoted_term_instead_of_one_exact_phrase():
+    transport, requests = route()
+    await ArxivClient(transport=transport).search('error-correcting  codes "genetics\\')
+    assert requests[0].url.params["search_query"] == (
+        'all:"error-correcting" AND all:"codes" AND all:"genetics"'
+    )
 
 
 @pytest.mark.parametrize("query", ["", " ", "x" * 501, "hello\x00world", 42])
@@ -385,10 +396,39 @@ async def test_oversized_abstract_cannot_overflow_model_source_document_limit():
     assert result.provider_failures[0].code == "invalid_response"
 
 
-def test_unverified_openalex_credentials_cannot_enter_query_strings():
-    with pytest.raises(ValueError, match="credential transport is not verified") as caught:
-        OpenAlexClient(api_key=SecretStr("fixture-secret-never-for-query-logs"))
-    assert "fixture-secret" not in str(caught.value)
+async def test_openalex_key_travels_only_as_bearer_header_never_in_query_strings():
+    secret = "fixture-secret-never-for-query-logs"
+    transport, requests = route()
+    tools = OpenLiteratureTools(transport=transport, openalex_api_key=SecretStr(secret))
+    await tools.search("concept", "discovery")
+    openalex = [request for request in requests if request.url.host == "api.openalex.org"]
+    arxiv = [request for request in requests if request.url.host == "export.arxiv.org"]
+    assert len(openalex) == 1 and len(arxiv) == 1
+    assert openalex[0].headers["authorization"] == f"Bearer {secret}"
+    assert secret not in str(openalex[0].url)
+    assert "api_key" not in openalex[0].url.params
+    assert "authorization" not in arxiv[0].headers
+
+
+async def test_openalex_without_key_sends_no_authorization_header():
+    transport, requests = route()
+    await OpenAlexClient(transport=transport).search("concept")
+    assert "authorization" not in requests[0].headers
+
+
+async def test_openalex_key_never_appears_in_provider_failures():
+    secret = "fixture-secret-never-for-errors"
+    transport, _ = route(openalex_status=401)
+    client = OpenAlexClient(api_key=SecretStr(secret), transport=transport)
+    with pytest.raises(ProviderError, match="access_denied") as caught:
+        await client.search("concept")
+    assert secret not in str(caught.value) and secret not in repr(caught.value)
+
+
+def test_empty_openalex_key_is_rejected_without_echoing_input():
+    with pytest.raises(ValueError, match="OpenAlex API key is empty") as caught:
+        OpenAlexClient(api_key=SecretStr("   "))
+    assert "   " not in str(caught.value).removeprefix("OpenAlex API key is empty")
 
 
 @pytest.mark.parametrize("encoding", ["utf-16", "utf-16-le", "utf-32"])

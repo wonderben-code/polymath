@@ -19,7 +19,7 @@ from polymath.literature.feed import OpenLiteratureFeed
 def build_ingestion_worker(engine: Engine, settings: Settings) -> IngestionWorker:
     return IngestionWorker(
         engine,
-        tools_factory=lambda _: OpenLiteratureFeed(),
+        tools_factory=lambda _: OpenLiteratureFeed(openalex_api_key=settings.openalex_api_key),
         execution_enabled=settings.literature_ingestion_enabled,
     )
 

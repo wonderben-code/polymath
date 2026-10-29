@@ -95,6 +95,9 @@ _VOID = frozenset(
 )
 
 
+_STRICT_ATTRIBUTE_TAGS = frozenset({"html", "head", "meta", "link", "article", "math"})
+
+
 @dataclass
 class _Frame:
     tag: str
@@ -177,7 +180,12 @@ class _ArxivParser(HTMLParser):
         self._node()
         if len(attrs) > 64 or any(len(value or "") > 16_000 for _, value in attrs):
             raise FullTextError("full_text_structure_limit")
-        if len({key for key, _ in attrs}) != len(attrs):
+        if len({key for key, _ in attrs}) != len(attrs) and (
+            self.root_open or tag in _STRICT_ATTRIBUTE_TAGS
+        ):
+            # Live arXiv pages repeat attributes on site-chrome buttons outside
+            # the article. Those elements contribute no text or identity, so
+            # duplicates are rejected only where they could change either.
             raise FullTextError("full_text_invalid_html")
         attrs = {key: value or "" for key, value in attrs}
         if tag == "head":
@@ -292,9 +300,19 @@ class _ArxivParser(HTMLParser):
 
 
 def extract_arxiv_html(
-    payload: bytes, locator: ArxivFullTextLocator, retrieved_at: datetime
+    payload: bytes,
+    locator: ArxivFullTextLocator,
+    retrieved_at: datetime,
+    *,
+    transport_identified: bool = False,
 ) -> ExtractedFullText:
-    """Parse one bounded version-identified article; never silently truncate its body."""
+    """Parse one bounded version-identified article; never silently truncate its body.
+
+    ``transport_identified`` is set only by the fetcher after a non-redirected 200
+    for the exact versioned URL whose HTTP canonical link names the same paper.
+    Live arXiv pages carry no in-document identity tags. Any in-document identity
+    that is present must still match exactly.
+    """
     try:
         locator = ArxivFullTextLocator.model_validate_json(locator.model_dump_json())
         if locator.arxiv_version is None or not isinstance(payload, bytes):
@@ -307,7 +325,7 @@ def extract_arxiv_html(
         parser = _ArxivParser(locator)
         parser.feed(html)
         parser.close()
-        if not parser.identity_found:
+        if not parser.identity_found and not transport_identified:
             raise FullTextError("full_text_version_unverified")
         if not parser.root_closed or parser.math is not None:
             raise FullTextError("full_text_invalid_html")
@@ -346,6 +364,19 @@ def extract_arxiv_html(
         raise
     except Exception:
         raise FullTextError("full_text_invalid_html") from None
+
+
+def _canonical_header_matches(response: httpx.Response, locator: ArxivFullTextLocator) -> bool:
+    """Whether one HTTP canonical link names this paper's unversioned or exact URL.
+
+    The request already targeted the exact versioned URL with redirects disabled,
+    so the version is bound by the request; the header confirms the paper.
+    """
+    if len(response.headers.get_list("link")) != 1:
+        return False
+    canonical = response.links.get("canonical", {}).get("url")
+    base = f"https://arxiv.org/html/{locator.arxiv_id}"
+    return canonical in (base, f"{base}v{locator.arxiv_version}")
 
 
 class ArxivHtmlClient:
@@ -442,7 +473,12 @@ class ArxivHtmlClient:
                             if len(payload) + len(chunk) > MAX_HTML_BYTES:
                                 raise FullTextError("full_text_response_too_large")
                             payload.extend(chunk)
-                        return extract_arxiv_html(bytes(payload), locator, datetime.now(UTC))
+                        return extract_arxiv_html(
+                            bytes(payload),
+                            locator,
+                            datetime.now(UTC),
+                            transport_identified=_canonical_header_matches(response, locator),
+                        )
         except ProviderPacingError as error:
             code = "rate_limited" if error.code == "rate_limited" else "transport_error"
             raise FullTextError("full_text_" + code) from None

@@ -24,6 +24,8 @@ class Settings(BaseSettings):
     model_api_key: SecretStr | None = None
     meta_model: str | None = None
     meta_api_base_url: str = "https://api.meta.ai/v1"
+    # Optional free OpenAlex key, sent only as a Bearer header for source search.
+    openalex_api_key: SecretStr | None = None
     operator_bootstrap_token: SecretStr | None = None
     operator_actor_id: str = Field(
         default="publisher", pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}$"

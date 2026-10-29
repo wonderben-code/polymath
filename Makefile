@@ -5,7 +5,9 @@ export npm_config_cache ?= /tmp/polymath-npm-cache
 export BUILDX_CONFIG ?= /tmp/polymath-buildx
 UV := uv --project backend
 
-.PHONY: install db-up db-stop migrate api web api-client publication-worker literature-worker meta-probe-worker native-research-worker check test integration build image compose-up compose-stop
+PREFLIGHT_ARGS ?=
+
+.PHONY: preflight install db-up db-stop migrate api web api-client publication-worker literature-worker meta-probe-worker native-research-worker check test integration build image compose-up compose-stop
 
 install:
 	$(UV) sync --locked
@@ -25,6 +27,9 @@ api:
 
 web:
 	npm --prefix web run dev -- --host 127.0.0.1
+
+preflight:
+	python3 scripts/meta-preflight.py $(PREFLIGHT_ARGS)
 
 api-client:
 	python3 scripts/polymath-client.py --help
@@ -46,6 +51,8 @@ check:
 	$(UV) run ruff format --check backend
 	$(UV) run ruff check --config backend/pyproject.toml scripts/polymath-client.py
 	$(UV) run ruff format --check --config backend/pyproject.toml scripts/polymath-client.py
+	$(UV) run ruff check --config backend/pyproject.toml scripts/meta-preflight.py
+	$(UV) run ruff format --check --config backend/pyproject.toml scripts/meta-preflight.py
 	npm --prefix web run typecheck
 
 test:
