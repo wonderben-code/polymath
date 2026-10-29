@@ -218,7 +218,10 @@ class FrontierStore:
                     select(FrontierNode).where(FrontierNode.programme_id == programme.id)
                 )
             }
-            target = nodes.get(node_id)
+            try:
+                target = nodes.get(uuid.UUID(str(node_id)))
+            except ValueError:
+                target = None
             if target is None or target.kind == "question":
                 raise FrontierError("frontier_node_not_found")
             pending = [target]
