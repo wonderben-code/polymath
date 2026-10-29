@@ -1,0 +1,14 @@
+.notify-toggle { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.notify-toggle button { display: inline-flex; align-items: center; gap: 8px; border: 1px solid #9bad9f; border-radius: 20px; background: #fdfcf5; color: #234e3d; padding: 7px 14px; font-size: 12px; cursor: pointer; transition: background .2s, border-color .2s; }
+.notify-toggle button[aria-pressed='true'] { background: #e5eee6; border-color: #266b58; }
+.notify-toggle button:focus-visible { outline: 3px solid #af7942; outline-offset: 2px; }
+.notify-bell { font-size: 13px; }
+.notify-note { margin: 0; font-size: 11px; color: #4e5d55; }
+.completion-toast { position: fixed; right: 24px; bottom: 24px; z-index: 20; display: flex; align-items: flex-start; gap: 14px; max-width: min(420px, calc(100vw - 32px)); padding: 16px 16px 16px 18px; border-radius: 12px; background: #1f3a32; color: #f4f2ea; box-shadow: 0 18px 40px rgba(20, 40, 33, .28); animation: toast-in .45s cubic-bezier(.2, .8, .2, 1.1) both; }
+.completion-toast strong { display: block; font-size: 14px; }
+.completion-toast p { margin: 4px 0 0; font-size: 13px; line-height: 1.5; color: #d6dfd8; }
+.completion-toast button { margin-left: auto; border: 0; background: transparent; color: #d6dfd8; font-size: 20px; line-height: 1; cursor: pointer; }
+.completion-toast-mark { display: grid; place-items: center; width: 28px; height: 28px; flex-shrink: 0; border-radius: 50%; background: #4f9a83; color: #fff; font-weight: 700; }
+@keyframes toast-in { from { opacity: 0; transform: translateY(16px); } }
+@media (max-width: 760px) { .completion-toast { right: 16px; bottom: 16px; left: 16px; max-width: none; } }
+@media (prefers-reduced-motion: reduce) { .completion-toast { animation: none; } }

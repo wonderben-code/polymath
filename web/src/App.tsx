@@ -15,6 +15,7 @@ import { ShareWorkspace } from './sharing/ShareWorkspace'
 import { NativeResearchProvider } from './research/nativeContext'
 import { NativeResearchNotice } from './research/NativeResearchNotice'
 import { FrontierWorkspace } from './frontier/FrontierWorkspace'
+import { CompletionToast, NotifyToggle, useNotifier, useRunCompletion } from './notify/notifier'
 import { createProgramme, FrontierApiError } from './frontier/client'
 
 type Mode = 'explore' | 'ask' | 'surprise' | 'frontier'
@@ -99,6 +100,7 @@ export function App() {
   const [discoveryRefresh, setDiscoveryRefresh] = useState(0)
   const [selectedFindingId, setSelectedFindingId] = useState<string | null>(null)
   const content = copy[mode]
+  const notifier = useNotifier()
   const workspace = useResearchWorkspace(
     connection === 'connected' && !!system?.database && system.migrations,
     !!system?.researchAvailable,
@@ -106,6 +108,8 @@ export function App() {
   )
   const findingResultId = !workspace.activeRun?.discovery_intent && !workspace.activeRun?.explore_collection_intent && workspace.activeRun?.status === 'succeeded' && (workspace.result?.finding?.outcome === 'bridge' || workspace.result?.finding?.outcome === 'answer') ? workspace.activeRun.result_id : null
   const findingHead = useFindingHead({ resultId: findingResultId, enabled: workspace.phase === 'ready' && selectedFindingId === null, onSessionExpired: workspace.invalidateSession, refreshToken: assessmentRefresh })
+  useRunCompletion(workspace.activeRun, notifier)
+  const onFrontierFinished = useCallback((programme: { id: string; question: string }) => notifier.announce('Frontier programme finished', programme.question, programme.id), [notifier.announce])
   const discoveryChanged = useCallback(() => setDiscoveryRefresh((previous) => previous + 1), [])
   const assessmentChanged = useCallback(() => setAssessmentRefresh((previous) => previous + 1), [])
   const openFinding = useCallback((id: string) => { if (/^[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}$/.test(id)) setSelectedFindingId(id) }, [])
@@ -285,7 +289,7 @@ export function App() {
 
           {workspace.selectedId && !workspace.activeRun && <p className="history-note" role="status">Loading the saved investigation…</p>}
           {workspace.detailError && <div className="research-detail-error" role="alert"><p>{workspace.detailError}</p>{workspace.selectedId && <button type="button" className="text-button" onClick={() => workspace.selectRun(workspace.selectedId!)}>Reload investigation</button>}</div>}
-          {!selectedFindingId && workspace.activeRun && <ResearchRunView hideOutcome={!!workspace.activeRun.discovery_intent || !!workspace.activeRun.explore_collection_intent} run={workspace.activeRun} events={workspace.events} result={workspace.result} connection={workspace.connection} onCancel={workspace.canCancel ? () => void workspace.cancel() : undefined} cancelling={workspace.cancelling} onOpenRun={openRun} findingVersion={findingResultId ? { head: findingHead.head, phase: findingHead.phase, pollPaused: findingHead.pollPaused, onRefresh: findingHead.refresh, onOpenFinding: openFinding } : undefined} />}
+          {!selectedFindingId && workspace.activeRun && <ResearchRunView notifyControl={<NotifyToggle notifier={notifier} />} hideOutcome={!!workspace.activeRun.discovery_intent || !!workspace.activeRun.explore_collection_intent} run={workspace.activeRun} events={workspace.events} result={workspace.result} connection={workspace.connection} onCancel={workspace.canCancel ? () => void workspace.cancel() : undefined} cancelling={workspace.cancelling} onOpenRun={openRun} findingVersion={findingResultId ? { head: findingHead.head, phase: findingHead.phase, pollPaused: findingHead.pollPaused, onRefresh: findingHead.refresh, onOpenFinding: openFinding } : undefined} />}
 
           {!selectedFindingId && workspace.activeRun?.explore_collection_intent && <ExploreWorkspace key={`collection:${workspace.activeRun.id}`} run={workspace.activeRun} events={workspace.events} enabled={workspace.phase === 'ready'} csrfToken={workspace.csrfToken} onSessionExpired={workspace.invalidateSession} onOpenFinding={openFinding} onStagesChanged={discoveryChanged} />}
           {!selectedFindingId && workspace.activeRun?.discovery_intent && <DiscoveryWorkspace key={`discovery:${workspace.activeRun.id}`} run={workspace.activeRun} events={workspace.events} finalResult={workspace.result} enabled={workspace.phase === 'ready'} csrfToken={workspace.csrfToken} canGenerate={workspace.canSubmit && !assessmentBusy} onSessionExpired={workspace.invalidateSession} onOpenFinding={openFinding} onOpenRun={openRun} onBusyChange={setArtifactBusy} onStagesChanged={discoveryChanged} />}
@@ -294,7 +298,7 @@ export function App() {
           {!selectedFindingId && !workspace.activeRun?.discovery_intent && !workspace.activeRun?.explore_collection_intent && findingResultId && <ShareWorkspace key={`share:${findingResultId}`} sourceResultId={findingResultId} enabled={workspace.phase === 'ready'} csrfToken={workspace.csrfToken} sourceCurrent={findingHead.canGenerate} refreshToken={assessmentRefresh} onSessionExpired={workspace.invalidateSession} />}
           {selectedFindingId && <FindingVersionWorkspace key={selectedFindingId} resultId={selectedFindingId} enabled={workspace.phase === 'ready'} csrfToken={workspace.csrfToken} canGenerate={workspace.canSubmit && !assessmentBusy} refreshToken={assessmentRefresh} onSessionExpired={workspace.invalidateSession} onOpenFinding={openFinding} onOpenRun={openRun} onBusyChange={setArtifactBusy} onClose={() => setSelectedFindingId(null)} />}
 
-          <FrontierWorkspace enabled={workspace.phase === 'ready'} csrfToken={workspace.csrfToken} canSubmit={workspace.canSubmit && !artifactBusy && !assessmentBusy} focusId={frontierFocus} submit={(frontierMode, goal, parents) => workspace.submit(frontierMode, goal, parents)} onOpenRun={openRun} onSessionExpired={workspace.invalidateSession} />
+          <FrontierWorkspace enabled={workspace.phase === 'ready'} csrfToken={workspace.csrfToken} canSubmit={workspace.canSubmit && !artifactBusy && !assessmentBusy} focusId={frontierFocus} onFinished={onFrontierFinished} notifyControl={<NotifyToggle notifier={notifier} />} submit={(frontierMode, goal, parents) => workspace.submit(frontierMode, goal, parents)} onOpenRun={openRun} onSessionExpired={workspace.invalidateSession} />
 
           <KnowledgeBrowser enabled={workspace.phase === 'ready'} onOpenRun={openRun} onOpenFinding={openFinding} refreshToken={`${workspace.activeRun?.result_id ?? ''}:${assessmentRefresh}:${discoveryRefresh}`} canInvestigate={workspace.canSubmit && !artifactBusy && !assessmentBusy} investigating={workspace.submitting} onInvestigateBridges={workspace.investigateBridges} csrfToken={workspace.csrfToken} onSessionExpired={workspace.invalidateSession} onAssessmentApplied={assessmentChanged} onAssessmentBusyChange={setAssessmentBusy} />
 
@@ -313,6 +317,7 @@ export function App() {
             <div className="principle"><span className="principle-number">03</span><h3>Make it inspectable</h3><p>Trace findings to source passages, with assumptions and uncertainty in view.</p></div>
           </section>
         </main>
+        <CompletionToast notifier={notifier} />
         <footer className="site-footer"><span>Polymath · Open questions, shared knowledge.</span><a href="/operator/budget">Operator budget desk</a><span>Designed for Meta intelligence <span className="footer-asterisk">✳︎</span></span></footer>
       </div>
     </NativeResearchProvider>

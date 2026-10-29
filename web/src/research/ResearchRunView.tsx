@@ -270,7 +270,7 @@ export function ResearchFindingView({ result, onOpenRun, mode = result.mode, pri
   return <>{mode === 'surprise' && <SelectedFields selections={result.field_selections ?? []} />}<Outcome result={result} /><ResearchMemory result={result} onOpenRun={onOpenRun} /><Evidence result={result} primaryPaperGroups={primaryPaperGroups} /></>
 }
 
-export function ResearchRunView({ run, events, result, connection, onCancel, cancelling = false, onOpenRun, findingVersion, hideOutcome = false, primaryPaperGroups }: ResearchRunViewProps) {
+export function ResearchRunView({ run, events, result, connection, onCancel, cancelling = false, onOpenRun, findingVersion, hideOutcome = false, primaryPaperGroups, notifyControl }: ResearchRunViewProps) {
   const state = states[run.status] ?? { label: 'Status unavailable', description: 'The investigation status could not be identified. Recorded material remains below.' }
   const activity = orderedEvents(events)
   const timestamps = run as { created_at?: string; updated_at?: string }
@@ -278,7 +278,7 @@ export function ResearchRunView({ run, events, result, connection, onCancel, can
   return (
     <section className="research-run-view" aria-labelledby="research-run-title">
       <header className="research-run-heading"><div><span className="eyebrow accent">{run.task_kind === 'reassess_finding' ? 'EVIDENCE REASSESSMENT' : modeNames[run.mode].toUpperCase()} / RESEARCH RECORD</span><h2 id="research-run-title">{run.goal || 'An open discovery'}</h2></div><span className={`research-run-state state-${run.status}`} role="status">{state.label}</span></header>
-      <div className="research-run-summary"><p>{state.description}</p>{canCancel && <button type="button" className="research-cancel" onClick={onCancel} disabled={cancelling}>{cancelling ? 'Requesting cancellation…' : 'Cancel investigation'}</button>}</div>
+      <div className="research-run-summary"><p>{state.description}</p>{!terminalStatuses.has(run.status) && notifyControl}{canCancel && <button type="button" className="research-cancel" onClick={onCancel} disabled={cancelling}>{cancelling ? 'Requesting cancellation…' : 'Cancel investigation'}</button>}</div>
       {findingVersion && <FindingVersionNotice {...findingVersion} />}
       {(events.length > 0 || !terminalStatuses.has(run.status)) && <Observatory events={events} terminal={terminalStatuses.has(run.status)} createdAt={timestamps.created_at} updatedAt={timestamps.updated_at} result={hideOutcome ? null : result} />}
       <div className={`research-run-layout${hideOutcome ? ' research-run-layout-activity-only' : ''}`}>

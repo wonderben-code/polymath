@@ -18,6 +18,7 @@ export interface FrontierWorkspaceProps {
   onOpenRun: (id: string) => void
   onSessionExpired: () => void
   onFinished?: (programme: FrontierProgramme) => void
+  notifyControl?: import('react').ReactNode
 }
 
 function message(code: string): string {
@@ -28,7 +29,7 @@ function message(code: string): string {
   return 'Frontier could not be reached. Try again in a moment.'
 }
 
-export function FrontierWorkspace({ enabled, csrfToken, canSubmit, focusId, submit, onOpenRun, onSessionExpired, onFinished }: FrontierWorkspaceProps) {
+export function FrontierWorkspace({ enabled, csrfToken, canSubmit, focusId, submit, onOpenRun, onSessionExpired, onFinished, notifyControl }: FrontierWorkspaceProps) {
   const [programmes, setProgrammes] = useState<FrontierSummary[]>([])
   const [programme, setProgramme] = useState<FrontierProgramme | null>(null)
   const [selectedNode, setSelectedNode] = useState<string | null>(null)
@@ -135,6 +136,7 @@ export function FrontierWorkspace({ enabled, csrfToken, canSubmit, focusId, subm
           </div>
         </div>
         <p className="frontier-progress" role="status">{running ? <span className="frontier-live-dot" aria-hidden="true" /> : null}{status || (programme.status === 'active' ? 'Ready. Run the programme to research one step at a time; keep this tab open.' : `Programme ${programme.status}.`)} <span className="frontier-usage">{programme.attempts_used} of {programme.limits.max_attempts} investigations used · depth up to {programme.limits.max_depth}</span></p>
+        {running && notifyControl}
         <ul className="frontier-legend" aria-label="Frontier status legend">{counts.map(([key, count]) => <li key={key}><span className={`frontier-swatch status-${key}`} aria-hidden="true" />{STATUS_LABELS[key]} <strong>{count}</strong></li>)}</ul>
         <FrontierMap nodes={programme.nodes} selectedId={selectedNode} onSelect={setSelectedNode} />
         {node && <article className="frontier-detail" aria-label="Selected frontier node">
