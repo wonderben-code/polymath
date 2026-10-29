@@ -81,7 +81,7 @@ def bridge_run(engine, token, left, right, *, title="Synthetic thread"):
 SAVED: dict = {}
 
 
-def meta_run(engine, token, parents, left, right):
+def meta_run(engine, token, parents, left, right, title="Deeper"):
     """A finished deeper Explore that revisits every premise's original evidence."""
     from test_parent_evidence import child_result, read_refs
 
@@ -99,7 +99,7 @@ def meta_run(engine, token, parents, left, right):
     result = result.model_copy(
         update={
             "finding": result.finding.model_copy(
-                update={"title": "Deeper", "field_left": left, "field_right": right}
+                update={"title": title, "field_left": left, "field_right": right}
             )
         }
     )
@@ -107,6 +107,7 @@ def meta_run(engine, token, parents, left, right):
         store.save_source(lease, source)
     saved = store.save_result(lease, result)
     jobs.finish(lease, status="succeeded", outcome={"result_id": str(saved.id)})
+    SAVED[saved.id] = result
     return run.id
 
 
