@@ -3,6 +3,7 @@ import type { OwnedRun } from '../research/client'
 import { attachFrontierRun, changeProgramme, FrontierApiError, listProgrammes, loadProgramme, nextFrontierAction, pruneFrontierNode } from './client'
 import type { FrontierNodeStatus, FrontierProgramme, FrontierSummary } from './client'
 import { FrontierMap, STATUS_LABELS } from './FrontierMap'
+import { frontierReport } from './report'
 import './frontier.css'
 
 const ACTION_LABELS = { survey: 'Surveying the literature', transfer: 'Searching other fields for a solution', decompose: 'Breaking the gap into smaller steps', attempt: 'Attempting a step', converge: 'Looking for a connection between the bridges' } as const
@@ -108,6 +109,15 @@ export function FrontierWorkspace({ enabled, csrfToken, canSubmit, focusId, subm
     } catch (failure) { fail(failure) }
   }
 
+  function download(current: FrontierProgramme) {
+    const url = URL.createObjectURL(new Blob([frontierReport(current)], { type: 'text/markdown;charset=utf-8' }))
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `frontier-report-${current.id.slice(0, 8)}.md`
+    link.click()
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+  }
+
   async function prune(nodeId: string) {
     if (!programme || !csrfToken) return
     try { setProgramme(await pruneFrontierNode(programme.id, nodeId, csrfToken)) } catch (failure) { fail(failure) }
@@ -133,6 +143,7 @@ export function FrontierWorkspace({ enabled, csrfToken, canSubmit, focusId, subm
             {programme.status === 'active' && running && <button type="button" onClick={() => void change('pause')}>Pause</button>}
             {programme.status === 'paused' && <button type="button" className="frontier-primary" onClick={() => void change('resume')}>Resume</button>}
             {(programme.status === 'active' || programme.status === 'paused') && <button type="button" onClick={() => void change('stop')}>Stop</button>}
+            <button type="button" onClick={() => download(programme)}>Download report</button>
           </div>
         </div>
         <p className="frontier-progress" role="status">{running ? <span className="frontier-live-dot" aria-hidden="true" /> : null}{status || (programme.status === 'active' ? 'Ready. Run the programme to research one step at a time; keep this tab open.' : `Programme ${programme.status}.`)} <span className="frontier-usage">{programme.attempts_used} of {programme.limits.max_attempts} investigations used · depth up to {programme.limits.max_depth}</span></p>

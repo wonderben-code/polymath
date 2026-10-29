@@ -5,6 +5,7 @@ import { parseProgramme } from './client'
 import type { FrontierNode } from './client'
 import { FrontierMap, layout } from './FrontierMap'
 import { FrontierWorkspace } from './FrontierWorkspace'
+import { frontierReport } from './report'
 
 const PID = '11111111-1111-4111-8111-111111111111'
 const ROOT = '22222222-2222-4222-8222-222222222222'
@@ -78,3 +79,17 @@ describe('frontier workspace', () => {
     expect(submit).not.toHaveBeenCalled()
   })
 })
+
+describe('frontier report', () => {
+  it('builds an escaped Markdown report naming the weakest branch and the open frontier', () => {
+    const report = frontierReport(parseProgramme(programme([
+      node({ statement: '# Injected *heading* <b>' }),
+      node({ id: GAP, parent_id: ROOT, kind: 'gap', statement: 'An open synthetic gap', depth: 1, status: 'open', resolved_status: 'open' }),
+    ])), new Date('2026-10-29T00:00:00Z'))
+    expect(report).toContain('**Question** (Surveyed): \\# Injected \\*heading\\* \\<b\\>')
+    expect(report).toContain('weakest top-level branch is **open frontier**')
+    expect(report).toContain('## Open frontier\n\n- An open synthetic gap')
+    expect(report).not.toContain('<b>')
+  })
+})
+
