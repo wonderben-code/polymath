@@ -37,6 +37,9 @@ $150 in Meta Model API credits (claim via form), **Muse Code** (Meta's agentic c
 - [ ] Official Rules read (IP clause)
 
 ## To confirm from the details page / Official Rules (fill in)
+
+Checked 29 Oct: the public event pages (cerebralvalley.ai/e/meta-ai-developer-hackathon, dev.meta.ai/events/global-hackathon) confirm the 4 Nov 9:00 PM ET deadline and say the indie track is judged on creativity, technical ambition and whether it works. The Official Rules and submission form were not publicly readable; check the participant portal or Discord for the fields below.
+
 - Submission fields: `________________`
 - Video length limit: `________________`
 - Live URL required? `________________`
