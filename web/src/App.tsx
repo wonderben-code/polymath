@@ -15,6 +15,8 @@ import { ShareWorkspace } from './sharing/ShareWorkspace'
 import { NativeResearchProvider } from './research/nativeContext'
 import { NativeResearchNotice } from './research/NativeResearchNotice'
 import { FrontierWorkspace } from './frontier/FrontierWorkspace'
+import { ConvergeComposer } from './converge/ConvergeComposer'
+import { ConvergeWorkspace } from './converge/ConvergeWorkspace'
 import { HeroBridge } from './HeroBridge'
 import { CompletionToast, NotifyToggle, useNotifier, useRunCompletion } from './notify/notifier'
 import { createProgramme, FrontierApiError } from './frontier/client'
@@ -139,6 +141,9 @@ export function App() {
   const [assessmentRefresh, setAssessmentRefresh] = useState(0)
   const [discoveryRefresh, setDiscoveryRefresh] = useState(0)
   const [selectedFindingId, setSelectedFindingId] = useState<string | null>(null)
+  const [converging, setConverging] = useState(false)
+  const [convergeFocus, setConvergeFocus] = useState<string | null>(null)
+  const [convergeReading, setConvergeReading] = useState<string | null>(null)
   const content = copy[mode]
   const notifier = useNotifier()
   const workspace = useResearchWorkspace(
@@ -149,6 +154,7 @@ export function App() {
   const findingResultId = !workspace.activeRun?.discovery_intent && !workspace.activeRun?.explore_collection_intent && workspace.activeRun?.status === 'succeeded' && (workspace.result?.finding?.outcome === 'bridge' || workspace.result?.finding?.outcome === 'answer') ? workspace.activeRun.result_id : null
   const findingHead = useFindingHead({ resultId: findingResultId, enabled: workspace.phase === 'ready' && selectedFindingId === null, onSessionExpired: workspace.invalidateSession, refreshToken: assessmentRefresh })
   useRunCompletion(workspace.activeRun, notifier)
+  const onConvergeFinished = useCallback((programme: { id: string; theme: string | null }) => notifier.announce('Converge circle finished', programme.theme ?? 'An open circle of fields', programme.id), [notifier.announce])
   const onFrontierFinished = useCallback((programme: { id: string; question: string }) => notifier.announce('Frontier programme finished', programme.question, programme.id), [notifier.announce])
   const discoveryChanged = useCallback(() => setDiscoveryRefresh((previous) => previous + 1), [])
   const assessmentChanged = useCallback(() => setAssessmentRefresh((previous) => previous + 1), [])
@@ -160,6 +166,8 @@ export function App() {
   const openRun = useCallback((id: string) => { pendingFocus.current = true; setSelectedFindingId(null); workspace.selectRun(id); go('research') }, [workspace.selectRun, go])
   const openFindingHere = useCallback((id: string) => { pendingFocus.current = true; openFinding(id); go('research') }, [openFinding, go])
   const investigateBridges = useCallback(async (ids: string[]) => { pendingFocus.current = true; go('research'); await workspace.investigateBridges(ids) }, [workspace.investigateBridges, go])
+  const [deeperFrom, setDeeperFrom] = useState<string | null>(null)
+  const goDeeper = useCallback((resultId: string) => { setDeeperFrom(resultId); go('library') }, [go])
   const focusedId = selectedFindingId ?? workspace.activeRun?.id
   useEffect(() => {
     if (!pendingFocus.current || !focusedId) return
@@ -258,14 +266,16 @@ export function App() {
               <HeroBridge />
               <div className="mode-switch" role="group" aria-label="Research mode">
                 {modes.map((item) => (
-                  <button key={item.id} type="button" aria-pressed={mode === item.id}
-                    onClick={() => { setMode(item.id); setNotice('') }}>
+                  <button key={item.id} type="button" aria-pressed={!converging && mode === item.id}
+                    onClick={() => { setMode(item.id); setConverging(false); setNotice('') }}>
                     <span className="mode-number">{item.number}</span>{item.label}
                   </button>
                 ))}
+                <button type="button" aria-pressed={converging} onClick={() => { setConverging(true); setNotice('') }}><span className="mode-number">04</span>Converge</button>
               </div>
-              <p className="composer-description mode-description">{content.description}</p>
-              <form onSubmit={handleSubmit}>
+              <p className="composer-description mode-description">{converging ? <>Choose how many fields, and any you want included. Polymath connects them, then finds what those connections share, level after level. <span className="nav-badge">Experimental</span></> : content.description}</p>
+              {converging && <ConvergeComposer csrfToken={workspace.csrfToken} ready={workspace.phase === 'ready'} onCreated={(programme) => setConvergeFocus(programme.id)} onSessionExpired={workspace.invalidateSession} />}
+              <form onSubmit={handleSubmit} hidden={converging}>
                 <label htmlFor="research-prompt" className="composer-label">{content.label}</label>
                 <div className="prompt-box">
                   <textarea id="research-prompt" value={prompts[mode]}
@@ -295,11 +305,15 @@ export function App() {
               {notice && <p className="composer-alert" role="alert">{notice}</p>}
               {!(workspace.native.phase === 'disabled' && !workspace.native.access) && <NativeResearchNotice context={workspace.native} />}
             </section>
-
+          </>}
+          <div hidden={!(place === 'research' && converging)}>
+            <ConvergeWorkspace enabled={workspace.phase === 'ready'} csrfToken={workspace.csrfToken} canSubmit={workspace.canSubmit && !artifactBusy && !assessmentBusy} focusId={convergeFocus} onFinished={onConvergeFinished} notifyControl={<NotifyToggle notifier={notifier} />} submit={(convergeMode, goal, parents) => workspace.submit(convergeMode, goal, parents)} liveActivity={workspace.activeRun && workspace.events.length ? { runId: workspace.activeRun.id, summary: workspace.events[workspace.events.length - 1].summary } : null} onOpenRun={(id) => { setConvergeReading(id); openRun(id) }} onGoDeeper={goDeeper} onSessionExpired={workspace.invalidateSession} />
+          </div>
+          {place === 'research' && (!converging || (convergeReading !== null && convergeReading === workspace.selectedId)) && <>
             <div ref={focusAnchor} className="focus-anchor" />
             {workspace.selectedId && !workspace.activeRun && <p className="history-note" role="status">Opening the investigation…</p>}
             {workspace.detailError && <div className="research-detail-error" role="alert"><p>{workspace.detailError}</p>{workspace.selectedId && <button type="button" className="text-button" onClick={() => workspace.selectRun(workspace.selectedId!)}>Reload investigation</button>}</div>}
-            {!selectedFindingId && workspace.activeRun && <ResearchRunView notifyControl={<NotifyToggle notifier={notifier} />} hideOutcome={!!workspace.activeRun.discovery_intent || !!workspace.activeRun.explore_collection_intent} run={workspace.activeRun} events={workspace.events} result={workspace.result} connection={workspace.connection} onCancel={workspace.canCancel ? () => void workspace.cancel() : undefined} cancelling={workspace.cancelling} onOpenRun={openRun} findingVersion={findingResultId ? { head: findingHead.head, phase: findingHead.phase, pollPaused: findingHead.pollPaused, onRefresh: findingHead.refresh, onOpenFinding: openFinding } : undefined} />}
+            {!selectedFindingId && workspace.activeRun && <ResearchRunView notifyControl={<NotifyToggle notifier={notifier} />} onGoDeeper={workspace.activeRun.result_id && !workspace.activeRun.discovery_intent && !workspace.activeRun.explore_collection_intent ? () => goDeeper(workspace.activeRun!.result_id!) : undefined} hideOutcome={!!workspace.activeRun.discovery_intent || !!workspace.activeRun.explore_collection_intent} run={workspace.activeRun} events={workspace.events} result={workspace.result} connection={workspace.connection} onCancel={workspace.canCancel ? () => void workspace.cancel() : undefined} cancelling={workspace.cancelling} onOpenRun={openRun} findingVersion={findingResultId ? { head: findingHead.head, phase: findingHead.phase, pollPaused: findingHead.pollPaused, onRefresh: findingHead.refresh, onOpenFinding: openFinding } : undefined} />}
             {!selectedFindingId && workspace.activeRun?.explore_collection_intent && <ExploreWorkspace key={`collection:${workspace.activeRun.id}`} run={workspace.activeRun} events={workspace.events} enabled={workspace.phase === 'ready'} csrfToken={workspace.csrfToken} onSessionExpired={workspace.invalidateSession} onOpenFinding={openFinding} onStagesChanged={discoveryChanged} />}
             {!selectedFindingId && workspace.activeRun?.discovery_intent && <DiscoveryWorkspace key={`discovery:${workspace.activeRun.id}`} run={workspace.activeRun} events={workspace.events} finalResult={workspace.result} enabled={workspace.phase === 'ready'} csrfToken={workspace.csrfToken} canGenerate={workspace.canSubmit && !assessmentBusy} onSessionExpired={workspace.invalidateSession} onOpenFinding={openFinding} onOpenRun={openRun} onBusyChange={setArtifactBusy} onStagesChanged={discoveryChanged} />}
             {!selectedFindingId && workspace.activeRun && <NativeResumeControl run={workspace.activeRun} csrfToken={workspace.csrfToken} onResumed={workspace.refresh} onSessionExpired={workspace.invalidateSession} />}
@@ -307,7 +321,7 @@ export function App() {
             {!selectedFindingId && !workspace.activeRun?.discovery_intent && !workspace.activeRun?.explore_collection_intent && findingResultId && <ShareWorkspace key={`share:${findingResultId}`} sourceResultId={findingResultId} enabled={workspace.phase === 'ready'} csrfToken={workspace.csrfToken} sourceCurrent={findingHead.canGenerate} refreshToken={assessmentRefresh} onSessionExpired={workspace.invalidateSession} />}
             {selectedFindingId && <FindingVersionWorkspace key={selectedFindingId} resultId={selectedFindingId} enabled={workspace.phase === 'ready'} csrfToken={workspace.csrfToken} canGenerate={workspace.canSubmit && !assessmentBusy} refreshToken={assessmentRefresh} onSessionExpired={workspace.invalidateSession} onOpenFinding={openFinding} onOpenRun={openRun} onBusyChange={setArtifactBusy} onClose={() => setSelectedFindingId(null)} />}
 
-            <section className="recent" aria-labelledby="history-title">
+            {!converging && <section className="recent" aria-labelledby="history-title">
               <div className="recent-heading"><h2 id="history-title">Recent investigations</h2><button type="button" className="text-button" disabled={workspace.phase === 'loading' || connection !== 'connected' || !system?.database || !system.migrations} onClick={workspace.refresh}>Reload saved research</button></div>
               {recent.length === 0 && <div className="recent-empty">
                 <svg className="recent-mark" viewBox="0 0 120 64" aria-hidden="true"><path d="M10 44 L44 16 L92 26 L62 54 Z M44 16 L62 54" /><circle cx="10" cy="44" r="3.5" /><circle cx="44" cy="16" r="5.5" /><circle cx="92" cy="26" r="4" /><circle cx="62" cy="54" r="3" /></svg>
@@ -317,12 +331,12 @@ export function App() {
               {recent.length > 0 && <ul className="recent-list" aria-label="Your saved investigations">{recent.map((run) => <li key={run.id}><button type="button" className={`history-card mode-${run.mode} status-${run.status}`} aria-pressed={workspace.selectedId === run.id} onClick={() => openRun(run.id)}><span className="history-mode">{run.mode === 'surprise' ? 'Surprise me' : run.mode === 'ask' ? 'Ask' : 'Explore'} · {run.status.replaceAll('_', ' ')}</span><span className="history-goal">{run.goal || 'An open discovery'}</span></button></li>)}</ul>}
               {workspace.nextCursor && <button className="history-more" type="button" disabled={workspace.loadingMore} onClick={() => void workspace.loadMore()}>{workspace.loadingMore ? 'Loading more…' : 'Load earlier investigations'}</button>}
               {workspace.error && <p className="history-error" role="alert">{workspace.error}</p>}
-            </section>
+            </section>}
           </>}
 
           {place === 'library' && <>
             <header className="place-heading"><h1>Your library</h1><p>Everything you have saved in this browser: findings, the papers behind them, how they connect, and the literature you are watching.</p></header>
-            <KnowledgeBrowser enabled={workspace.phase === 'ready'} onOpenRun={openRun} onOpenFinding={openFindingHere} refreshToken={`${workspace.activeRun?.result_id ?? ''}:${assessmentRefresh}:${discoveryRefresh}`} canInvestigate={workspace.canSubmit && !artifactBusy && !assessmentBusy} investigating={workspace.submitting} onInvestigateBridges={investigateBridges} csrfToken={workspace.csrfToken} onSessionExpired={workspace.invalidateSession} onAssessmentApplied={assessmentChanged} onAssessmentBusyChange={setAssessmentBusy} />
+            <KnowledgeBrowser enabled={workspace.phase === 'ready'} onOpenRun={openRun} onOpenFinding={openFindingHere} refreshToken={`${workspace.activeRun?.result_id ?? ''}:${assessmentRefresh}:${discoveryRefresh}`} canInvestigate={workspace.canSubmit && !artifactBusy && !assessmentBusy} investigating={workspace.submitting} onInvestigateBridges={investigateBridges} csrfToken={workspace.csrfToken} onSessionExpired={workspace.invalidateSession} onAssessmentApplied={assessmentChanged} onAssessmentBusyChange={setAssessmentBusy} deeperFrom={deeperFrom} onDeeperShown={() => setDeeperFrom(null)} />
           </>}
 
           {place === 'frontier' && <section className="composer frontier-composer" aria-labelledby="frontier-composer-title">

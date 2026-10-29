@@ -17,6 +17,8 @@ Created 27 October 2026. Every push to `main` is Bitcoin-timestamped through Ope
 - **Turn hunches into maths.** Conjectures, with proof attempts.
 - **Write and publish.** Plain summary or formal paper → approve → DOI on Zenodo.
 - **Surprise me**. Polymath picks the fields itself and goes hunting for convergences, and you watch it think.
+- **Converge (experimental).** Choose how many fields (up to 200) and, if you like, which ones. Polymath connects them, then finds what those connections share, level after level, drawn as an ensō with the deepest convergence at its centre.
+- **Go deeper.** Any saved connection can be combined with others to find the structure they share, and again from there.
 - **Frontier (experimental).** Give it an unsolved problem: it surveys the literature, names the gaps, searches other fields for solutions, breaks stubborn gaps into smaller steps and maps the path, with every node labelled by how well it is supported.
 
 ## Docs
@@ -39,6 +41,7 @@ Created 27 October 2026. Every push to `main` is Bitcoin-timestamped through Ope
 | [docs/EXPLORE_COLLECTION.md](docs/EXPLORE_COLLECTION.md) | Model-ranked Explore collections, exact replay and remaining release verification |
 | [docs/PUBLIC_RESEARCH_ACCESS.md](docs/PUBLIC_RESEARCH_ACCESS.md) | Controlled visitor access, explicit durable owner funding, shared-ledger quotas and resource controls; disabled by default |
 | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Production stack, host comparison, launch, backups and quarantined restore |
+| [docs/CONVERGE.md](docs/CONVERGE.md) | Experimental Converge mode: many fields, their connections and deeper levels |
 | [docs/FRONTIER.md](docs/FRONTIER.md) | Experimental Frontier mode specification (draft for review) |
 | [docs/EXPERIENCE.md](docs/EXPERIENCE.md) | End-to-end experience and visualisation plan |
 | [docs/SUBMISSION.md](docs/SUBMISSION.md) | Submission descriptions, how Polymath uses Meta AI, demo script and release checklist |
@@ -79,6 +82,7 @@ The implementation baseline is recorded in `docs/ARCHITECTURE.md`. The target is
 - [x] Production stack, HTTPS proxy, backups and restore quarantine prepared ([DEPLOYMENT.md](docs/DEPLOYMENT.md)); not yet hosted
 - [x] Term and claim-level search of saved research
 - [x] Experience upgrade: live research Observatory, notify-when-done, bridge diagram, claim spectrum, boot mark; axe WCAG AA audit clean ([EXPERIENCE.md](docs/EXPERIENCE.md))
+- [x] Converge (experimental): schema 0027, engine, Ensō view, Go deeper ([CONVERGE.md](docs/CONVERGE.md)); synthetic verification only
 - [x] Frontier (experimental) v1: programme engine, schema 0026, Frontier Map, convergence, report ([FRONTIER.md](docs/FRONTIER.md)); synthetic verification only
 - [ ] H: complete-product validation, polish, and submission ([SUBMISSION.md](docs/SUBMISSION.md))
 

@@ -38,6 +38,7 @@ class Settings(BaseSettings):
     # Experimental Frontier programmes record a tree of ordinary owned research
     # runs; they never spend directly, so the feature itself defaults on.
     frontier_enabled: bool = True
+    converge_enabled: bool = True
     budget_readiness_enabled: bool = False
     budget_admin_actor_ids: tuple[str, ...] = ()
     budget_max_hard_cap_microdollars: int = Field(default=150_000_000, ge=1, le=150_000_000)

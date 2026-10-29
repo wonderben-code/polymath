@@ -129,6 +129,8 @@ export interface ResearchResult {
 
 export interface ResearchRunViewProps {
   notifyControl?: import('react').ReactNode
+  /** Offered beneath a finished, saved connection. */
+  onGoDeeper?: () => void
   run: ResearchRunSummary
   events: ResearchActivityEvent[]
   result: ResearchResult | null

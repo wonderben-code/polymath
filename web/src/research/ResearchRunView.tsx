@@ -18,6 +18,7 @@ import type {
 } from './types'
 import './research.css'
 import { Observatory } from './observatory/Observatory'
+import { GoDeeper } from '../deeper/DeeperDiagram'
 
 const terminalStatuses = new Set(['succeeded', 'failed', 'cancelled', 'interrupted'])
 const modeNames = { explore: 'Explore', ask: 'Ask', surprise: 'Surprise me' }
@@ -292,7 +293,7 @@ export function ResearchFindingView({ result, onOpenRun, mode = result.mode, pri
   return <>{mode === 'surprise' && <SelectedFields selections={result.field_selections ?? []} />}<Outcome result={result} /><ResearchMemory result={result} onOpenRun={onOpenRun} /><Evidence result={result} primaryPaperGroups={primaryPaperGroups} /></>
 }
 
-export function ResearchRunView({ run, events, result, connection, onCancel, cancelling = false, onOpenRun, findingVersion, hideOutcome = false, primaryPaperGroups, notifyControl }: ResearchRunViewProps) {
+export function ResearchRunView({ run, events, result, connection, onCancel, cancelling = false, onOpenRun, findingVersion, hideOutcome = false, primaryPaperGroups, notifyControl, onGoDeeper }: ResearchRunViewProps) {
   const state = states[run.status] ?? { label: 'Status unavailable', description: 'The investigation status could not be identified. Recorded material remains below.' }
   const activity = orderedEvents(events)
   const timestamps = run as { created_at?: string; updated_at?: string }
@@ -309,6 +310,7 @@ export function ResearchRunView({ run, events, result, connection, onCancel, can
       {findingVersion && <FindingVersionNotice {...findingVersion} />}
       {!terminal && observatory}
       {!hideOutcome && <section className="research-results" aria-labelledby="research-outcome-title"><h3 className="research-sr-only" id="research-outcome-title">Research outcome</h3>{result ? <ResearchFindingView result={result} onOpenRun={onOpenRun} mode={run.mode} primaryPaperGroups={primaryPaperGroups} /> : <PendingOutcome status={run.status} />}</section>}
+      {terminal && !hideOutcome && onGoDeeper && result?.finding?.outcome === 'bridge' && <GoDeeper onChoose={onGoDeeper} />}
       <details className="research-journey" open={hideOutcome || undefined}>
         <summary><span>{terminal ? 'How Polymath worked' : 'Step-by-step record'}</span><span className="research-journey-count">{activity.length} {activity.length === 1 ? 'step' : 'steps'}</span></summary>
         {terminal && observatory}
