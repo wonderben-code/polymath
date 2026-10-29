@@ -83,7 +83,11 @@ export function narrate(event: ResearchActivityEvent | null, state: Pick<Observa
     case 'stage_committed': { const match = STAGE.exec(summary); return match ? `Saved a bridge: “${clip(match[1])}”.` : 'Saved a bridge.' }
     case 'explore_ranked': return 'Ranking the bridges it found.'
     case 'concluded': case 'discovery_finished': case 'explore_finished': return 'Reached a conclusion.'
-    case 'tool_failed': case 'model_failed': case 'action_rejected': return 'Hit a setback and is adjusting.'
+    case 'artifact_basis_loaded': return 'Opening the saved finding and its quoted evidence.'
+    case 'finite_check_completed': return 'Ran a bounded mathematical check (not a proof).'
+    case 'artifact_draft_ready': return 'A cited draft is ready.'
+    case 'artifact_insufficient': return 'The saved evidence did not support a useful draft.'
+    case 'tool_failed': case 'model_failed': case 'action_rejected': case 'artifact_action_rejected': return 'Hit a setback and is adjusting.'
     case 'stopped': return 'Stopped at its research limits.'
     case 'cancelled': return 'The investigation was cancelled.'
     case 'interrupted': return 'The investigation paused and is waiting for review.'
@@ -123,7 +127,8 @@ export function observe(events: ResearchActivityEvent[], terminal = false): Obse
       case 'fields_selected': { const match = FIELDS.exec(summary); if (match) state.fields = match[1].split(', ').map((field) => clip(field, 40)).filter(Boolean).slice(0, 6); break }
       case 'stage_committed': state.findings += 1; break
       case 'concluded': case 'discovery_finished': case 'explore_finished': state.concluded = true; break
-      case 'tool_failed': case 'model_failed': case 'action_rejected': state.setbacks += 1; state.lastSetback = event.sequence; break
+      case 'artifact_draft_ready': case 'artifact_insufficient': state.concluded = true; break
+      case 'tool_failed': case 'model_failed': case 'action_rejected': case 'artifact_action_rejected': state.setbacks += 1; state.lastSetback = event.sequence; break
     }
     state.latest = event
   }
