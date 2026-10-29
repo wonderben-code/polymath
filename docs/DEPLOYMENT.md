@@ -147,6 +147,16 @@ for the chosen domain pointing at the server:
 5. Workers start only by profile once their gates are reviewed, for example
    `--profile literature` or, after [KEY_DAY.md](KEY_DAY.md), `--profile research`.
 
+**Local rehearsal, 29 October.** The production image built from this tree and
+the full stack started healthy under Docker with `POLYMATH_DOMAIN=localhost`
+(Caddy's internal certificate). Verified through HTTPS: readiness, HTTP→HTTPS 308
+redirect, HSTS/nosniff/no-referrer headers, a `Secure` session cookie, a
+client-supplied `X-Forwarded-For` ignored in favour of the real peer, no published
+database port, read-only non-root app containers, and research activity SSE
+streaming through Caddy unbuffered (a newly written event arrived within
+seconds; heartbeats continued). This is not a hosted deployment: a public domain,
+real certificate issuance and the chosen host remain to be verified.
+
 The API trusts forwarding headers only from the proxy's fixed address
 (`172.30.0.10`), so visitor identity, the https scheme, Secure cookies and Origin
 checks come from Caddy and cannot be spoofed by a client header. This was checked
@@ -158,16 +168,27 @@ cookie, and the same headers from an untrusted address were ignored.
 `scripts/production-backup.sh` writes a private, checksummed `pg_dump` into
 `backups/`. Copy each dump off the host.
 
-To restore, never reuse the running stack:
+To restore, never reuse the running stack. `R` below is
+`docker compose -p polymath-restore -f deploy/compose.production.yaml --env-file deploy/production.env`.
 
 1. Stop the old stack's workers and record the stopped state. If it is still
    reachable, use the budget desk's **Disable** first.
-2. Start an isolated copy with every gate false and no proxy, for example
-   `docker compose -p polymath-restore -f deploy/compose.production.yaml --env-file deploy/production.env up -d db`,
-   and `pg_restore` the dump into it.
-3. Run migrations on the copy, then the quarantine:
-   `docker compose -p polymath-restore -f deploy/compose.production.yaml --env-file deploy/production.env run --rm app /app/backend/.venv/bin/python -m polymath.restore_quarantine --confirm-restored-database`.
-4. Only then start the API for read-only access.
+2. Start only the isolated database with every gate false:
+   `R up -d --wait db`, then restore the dump:
+   `R exec -T db pg_restore -U polymath -d polymath --no-owner < backups/<file>.dump`.
+3. Migrate and quarantine through the `migrate` service, which uses only the
+   private database network (the proxy network's fixed address cannot exist
+   twice on one host): `R run --rm migrate`, then
+   `R run --rm migrate /app/backend/.venv/bin/python -m polymath.restore_quarantine --confirm-restored-database`.
+4. Only then serve the restored copy for read-only access, after the old stack
+   has been stopped on this host or on a separate host.
+
+Rehearsed on 29 October against the real production stack under Docker: a dump
+containing an armed research account and live sessions restored into an
+isolated project. The quarantine disabled, killed, froze and re-epoched the
+account (epoch 7 → 8, scope cleared) and expired both sessions. It refused with
+an enabled gate. The rehearsal also found that the fixed proxy subnet prevents a
+second full copy on the same host, which is why step 3 uses `migrate`.
 
 `polymath.restore_quarantine` refuses to run while any execution gate is on or
 the schema is not at head. In one transaction it disables, kills and freezes
