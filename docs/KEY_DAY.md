@@ -36,6 +36,13 @@ Consequences for Polymath:
   output-token count tell us. If calls finish on `length`, decide between a
   larger reviewed cap or a lower `reasoning_effort` before research activation;
   both change the reviewed request, so they need a fresh proposal.
+- **Watch for fenced JSON.** Actions are parsed as bare JSON. If the receipt
+  shows the action wrapped in a Markdown code fence, each reply would need a
+  paid repair call. Fix that with a versioned parser change (or the documented
+  `response_format: json_object`) before activation rather than paying per
+  step. The request already uses only documented parameters (`model`,
+  `messages`, `max_tokens`, `stream: false`), and a test feeds Meta's documented
+  response shape, including reasoning-token details, through the real adapter.
 - Avoid the `-contributor` models: they are cheaper because Meta may train on
   the content.
 
