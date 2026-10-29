@@ -38,6 +38,8 @@ Created 27 October 2026. Every push to `main` is Bitcoin-timestamped through Ope
 | [docs/EXPLORE_COLLECTION.md](docs/EXPLORE_COLLECTION.md) | Model-ranked Explore collections, exact replay and remaining release verification |
 | [docs/PUBLIC_RESEARCH_ACCESS.md](docs/PUBLIC_RESEARCH_ACCESS.md) | Controlled visitor access, explicit durable owner funding, shared-ledger quotas and resource controls; disabled by default |
 | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Production stack, host comparison, launch, backups and quarantined restore |
+| [docs/FRONTIER.md](docs/FRONTIER.md) | Experimental Frontier mode specification (draft for review) |
+| [docs/EXPERIENCE.md](docs/EXPERIENCE.md) | End-to-end experience and visualisation plan |
 | [docs/SUBMISSION.md](docs/SUBMISSION.md) | Submission descriptions, how Polymath uses Meta AI, demo script and release checklist |
 | [docs/HACKATHON.md](docs/HACKATHON.md) | Dates, judging, setup checklist, IP notes |
 | [CLAUDE.md](CLAUDE.md) | Instructions for any coding agent picking this up |
