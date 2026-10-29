@@ -20,6 +20,7 @@ from test_worker import database as database_fixture
 
 from polymath.access_models import BrowserSession
 from polymath.budget import BudgetService
+from polymath.converge_models import ConvergeProgramme, ConvergeStep
 from polymath.discovery_contracts import DiscoveryIntent
 from polymath.discovery_models import DiscoveryIntent as SurpriseIntentRecord
 from polymath.discovery_models import StageCommit
@@ -97,8 +98,17 @@ async def test_populated_surprise_migration_round_trip_changes_only_three_owner_
         store.list_stages(partial_owner, partial_id),
     )
     # Tables created after 0024 cannot exist at that revision: 0025's own
-    # tables and the later experimental Frontier tables (0026).
-    later = {model.__tablename__ for model in (FrontierProgramme, FrontierNode, FrontierAttempt)}
+    # tables and the later experimental Frontier (0026) and Converge (0027) tables.
+    later = {
+        model.__tablename__
+        for model in (
+            FrontierProgramme,
+            FrontierNode,
+            FrontierAttempt,
+            ConvergeProgramme,
+            ConvergeStep,
+        )
+    }
     excluded = {model.__tablename__ for model in MODELS} | later | {"alembic_version"}
     with engine.connect() as connection:
         tables = tuple(

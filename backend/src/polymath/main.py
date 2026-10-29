@@ -23,6 +23,7 @@ from polymath.assessment_api import create_assessment_router
 from polymath.budget_admin_api import create_budget_admin_router
 from polymath.budget_models import BudgetAccount
 from polymath.config import Settings, get_settings
+from polymath.converge_api import create_converge_router
 from polymath.database import build_engine
 from polymath.discovery_api import create_discovery_router
 from polymath.explore_collection_api import create_explore_collection_router
@@ -290,6 +291,11 @@ def create_app(
     application.include_router(
         create_frontier_router(
             application.state.engine, availability=lambda: settings.frontier_enabled
+        )
+    )
+    application.include_router(
+        create_converge_router(
+            application.state.engine, availability=lambda: settings.converge_enabled
         )
     )
     application.include_router(
