@@ -1,6 +1,6 @@
 # Frontier mode (experimental): specification for review
 
-Status: draft for owner review, 29 October 2026. Nothing here is built yet.
+Status: owner approved 29 October 2026; version 1 implemented (see §9). Experimental.
 Frontier mode is an experimental fourth way of working with Polymath, beside
 Explore, Ask and Surprise me.
 
@@ -145,3 +145,38 @@ readable.
 3. **Name:** "Frontier" (suggested), or another name you prefer.
 4. **Timing:** suggested F0–F5 before submission, presented as experimental,
    with live evaluation after key day.
+
+## 9. What version 1 implements (29 October 2026)
+
+Owner decisions: the suggested defaults (24 investigations, depth 4, 6
+branches per node, adjustable per programme), the name "Frontier", results
+presented as a proposed solve path named by its weakest step, and delivery
+before submission marked Experimental.
+
+**How it runs.** Every attempt is an ordinary Ask or Explore investigation
+created by the owner's browser through the existing run API. All approval,
+budget, evidence and replay guarantees therefore apply unchanged, and the
+Frontier routes never start research or spend. The programme advances one
+investigation at a time while the page is open.
+
+| Node | Attempt | What the saved result does |
+|---|---|---|
+| Question | Survey (Ask) | Each unanswered question in the answer becomes a gap; with no answer, the whole question becomes the gap |
+| Gap | Transfer (Explore across fields) | A saved bridge marks it Transferred; otherwise it is decomposed (or Open at the depth limit) |
+| Gap or unresolved step | Decompose (Ask for intermediate results) | Each cited claim in the answer becomes a step |
+| Step | Attempt (Ask) | Labelled by its weakest claim: Supported, Derived or Conjectured; Conjectured or unanswered steps are decomposed again while depth allows |
+
+A decomposed gap shows its weakest step, or "in progress" while steps remain.
+Failed investigations are retried once, then the node is marked Open.
+
+**Honest scope of v1.** The model directs everything inside each
+investigation: the gaps it names, the steps it proposes and the evidence it
+cites. The order in which nodes are attempted is a fixed breadth-first
+schedule, and the owner can pause, stop or skip branches. A model-directed
+orchestrator choosing which branch to pursue, the Checked status from
+Formalise, Refuted detection and a cross-branch meta-convergence pass are the
+next steps. Node statements always come from saved, hash-checked results,
+never from the browser.
+
+**Verification.** Seven PostgreSQL/HTTP tests and five web tests use
+synthetic runs. No live Frontier programme has run against Meta yet.

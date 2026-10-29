@@ -488,8 +488,11 @@ class FrontierStore:
         def resolved(node: FrontierNode) -> str:
             # A decomposed gap is only as strong as its weakest step.
             if node.status == "decomposed":
-                children = by_parent.get(node.id, [])
-                return weakest([resolved(child) for child in children]) if children else "open"
+                children = [resolved(child) for child in by_parent.get(node.id, [])]
+                children = [status for status in children if status != "skipped"]
+                if any(status in ("pending", "running") for status in children):
+                    return "pending"
+                return weakest(children) if children else "open"
             return node.status
 
         summary = self._summary(session, programme)

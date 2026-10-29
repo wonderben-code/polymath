@@ -75,6 +75,8 @@ def test_unbridged_gap_is_decomposed_into_steps_resolved_by_their_weakest(databa
     snapshot = store.get(token, pid)
     steps = nodes_by_kind(snapshot, "step")
     assert len(steps) == 3 and all(node["pending_action"] == "attempt" for node in steps)
+    # Unfinished steps keep the gap in progress rather than open.
+    assert nodes_by_kind(snapshot, "gap")[0]["resolved_status"] == "pending"
     for _ in steps:
         step = due(store, token, pid)
         assert step["action"] == "attempt"
