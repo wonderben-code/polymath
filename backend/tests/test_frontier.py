@@ -233,3 +233,76 @@ def uuid_text():
     import uuid
 
     return str(uuid.uuid4())
+
+
+def save_two_gap_answer(engine, token):
+    from test_answer_persistence import answer_result
+
+    from polymath.evidence import EvidenceStore
+
+    result = answer_result()
+    result = result.model_copy(
+        update={
+            "finding": result.finding.model_copy(
+                update={"unanswered_questions": ["First synthetic gap?", "Second synthetic gap?"]}
+            )
+        }
+    )
+    jobs, store = JobRepository(engine), EvidenceStore(engine)
+    run = jobs.create(mode="ask", goal=result.finding.question)
+    assign(engine, run.id, token)
+    lease = jobs.claim_next("synthetic-frontier-gaps", lease_seconds=300)
+    for source in result.sources:
+        store.save_source(lease, source)
+    saved = store.save_result(lease, result)
+    jobs.finish(lease, status="succeeded", outcome={"result_id": str(saved.id)})
+    return saved.run_id
+
+
+def run_with_parents(engine, token, bridges):
+    from sqlalchemy.orm import Session
+
+    from polymath.lineage_models import ResearchRunParent
+
+    jobs = JobRepository(engine)
+    run = jobs.create(mode="explore", goal="Synthetic convergence")
+    assign(engine, run.id, token)
+    with Session(engine) as session, session.begin():
+        for index, saved in enumerate(bridges):
+            session.add(
+                ResearchRunParent(
+                    run_id=run.id,
+                    parent_result_id=saved.id,
+                    parent_run_id=saved.run_id,
+                    ordinal=index,
+                    content_sha256="a" * 64,
+                )
+            )
+    return run.id
+
+
+def test_two_transferred_bridges_queue_a_convergence_on_exactly_those_bridges(database):
+    token = owner(database)
+    store = FrontierStore(database)
+    pid = store.create(token, QUESTION)["id"]
+    step = due(store, token, pid)
+    store.attach(token, pid, step["node_id"], "survey", save_two_gap_answer(database, token))
+    bridges = []
+    for index in range(2):
+        step = due(store, token, pid)
+        assert step["action"] == "transfer" and step["parent_result_ids"] == []
+        saved, _ = complete(database, token, title=f"Synthetic bridge {index}", suffix=str(index))
+        bridges.append(saved)
+        store.attach(token, pid, step["node_id"], "transfer", saved.run_id)
+    step = due(store, token, pid)
+    assert step["action"] == "converge" and step["mode"] == "explore"
+    assert step["parent_result_ids"] == [str(saved.id) for saved in bridges]
+    with pytest.raises(FrontierError, match="frontier_run_invalid"):
+        store.attach(
+            token, pid, step["node_id"], "converge", run_with_parents(database, token, bridges[:1])
+        )
+    store.attach(
+        token, pid, step["node_id"], "converge", run_with_parents(database, token, bridges)
+    )
+    convergence = nodes_by_kind(store.get(token, pid), "convergence")
+    assert len(convergence) == 1 and convergence[0]["status"] == "running"

@@ -24,11 +24,19 @@ from polymath.access_models import ResearchRunAccess
 from polymath.evidence import _canonical, _hash
 from polymath.evidence_models import EvidenceResult
 from polymath.frontier_models import FrontierAttempt, FrontierNode, FrontierProgramme
+from polymath.lineage_models import ResearchRunParent
 from polymath.models import ResearchRun
 from polymath.research.models import AnswerFinding, BridgeFinding
 
 TERMINAL_RUN_STATUSES = ("succeeded", "failed", "cancelled", "interrupted")
-ACTION_MODES = {"survey": "ask", "transfer": "explore", "decompose": "ask", "attempt": "ask"}
+ACTION_MODES = {
+    "survey": "ask",
+    "transfer": "explore",
+    "decompose": "ask",
+    "attempt": "ask",
+    "converge": "explore",
+}
+MAX_CONVERGENCE_PREMISES = 4
 LABEL_STATUS = {"known": "supported", "postulated": "derived", "speculative": "conjectured"}
 STATUS_STRENGTH = ("supported", "transferred", "derived", "conjectured", "open")
 MAX_FAILED_ATTEMPTS = 2
@@ -85,6 +93,12 @@ def goal_for(action: str, statement: str, question: str) -> str:
         )
     elif action == "attempt":
         goal = f"{_clip(statement, 2200)} (an intermediate step toward: {context})"
+    elif action == "converge":
+        goal = (
+            "Investigate a shared structure across these bridges found for the open problem, "
+            "test it against the original literature, and report limitations. "
+            f"Problem: {context}"
+        )
     else:
         raise FrontierError("invalid_frontier_action")
     return _clip(goal, GOAL_LIMIT)
@@ -270,6 +284,15 @@ class FrontierStore:
             ):
                 raise FrontierError("frontier_run_invalid")
             node = session.get(FrontierNode, node_id)
+            parents = set(
+                session.scalars(
+                    select(ResearchRunParent.parent_result_id).where(
+                        ResearchRunParent.run_id == run.id
+                    )
+                )
+            )
+            if parents != {uuid.UUID(value) for value in node.premise_result_ids}:
+                raise FrontierError("frontier_run_invalid")
             session.add(
                 FrontierAttempt(
                     id=uuid.uuid4(),
@@ -327,6 +350,7 @@ class FrontierStore:
             "action": node.pending_action,
             "mode": ACTION_MODES[node.pending_action],
             "goal": goal_for(node.pending_action, node.statement, programme.question),
+            "parent_result_ids": list(node.premise_result_ids),
         }
 
     def _absorb(self, session: Session, programme: FrontierProgramme) -> None:
@@ -364,6 +388,8 @@ class FrontierStore:
                 else "insufficient_evidence"
             )
             self._apply(session, programme, node, attempt.action, result_id, finding)
+        if attempts:
+            self._maybe_converge(session, programme)
 
     def _apply(self, session, programme, node, action, result_id, finding) -> None:
         deeper = node.depth + 1 < programme.max_depth
@@ -410,6 +436,9 @@ class FrontierStore:
             else:
                 node.status = "open"
             return
+        if action == "converge":
+            node.status = "transferred" if isinstance(finding, BridgeFinding) else "open"
+            return
         if action == "attempt":
             status = (
                 weakest([LABEL_STATUS[claim.label] for claim in finding.claims])
@@ -420,6 +449,53 @@ class FrontierStore:
                 node.status, node.pending_action = "pending", "decompose"
             else:
                 node.status = status
+
+    def _maybe_converge(self, session: Session, programme: FrontierProgramme) -> None:
+        """Queue a connections-between-connections pass over fresh bridges."""
+        bridges = session.scalars(
+            select(FrontierAttempt.result_id)
+            .where(
+                FrontierAttempt.programme_id == programme.id,
+                FrontierAttempt.action == "transfer",
+                FrontierAttempt.outcome == "bridge",
+                FrontierAttempt.result_id.is_not(None),
+            )
+            .order_by(FrontierAttempt.created_at)
+        ).all()
+        convergences = session.scalars(
+            select(FrontierNode).where(
+                FrontierNode.programme_id == programme.id,
+                FrontierNode.kind == "convergence",
+            )
+        ).all()
+        used = {value for node in convergences for value in node.premise_result_ids}
+        fresh = [str(value) for value in bridges if str(value) not in used]
+        if len(fresh) < 2:
+            return
+        root = session.scalar(
+            select(FrontierNode).where(
+                FrontierNode.programme_id == programme.id, FrontierNode.kind == "question"
+            )
+        )
+        premises = fresh[:MAX_CONVERGENCE_PREMISES]
+        session.add(
+            FrontierNode(
+                id=uuid.uuid4(),
+                programme_id=programme.id,
+                parent_id=root.id,
+                kind="convergence",
+                statement=(
+                    f"Look for a shared structure across {len(premises)} bridges found for "
+                    "this problem."
+                ),
+                ordinal=100 + len(convergences),
+                depth=1,
+                pending_action="converge",
+                origin_ref=f"converge:{len(convergences)}",
+                premise_result_ids=premises,
+            )
+        )
+        session.flush()
 
     def _child(self, session, programme, parent, kind, statement, ordinal, result_id, ref) -> None:
         text = " ".join(str(statement).split())
@@ -516,6 +592,7 @@ class FrontierStore:
                         "status": node.status,
                         "resolved_status": resolved(node),
                         "pending_action": node.pending_action,
+                        "premise_result_ids": list(node.premise_result_ids),
                         "attempts": [
                             {
                                 "action": attempt.action,

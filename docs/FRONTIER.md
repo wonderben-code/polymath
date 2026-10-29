@@ -167,6 +167,12 @@ investigation at a time while the page is open.
 | Step | Attempt (Ask) | Labelled by its weakest claim: Supported, Derived or Conjectured; Conjectured or unanswered steps are decomposed again while depth allows |
 
 A decomposed gap shows its weakest step, or "in progress" while steps remain.
+
+**Connections between connections.** When two or more gaps have been bridged
+from other fields, a Convergence node queues a higher-level Explore
+investigation built on exactly those bridges (up to four), through the existing
+selected-bridge research path. The server checks the run's recorded parents
+match before attaching it.
 Failed investigations are retried once, then the node is marked Open.
 
 **Honest scope of v1.** The model directs everything inside each
@@ -174,9 +180,8 @@ investigation: the gaps it names, the steps it proposes and the evidence it
 cites. The order in which nodes are attempted is a fixed breadth-first
 schedule, and the owner can pause, stop or skip branches. A model-directed
 orchestrator choosing which branch to pursue, the Checked status from
-Formalise, Refuted detection and a cross-branch meta-convergence pass are the
-next steps. Node statements always come from saved, hash-checked results,
+Formalise and Refuted detection are the next steps. Node statements always come from saved, hash-checked results,
 never from the browser.
 
-**Verification.** Seven PostgreSQL/HTTP tests and five web tests use
+**Verification.** Eight PostgreSQL/HTTP tests and five web tests use
 synthetic runs. No live Frontier programme has run against Meta yet.

@@ -5,7 +5,7 @@ import type { FrontierNodeStatus, FrontierProgramme, FrontierSummary } from './c
 import { FrontierMap, STATUS_LABELS } from './FrontierMap'
 import './frontier.css'
 
-const ACTION_LABELS = { survey: 'Surveying the literature', transfer: 'Searching other fields for a solution', decompose: 'Breaking the gap into smaller steps', attempt: 'Attempting a step' } as const
+const ACTION_LABELS = { survey: 'Surveying the literature', transfer: 'Searching other fields for a solution', decompose: 'Breaking the gap into smaller steps', attempt: 'Attempting a step', converge: 'Looking for a connection between the bridges' } as const
 const LEGEND: FrontierNodeStatus[] = ['supported', 'transferred', 'derived', 'conjectured', 'open', 'pending', 'skipped']
 const POLL_MS = 4000
 
@@ -14,7 +14,7 @@ export interface FrontierWorkspaceProps {
   csrfToken: string | null
   canSubmit: boolean
   focusId: string | null
-  submit: (mode: 'ask' | 'explore', goal: string) => Promise<OwnedRun | undefined>
+  submit: (mode: 'ask' | 'explore', goal: string, parentResultIds: readonly string[]) => Promise<OwnedRun | undefined>
   onOpenRun: (id: string) => void
   onSessionExpired: () => void
   onFinished?: (programme: FrontierProgramme) => void
@@ -70,7 +70,7 @@ export function FrontierWorkspace({ enabled, csrfToken, canSubmit, focusId, subm
       if (next.state === 'due') {
         if (!canSubmitRef.current) { setStatus('Waiting until live research is available for this browser.'); return }
         setStatus(`${ACTION_LABELS[next.action]}…`)
-        const run = await submit(next.mode, next.goal)
+        const run = await submit(next.mode, next.goal, next.parent_result_ids)
         if (!run) { setRunning(false); setStatus('The next step could not be queued. Live research may be unavailable; the programme is saved.'); return }
         setProgramme(await attachFrontierRun(programme.id, csrfToken, { node_id: next.node_id, action: next.action, run_id: run.id }))
       } else if (next.state === 'waiting') {

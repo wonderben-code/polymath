@@ -13,7 +13,7 @@ const RUN = '44444444-4444-4444-8444-444444444444'
 const CSRF = 'a'.repeat(64)
 
 function node(overrides: Partial<FrontierNode> = {}): FrontierNode {
-  return { id: ROOT, parent_id: null, kind: 'question', statement: 'An unsolved synthetic problem', depth: 0, ordinal: 0, status: 'surveyed', resolved_status: 'surveyed', pending_action: null, attempts: [], ...overrides }
+  return { id: ROOT, parent_id: null, kind: 'question', statement: 'An unsolved synthetic problem', depth: 0, ordinal: 0, status: 'surveyed', resolved_status: 'surveyed', pending_action: null, premise_result_ids: [], attempts: [], ...overrides }
 }
 
 function programme(nodes: FrontierNode[] = [node(), node({ id: GAP, parent_id: ROOT, kind: 'gap', statement: 'A named synthetic gap', depth: 1, status: 'pending', resolved_status: 'pending', pending_action: 'transfer' })], status = 'active') {
@@ -53,13 +53,13 @@ describe('frontier workspace', () => {
       const url = String(input)
       calls.push(`${init?.method ?? 'GET'} ${url}`)
       if (url === '/api/v1/frontier') return Response.json({ programmes: [programme()] })
-      if (url.endsWith('/next')) return Response.json({ next: { state: 'due', node_id: GAP, action: 'transfer', mode: 'explore', goal: 'A named synthetic gap (an open gap within the problem)' }, programme: programme() })
+      if (url.endsWith('/next')) return Response.json({ next: { state: 'due', node_id: GAP, action: 'transfer', mode: 'explore', goal: 'A named synthetic gap (an open gap within the problem)', parent_result_ids: [] }, programme: programme() })
       if (url.endsWith('/attach')) { expect(JSON.parse(String(init?.body))).toEqual({ node_id: GAP, action: 'transfer', run_id: RUN }); return Response.json(programme([node(), node({ id: GAP, parent_id: ROOT, kind: 'gap', statement: 'A named synthetic gap', depth: 1, status: 'running', resolved_status: 'running', pending_action: 'transfer' })])) }
       return Response.json(programme())
     }))
     const submit = vi.fn(async () => ({ id: RUN, mode: 'explore', goal: 'g', status: 'queued', created_at: '', updated_at: '', result_id: null, error_code: null, external_outcome_unknown: false } as never))
     render(<FrontierWorkspace enabled csrfToken={CSRF} canSubmit focusId={PID} submit={submit} onOpenRun={vi.fn()} onSessionExpired={vi.fn()} />)
-    await waitFor(() => expect(submit).toHaveBeenCalledWith('explore', 'A named synthetic gap (an open gap within the problem)'))
+    await waitFor(() => expect(submit).toHaveBeenCalledWith('explore', 'A named synthetic gap (an open gap within the problem)', []))
     await waitFor(() => expect(calls).toContain(`POST /api/v1/frontier/${PID}/attach`))
     expect(screen.getByText('Experimental')).toBeInTheDocument()
   })
@@ -68,7 +68,7 @@ describe('frontier workspace', () => {
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input)
       if (url === '/api/v1/frontier') return Response.json({ programmes: [programme()] })
-      if (url.endsWith('/next')) return Response.json({ next: { state: 'due', node_id: GAP, action: 'transfer', mode: 'explore', goal: 'goal' }, programme: programme() })
+      if (url.endsWith('/next')) return Response.json({ next: { state: 'due', node_id: GAP, action: 'transfer', mode: 'explore', goal: 'goal', parent_result_ids: [] }, programme: programme() })
       return Response.json(programme())
     }))
     const submit = vi.fn()

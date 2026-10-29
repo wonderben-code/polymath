@@ -48,17 +48,21 @@ CREATE TABLE frontier_nodes (
  failed_attempts INTEGER NOT NULL DEFAULT 0,
  origin_result_id UUID REFERENCES evidence_results(id),
  origin_ref VARCHAR(64),
+ premise_result_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
  CONSTRAINT uq_frontier_node_origin UNIQUE(programme_id,parent_id,origin_result_id,origin_ref),
- CONSTRAINT ck_frontier_node_kind CHECK(kind IN ('question','gap','step')),
+ CONSTRAINT ck_frontier_node_kind CHECK(kind IN ('question','gap','step','convergence')),
  CONSTRAINT ck_frontier_node_statement CHECK(char_length(statement) BETWEEN 1 AND 4000),
  CONSTRAINT ck_frontier_node_depth CHECK(depth BETWEEN 0 AND 7),
  CONSTRAINT ck_frontier_node_status CHECK(status IN ('pending','running','surveyed','supported',
   'transferred','derived','conjectured','decomposed','open','skipped')),
  CONSTRAINT ck_frontier_node_action CHECK
-  (pending_action IS NULL OR pending_action IN ('survey','transfer','decompose','attempt')),
- CONSTRAINT ck_frontier_node_root CHECK((kind = 'question') = (parent_id IS NULL))
+  (pending_action IS NULL OR
+   pending_action IN ('survey','transfer','decompose','attempt','converge')),
+ CONSTRAINT ck_frontier_node_root CHECK((kind = 'question') = (parent_id IS NULL)),
+ CONSTRAINT ck_frontier_node_premises CHECK
+  (jsonb_typeof(premise_result_ids) = 'array' AND jsonb_array_length(premise_result_ids) <= 4)
 );
 CREATE INDEX ix_frontier_nodes_programme ON frontier_nodes(programme_id,depth,ordinal,created_at);
 CREATE TABLE frontier_attempts (
@@ -71,7 +75,8 @@ CREATE TABLE frontier_attempts (
  outcome VARCHAR(32),
  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
  absorbed_at TIMESTAMPTZ,
- CONSTRAINT ck_frontier_attempt_action CHECK(action IN ('survey','transfer','decompose','attempt'))
+ CONSTRAINT ck_frontier_attempt_action CHECK
+  (action IN ('survey','transfer','decompose','attempt','converge'))
 );
 CREATE INDEX ix_frontier_attempts_programme ON frontier_attempts(programme_id,created_at);
 """)

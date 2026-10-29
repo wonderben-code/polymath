@@ -13,7 +13,9 @@ from sqlalchemy import (
     UniqueConstraint,
     Uuid,
     func,
+    text,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from polymath.database import Base
@@ -66,6 +68,9 @@ class FrontierNode(Base):
         Uuid, ForeignKey("evidence_results.id")
     )
     origin_ref: Mapped[str | None] = mapped_column(String(64))
+    premise_result_ids: Mapped[list] = mapped_column(
+        JSONB, default=list, server_default=text("'[]'::jsonb")
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

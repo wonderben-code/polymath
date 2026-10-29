@@ -6,21 +6,22 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const MAX_BYTES = 2_000_000
 
 export type FrontierNodeStatus = 'pending' | 'running' | 'surveyed' | 'supported' | 'transferred' | 'derived' | 'conjectured' | 'decomposed' | 'open' | 'skipped'
-export type FrontierAction = 'survey' | 'transfer' | 'decompose' | 'attempt'
+export type FrontierAction = 'survey' | 'transfer' | 'decompose' | 'attempt' | 'converge'
 const STATUSES: readonly FrontierNodeStatus[] = ['pending', 'running', 'surveyed', 'supported', 'transferred', 'derived', 'conjectured', 'decomposed', 'open', 'skipped']
-const ACTIONS: readonly FrontierAction[] = ['survey', 'transfer', 'decompose', 'attempt']
+const ACTIONS: readonly FrontierAction[] = ['survey', 'transfer', 'decompose', 'attempt', 'converge']
 
 export interface FrontierAttempt { action: FrontierAction; run_id: string; result_id: string | null; outcome: string | null }
 export interface FrontierNode {
   id: string
   parent_id: string | null
-  kind: 'question' | 'gap' | 'step'
+  kind: 'question' | 'gap' | 'step' | 'convergence'
   statement: string
   depth: number
   ordinal: number
   status: FrontierNodeStatus
   resolved_status: FrontierNodeStatus
   pending_action: FrontierAction | null
+  premise_result_ids: string[]
   attempts: FrontierAttempt[]
 }
 export interface FrontierSummary { id: string; question: string; status: 'active' | 'paused' | 'completed' | 'stopped'; created_at: string; updated_at: string; node_counts: Record<string, number> }
@@ -31,7 +32,7 @@ export interface FrontierProgramme extends FrontierSummary {
   nodes: FrontierNode[]
 }
 export type FrontierNext =
-  | { state: 'due'; node_id: string; action: FrontierAction; mode: 'ask' | 'explore'; goal: string }
+  | { state: 'due'; node_id: string; action: FrontierAction; mode: 'ask' | 'explore'; goal: string; parent_result_ids: string[] }
   | { state: 'waiting'; run_id: string }
   | { state: 'paused' | 'stopped' | 'completed' | 'active'; reason?: string }
 
@@ -51,9 +52,10 @@ function parseNode(value: unknown): FrontierNode {
   const item = record(value)
   const attempts = Array.isArray(item.attempts) ? item.attempts : invalid()
   return {
-    id: id(item.id), parent_id: nullableId(item.parent_id), kind: oneOf(item.kind, ['question', 'gap', 'step'] as const), statement: text(item.statement, 4000),
+    id: id(item.id), parent_id: nullableId(item.parent_id), kind: oneOf(item.kind, ['question', 'gap', 'step', 'convergence'] as const), statement: text(item.statement, 4000),
     depth: integer(item.depth), ordinal: integer(item.ordinal), status: oneOf(item.status, STATUSES), resolved_status: oneOf(item.resolved_status, STATUSES),
     pending_action: item.pending_action === null ? null : oneOf(item.pending_action, ACTIONS),
+    premise_result_ids: Array.isArray(item.premise_result_ids) && item.premise_result_ids.length <= 4 ? item.premise_result_ids.map(id) : invalid(),
     attempts: attempts.map((attempt) => { const entry = record(attempt); return { action: oneOf(entry.action, ACTIONS), run_id: id(entry.run_id), result_id: nullableId(entry.result_id), outcome: entry.outcome === null ? null : text(entry.outcome, 32) } }),
   }
 }
@@ -72,7 +74,7 @@ export function parseProgramme(value: unknown): FrontierProgramme {
 
 function parseNext(value: unknown): FrontierNext {
   const item = record(value)
-  if (item.state === 'due') return { state: 'due', node_id: id(item.node_id), action: oneOf(item.action, ACTIONS), mode: oneOf(item.mode, ['ask', 'explore'] as const), goal: text(item.goal, 4000) }
+  if (item.state === 'due') { const parents = Array.isArray(item.parent_result_ids) && item.parent_result_ids.length <= 4 ? item.parent_result_ids.map(id) : invalid(); return { state: 'due', node_id: id(item.node_id), action: oneOf(item.action, ACTIONS), mode: oneOf(item.mode, ['ask', 'explore'] as const), goal: text(item.goal, 4000), parent_result_ids: parents } }
   if (item.state === 'waiting') return { state: 'waiting', run_id: id(item.run_id) }
   return { state: oneOf(item.state, ['paused', 'stopped', 'completed', 'active'] as const), ...(typeof item.reason === 'string' ? { reason: text(item.reason, 64) } : {}) }
 }

@@ -13,7 +13,7 @@ export const STATUS_LABELS: Record<FrontierNodeStatus, string> = {
   skipped: 'Skipped',
 }
 
-const KIND_LABELS = { question: 'Question', gap: 'Gap', step: 'Step' } as const
+const KIND_LABELS = { question: 'Question', gap: 'Gap', step: 'Step', convergence: 'Convergence' } as const
 const COLUMN = 230, ROW = 74, PAD_X = 40, PAD_Y = 44
 
 interface Placed { node: FrontierNode; x: number; y: number }
@@ -44,6 +44,7 @@ function clip(value: string, length: number): string {
 function Shape({ kind, status }: { kind: FrontierNode['kind']; status: FrontierNodeStatus }) {
   const className = `frontier-shape status-${status}`
   if (kind === 'question') return <><circle className="frontier-question-ring" r="17" /><circle className={className} r="11" /></>
+  if (kind === 'convergence') return <path className={className} d="M 0 -12 L 3.5 -3.5 L 12 0 L 3.5 3.5 L 0 12 L -3.5 3.5 L -12 0 L -3.5 -3.5 Z" />
   if (kind === 'gap') return <rect className={className} x="-9" y="-9" width="18" height="18" rx="3" transform="rotate(45)" />
   return <circle className={className} r="9" />
 }
