@@ -128,3 +128,32 @@
 .research-thinking-dots span:nth-child(3) { animation-delay: .4s; }
 @keyframes research-thinking { 0%, 80%, 100% { opacity: .25; transform: scale(.8); } 40% { opacity: 1; transform: scale(1); } }
 @media (prefers-reduced-motion: reduce) { .research-thinking-dots span { animation: none; opacity: .7; } }
+
+.bridge-diagram { margin: 22px 0 24px; padding: 22px 20px; border-radius: 12px; background: radial-gradient(120% 140% at 50% 0%, #fbfaf5 0%, #eff1e8 100%); border: 1px solid #dfe3d7; }
+.bridge-diagram-fields { display: grid; grid-template-columns: 1fr minmax(80px, 1.2fr) 1fr; align-items: end; gap: 10px; margin-bottom: 14px; }
+.bridge-diagram-fields > span { font-family: 'Iowan Old Style', 'Palatino Linotype', Georgia, serif; font-size: 17px; color: #22382f; }
+.bridge-diagram-fields > span:last-child { text-align: right; }
+.bridge-diagram-arc { width: 100%; height: 34px; overflow: visible; }
+.bridge-diagram-arc path { fill: none; stroke: #266b58; stroke-width: 2.4; stroke-linecap: round; stroke-dasharray: 1; animation: bridge-draw 1.4s ease-in-out both; }
+.bridge-diagram-row { display: grid; grid-template-columns: 1fr minmax(60px, .5fr) 1fr; align-items: center; gap: 8px; margin-top: 8px; animation: bridge-row .6s ease-out both; }
+.bridge-diagram-row svg { width: 100%; height: 22px; overflow: visible; }
+.bridge-diagram-row path { fill: none; stroke: #6f9a87; stroke-width: 1.6; stroke-dasharray: 1; animation: bridge-draw 1s ease-out both; }
+.bridge-diagram-row circle { fill: #266b58; }
+.bridge-diagram-term { padding: 9px 12px; border-radius: 8px; background: #fffef9; border: 1px solid #d5dbcf; font-size: 13px; line-height: 1.45; color: #22382f; }
+.bridge-diagram-term.is-left { border-left: 3px solid #3f7f9c; }
+.bridge-diagram-term.is-right { border-right: 3px solid #c08a1e; text-align: right; }
+.claim-spectrum { margin: 18px 0 20px; }
+.claim-spectrum-bar { display: flex; height: 12px; border-radius: 6px; overflow: hidden; gap: 2px; background: #e4e6dc; }
+.claim-spectrum-bar span { animation: spectrum-grow .9s cubic-bezier(.2, .8, .2, 1) both; transform-origin: left; }
+.claim-spectrum figcaption { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 10px; font-size: 12px; color: #4e5d55; }
+.claim-spectrum figcaption span { display: inline-flex; align-items: center; gap: 6px; }
+.claim-spectrum figcaption strong { color: #22382f; }
+.claim-spectrum figcaption i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.claim-spectrum .is-known { background: #266b58; }
+.claim-spectrum .is-postulated { background: #c08a1e; }
+.claim-spectrum .is-speculative { background: #7a5fa8; }
+@keyframes bridge-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+@keyframes bridge-row { from { opacity: 0; transform: translateY(6px); } }
+@keyframes spectrum-grow { from { transform: scaleX(0); } }
+@media (max-width: 760px) { .bridge-diagram { padding: 16px 12px; } .bridge-diagram-fields > span { font-size: 14px; } .bridge-diagram-term { font-size: 12px; padding: 7px 9px; } .bridge-diagram-row { grid-template-columns: 1fr 36px 1fr; } }
+@media (prefers-reduced-motion: reduce) { .bridge-diagram *, .claim-spectrum * { animation: none !important; } }

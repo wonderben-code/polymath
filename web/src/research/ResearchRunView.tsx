@@ -192,6 +192,7 @@ function Answer({ finding, result }: { finding: AnswerFinding; result: ResearchR
   return <article className="research-answer" aria-labelledby="answer-title">
     <span className="eyebrow accent">EVIDENCE-LINKED ANSWER</span>
     <h3 id="answer-title">{finding.question}</h3>
+    <ClaimSpectrum claims={finding.claims} />
     <div className="research-answer-labels"><h4>How to read the claim labels</h4><p><strong>Known</strong> is the model’s source-supported classification. <strong>Postulated</strong> is an inference across sources. <strong>Speculative</strong> is a tentative possibility.</p><p className="research-scope-note">These are model assessments, not guarantees of truth. Matched quotations do not independently verify the interpretation.</p></div>
     {result.overview_binding ? <ClaimBoundOverview finding={finding} binding={result.overview_binding} claimAnchor={claimAnchor} /> : <div className="research-answer-overview"><h4>Model overview</h4><p className="research-answer-summary">{finding.summary}</p><p className="research-scope-note">This overview is the model’s assessment. The classified claims below carry the source quotations.</p></div>}
     <ol className="research-answer-claims" aria-label="Answer claims">{finding.claims.map((claim, index) => <li key={claim.id} id={claimAnchor(claim.id)} tabIndex={-1}>
@@ -232,12 +233,33 @@ function ResearchMemory({ result, onOpenRun }: { result: ResearchResult; onOpenR
   </section>
 }
 
+// A visual reading of the mapping table, which stays the accessible record.
+function BridgeDiagram({ finding }: { finding: BridgeFinding }) {
+  return <div className="bridge-diagram" aria-hidden="true">
+    <div className="bridge-diagram-fields"><span>{finding.field_left}</span><svg className="bridge-diagram-arc" viewBox="0 0 200 40" preserveAspectRatio="none"><path d="M 4 36 Q 100 -14 196 36" pathLength={1} /></svg><span>{finding.field_right}</span></div>
+    {finding.mappings.map((mapping, index) => <div className="bridge-diagram-row" key={index} style={{ animationDelay: `${index * 120}ms` }}>
+      <span className="bridge-diagram-term is-left">{mapping.left}</span>
+      <svg viewBox="0 0 100 20" preserveAspectRatio="none"><path d="M 0 10 C 35 0, 65 20, 100 10" pathLength={1} /><circle cx="0" cy="10" r="3" /><circle cx="100" cy="10" r="3" /></svg>
+      <span className="bridge-diagram-term is-right">{mapping.right}</span>
+    </div>)}
+  </div>
+}
+
+function ClaimSpectrum({ claims }: { claims: AnswerClaim[] }) {
+  const counts = (['known', 'postulated', 'speculative'] as const).map((label) => [label, claims.filter((claim) => claim.label === label).length] as const)
+  return <figure className="claim-spectrum" aria-label={`${claims.length} claims: ${counts.map(([label, count]) => `${count} ${claimLabels[label].toLowerCase()}`).join(', ')}.`}>
+    <div className="claim-spectrum-bar">{counts.filter(([, count]) => count).map(([label, count]) => <span key={label} className={`is-${label}`} style={{ flexGrow: count }} />)}</div>
+    <figcaption>{counts.map(([label, count]) => <span key={label}><i className={`is-${label}`} aria-hidden="true" />{claimLabels[label]} <strong>{count}</strong></span>)}</figcaption>
+  </figure>
+}
+
 function Bridge({ finding }: { finding: BridgeFinding }) {
   return (
     <article className="research-bridge" aria-labelledby="bridge-title">
       <div className="research-bridge-heading"><span className="eyebrow accent">CANDIDATE CONNECTION</span><p>{finding.field_left}<span aria-hidden="true"> ↔ </span><span className="research-sr-only"> and </span>{finding.field_right}</p></div>
       <h3 id="bridge-title">{finding.title}</h3>
       <p className="research-explanation">{finding.explanation}</p>
+      <BridgeDiagram finding={finding} />
       <div className="research-mapping-wrap" role="region" aria-label="Structural mapping" tabIndex={0}>
         <table className="research-mapping"><caption>Proposed structural mapping</caption><thead><tr><th scope="col">{finding.field_left}</th><th scope="col">{finding.field_right}</th><th scope="col">Assumption</th></tr></thead><tbody>{finding.mappings.map((mapping, index) => <tr key={index}><td>{mapping.left}</td><td>{mapping.right}</td><td>{mapping.assumption}</td></tr>)}</tbody></table>
       </div>
