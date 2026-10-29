@@ -361,7 +361,7 @@ export function useResearchWorkspace(enabled: boolean, researchAvailable: boolea
     }
   }, [phase, csrf, activeRun, invalidate, remember])
 
-  const submit = useCallback(async (mode: OwnedRun['mode'], goal: string, parentResultIds: readonly string[] = []) => {
+  const submit = useCallback(async (mode: OwnedRun['mode'], goal: string, parentResultIds: readonly string[] = []): Promise<OwnedRun | undefined> => {
     if (mode === 'ask' && !scientificSelectionReady(native) || mode === 'explore' && !parentResultIds.length && (!exploreSelectionReady(native) || !!native.submission && rejectedExploreHash.current === native.submission.expectedActivationSha256)) return
     if (!enabled || !researchAvailable || !native.canSubmit || ownActiveResearch || unconfirmedSubmission || phase !== 'ready' || !csrf || mutation.current) return
     const controller = new AbortController()
@@ -378,6 +378,7 @@ export function useResearchWorkspace(enabled: boolean, researchAvailable: boolea
       selected.current = run.id
       setSelectedId(run.id)
       setDetailVersion((version) => version + 1)
+      return run
     } catch (failure) {
       if (controller.signal.aborted || current !== generation.current) return
       const failureCode = code(failure)
@@ -391,11 +392,11 @@ export function useResearchWorkspace(enabled: boolean, researchAvailable: boolea
     }
   }, [enabled, researchAvailable, phase, csrf, unconfirmedSubmission, invalidate, remember, native.canSubmit, native.submission, native.invalidate, native.scientificCapabilities, native.scientificPhase, native.invalidateScientific, native.exploreAccess, native.explorePhase, native.invalidateExplore, discoveryIntent, ownActiveResearch])
 
-  const investigateBridges = useCallback((parentResultIds: readonly string[]) => submit(
+  const investigateBridges = useCallback(async (parentResultIds: readonly string[]) => { await submit(
     'explore',
     'Investigate a shared structure across these saved bridges, test it against the original literature, and report limitations.',
     parentResultIds,
-  ), [submit])
+  ) }, [submit])
 
   const invalidateSession = useCallback(() => invalidate('session_expired'), [invalidate])
 

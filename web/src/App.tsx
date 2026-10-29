@@ -14,13 +14,16 @@ import { FindingVersionWorkspace } from './assessments/FindingVersionWorkspace'
 import { ShareWorkspace } from './sharing/ShareWorkspace'
 import { NativeResearchProvider } from './research/nativeContext'
 import { NativeResearchNotice } from './research/NativeResearchNotice'
+import { FrontierWorkspace } from './frontier/FrontierWorkspace'
+import { createProgramme, FrontierApiError } from './frontier/client'
 
-type Mode = 'explore' | 'ask' | 'surprise'
+type Mode = 'explore' | 'ask' | 'surprise' | 'frontier'
 
 const modes: { id: Mode; label: string; number: string }[] = [
   { id: 'explore', label: 'Explore', number: '01' },
   { id: 'ask', label: 'Ask', number: '02' },
   { id: 'surprise', label: 'Surprise me', number: '03' },
+  { id: 'frontier', label: 'Frontier', number: '04' },
 ]
 
 const copy = {
@@ -54,6 +57,16 @@ const copy = {
     note: 'The research model will choose the fields. No preselected pair is presented as a discovery.',
     examples: [],
   },
+  frontier: {
+    eyebrow: 'EXPERIMENTAL · FRONTIER RESEARCH',
+    title: 'Take on a problem nobody has solved yet.',
+    description: 'Polymath surveys the literature, names the gaps, searches other fields for solutions and breaks stubborn gaps into smaller steps, building a map of the path from question to answer.',
+    label: 'What unsolved problem should Polymath work on?',
+    placeholder: 'An open problem, stated as precisely as you can…',
+    action: 'Start a frontier programme',
+    note: 'Experimental. Each step is an ordinary investigation with its own evidence and budget, and every node on the map shows how well it is supported.',
+    examples: ['What mechanism sets the critical exponent of neuronal avalanches?', 'How could error-correcting codes improve gene drive stability?'],
+  },
 }
 
 function Arrow({ diagonal = false }: { diagonal?: boolean }) {
@@ -73,7 +86,9 @@ function StatusLine({ label, value, state }: { label: string; value: string; sta
 
 export function App() {
   const [mode, setMode] = useState<Mode>('explore')
-  const [prompts, setPrompts] = useState<Record<Mode, string>>({ explore: '', ask: '', surprise: '' })
+  const [prompts, setPrompts] = useState<Record<Mode, string>>({ explore: '', ask: '', surprise: '', frontier: '' })
+  const [frontierFocus, setFrontierFocus] = useState<string | null>(null)
+  const [creatingFrontier, setCreatingFrontier] = useState(false)
   const [system, setSystem] = useState<SystemStatus | null>(null)
   const [connection, setConnection] = useState<'loading' | 'connected' | 'offline'>('loading')
   const [retry, setRetry] = useState(0)
@@ -128,16 +143,31 @@ export function App() {
 
   // The server defaults to unavailable. A real cookie-owned session and healthy
   // storage are required as well; a capability flag alone cannot create a job.
-  const researchReady = workspace.canSubmit && (mode !== 'ask' || workspace.canAsk) && (mode !== 'explore' || workspace.canExplore)
+  const frontierReady = workspace.phase === 'ready' && !!workspace.csrfToken && !creatingFrontier
+  const researchReady = mode === 'frontier' ? frontierReady : workspace.canSubmit && (mode !== 'ask' || workspace.canAsk) && (mode !== 'explore' || workspace.canExplore)
   const researchConnected = researchReady && !artifactBusy && !assessmentBusy && (mode === 'surprise' || !!prompts[mode].trim())
   const unavailable = connection === 'offline'
     ? 'The research service could not be reached. Check the connection and try again.'
     : mode === 'explore' && workspace.native.canSubmit && !workspace.canExplore ? workspace.native.explorePhase === 'loading' ? 'Checking the approved Explore features…' : 'Explore features could not be verified for this funding approval. Refresh research access before starting an investigation; saved findings remain readable.' : workspace.ownActiveResearch ? 'An investigation is active in this browser. Finish or cancel it before starting another model task.' : workspace.native.required && workspace.native.phase !== 'disabled' ? 'Current funding authority or this browser’s limits do not permit a new model task. Saved research remains readable.' : 'Live investigations are disabled or unavailable. Saved research remains readable.'
 
+  async function startFrontier(question: string) {
+    if (!workspace.csrfToken) return
+    setCreatingFrontier(true)
+    try {
+      const created = await createProgramme(workspace.csrfToken, { question: question.trim() })
+      setFrontierFocus(created.id)
+      setPrompts((previous) => ({ ...previous, frontier: '' }))
+    } catch (failure) {
+      if (failure instanceof FrontierApiError && failure.code === 'session_expired') workspace.invalidateSession()
+      setNotice('The frontier programme could not be created. Try again in a moment.')
+    } finally { setCreatingFrontier(false) }
+  }
+
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!researchConnected) { setNotice(unavailable); return }
     setNotice('')
+    if (mode === 'frontier') { void startFrontier(prompts.frontier); return }
     void workspace.submit(mode, prompts[mode])
   }
 
@@ -209,7 +239,7 @@ export function App() {
 
               <div className="availability-note" id="research-availability" role="status">
                 <span className="small-star" aria-hidden="true">✳︎</span>
-                <p>{connection === 'loading' ? 'Checking the research service…' : artifactBusy ? 'A formalisation or writing task is active. Follow its progress below.' : assessmentBusy ? 'An evidence reassessment is active. Follow its saved progress in the literature watch.' : researchReady ? 'Research is available. Your investigation will be saved to this browser session.' : unavailable}</p>
+                <p>{connection === 'loading' ? 'Checking the research service…' : artifactBusy ? 'A formalisation or writing task is active. Follow its progress below.' : assessmentBusy ? 'An evidence reassessment is active. Follow its saved progress in the literature watch.' : mode === 'frontier' && researchReady ? (workspace.canSubmit ? 'Programmes are saved to this browser session. Each step runs as an ordinary investigation; keep this tab open while it works.' : 'Programmes can be planned and saved now. Their steps run when live research is available.') : researchReady ? 'Research is available. Your investigation will be saved to this browser session.' : unavailable}</p>
               </div>
               {notice && <p role="alert">{notice}</p>}
             </section>
@@ -263,6 +293,8 @@ export function App() {
           {!selectedFindingId && !workspace.activeRun?.discovery_intent && !workspace.activeRun?.explore_collection_intent && workspace.phase === 'ready' && workspace.activeRun?.status === 'succeeded' && workspace.activeRun.result_id && workspace.result?.finding && (workspace.result.finding.outcome === 'bridge' || workspace.result.finding.outcome === 'answer') && <ArtifactWorkspace key={workspace.activeRun.result_id} sourceResultId={workspace.activeRun.result_id} sourceKind={workspace.result.finding.outcome} csrfToken={workspace.csrfToken} enabled={workspace.phase === 'ready'} canGenerate={workspace.canSubmit && findingHead.canGenerate && !assessmentBusy} sourceCurrent={findingHead.canGenerate} onSessionExpired={workspace.invalidateSession} onBusyChange={setArtifactBusy} />}
           {!selectedFindingId && !workspace.activeRun?.discovery_intent && !workspace.activeRun?.explore_collection_intent && findingResultId && <ShareWorkspace key={`share:${findingResultId}`} sourceResultId={findingResultId} enabled={workspace.phase === 'ready'} csrfToken={workspace.csrfToken} sourceCurrent={findingHead.canGenerate} refreshToken={assessmentRefresh} onSessionExpired={workspace.invalidateSession} />}
           {selectedFindingId && <FindingVersionWorkspace key={selectedFindingId} resultId={selectedFindingId} enabled={workspace.phase === 'ready'} csrfToken={workspace.csrfToken} canGenerate={workspace.canSubmit && !assessmentBusy} refreshToken={assessmentRefresh} onSessionExpired={workspace.invalidateSession} onOpenFinding={openFinding} onOpenRun={openRun} onBusyChange={setArtifactBusy} onClose={() => setSelectedFindingId(null)} />}
+
+          <FrontierWorkspace enabled={workspace.phase === 'ready'} csrfToken={workspace.csrfToken} canSubmit={workspace.canSubmit && !artifactBusy && !assessmentBusy} focusId={frontierFocus} submit={(frontierMode, goal) => workspace.submit(frontierMode, goal)} onOpenRun={openRun} onSessionExpired={workspace.invalidateSession} />
 
           <KnowledgeBrowser enabled={workspace.phase === 'ready'} onOpenRun={openRun} onOpenFinding={openFinding} refreshToken={`${workspace.activeRun?.result_id ?? ''}:${assessmentRefresh}:${discoveryRefresh}`} canInvestigate={workspace.canSubmit && !artifactBusy && !assessmentBusy} investigating={workspace.submitting} onInvestigateBridges={workspace.investigateBridges} csrfToken={workspace.csrfToken} onSessionExpired={workspace.invalidateSession} onAssessmentApplied={assessmentChanged} onAssessmentBusyChange={setAssessmentBusy} />
 
