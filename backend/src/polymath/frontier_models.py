@@ -3,7 +3,17 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, Uuid, func
+from sqlalchemy import (
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    Uuid,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from polymath.database import Base
@@ -11,6 +21,9 @@ from polymath.database import Base
 
 class FrontierProgramme(Base):
     __tablename__ = "frontier_programmes"
+    __table_args__ = (
+        Index("ix_frontier_programmes_owner_created", "owner_session_hash", "created_at", "id"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     owner_session_hash: Mapped[str] = mapped_column(
@@ -28,6 +41,16 @@ class FrontierProgramme(Base):
 
 class FrontierNode(Base):
     __tablename__ = "frontier_nodes"
+    __table_args__ = (
+        UniqueConstraint(
+            "programme_id",
+            "parent_id",
+            "origin_result_id",
+            "origin_ref",
+            name="uq_frontier_node_origin",
+        ),
+        Index("ix_frontier_nodes_programme", "programme_id", "depth", "ordinal", "created_at"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     programme_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("frontier_programmes.id"))
@@ -49,6 +72,7 @@ class FrontierNode(Base):
 
 class FrontierAttempt(Base):
     __tablename__ = "frontier_attempts"
+    __table_args__ = (Index("ix_frontier_attempts_programme", "programme_id", "created_at"),)
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     programme_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("frontier_programmes.id"))
