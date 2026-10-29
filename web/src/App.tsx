@@ -15,6 +15,7 @@ import { ShareWorkspace } from './sharing/ShareWorkspace'
 import { NativeResearchProvider } from './research/nativeContext'
 import { NativeResearchNotice } from './research/NativeResearchNotice'
 import { FrontierWorkspace } from './frontier/FrontierWorkspace'
+import { HeroBridge } from './HeroBridge'
 import { CompletionToast, NotifyToggle, useNotifier, useRunCompletion } from './notify/notifier'
 import { createProgramme, FrontierApiError } from './frontier/client'
 
@@ -58,7 +59,6 @@ const modes: { id: Mode; label: string; number: string }[] = [
 
 const copy = {
   explore: {
-    title: 'Follow an idea across fields.',
     description: 'Name a concept. Polymath looks for the same structure in other disciplines and tests whether the connection really holds.',
     label: 'What would you like to explore?',
     placeholder: 'A concept, a phenomenon, an unexpected connection…',
@@ -67,7 +67,6 @@ const copy = {
     examples: ['Self-organised criticality', 'Error-correcting codes', 'Phase transitions in learning'],
   },
   ask: {
-    title: 'Ask what the evidence says.',
     description: 'Bring an open question. Polymath answers from the literature and labels every claim by how well it is supported.',
     label: 'What question is on your mind?',
     placeholder: 'What is the truth about…?',
@@ -76,8 +75,7 @@ const copy = {
     examples: ['Why is sleep necessary?', 'What limits how fast cities grow?'],
   },
   surprise: {
-    title: 'Let Polymath choose the fields.',
-    description: 'It picks distant disciplines, looks for a shared structure and keeps only what holds up.',
+    description: 'Polymath picks distant disciplines, looks for a shared structure and keeps only what holds up.',
     label: 'What should guide the search? (optional)',
     placeholder: 'Leave this open, or offer a direction…',
     action: 'Start a discovery',
@@ -255,9 +253,9 @@ export function App() {
         <main id="workspace">
           {place === 'research' && <>
             <section className="composer" aria-labelledby="research-title">
-              <p className="composer-tagline">An AI research partner that reads across every field.</p>
-              <h1 id="research-title">{content.title}</h1>
-              <p className="composer-description">{content.description}</p>
+              <h1 id="research-title">Find the hidden connections between fields of science.</h1>
+              <p className="hero-lede">Polymath is an AI research partner. It reads real papers across every discipline, tests each connection it finds, and shows you the exact passages behind it.</p>
+              <HeroBridge />
               <div className="mode-switch" role="group" aria-label="Research mode">
                 {modes.map((item) => (
                   <button key={item.id} type="button" aria-pressed={mode === item.id}
@@ -266,6 +264,7 @@ export function App() {
                   </button>
                 ))}
               </div>
+              <p className="composer-description mode-description">{content.description}</p>
               <form onSubmit={handleSubmit}>
                 <label htmlFor="research-prompt" className="composer-label">{content.label}</label>
                 <div className="prompt-box">

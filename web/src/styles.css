@@ -361,3 +361,29 @@ body { background: var(--paper); color: var(--ink); font-size: 16px; line-height
 .calm .frontier-note { font-size: 14px; }
 .calm .research-answer .research-scope-note { font-size: 13px; }
 .calm .research-claim-number, .calm .research-claim-label { font-size: 12px; }
+
+/* Home: what Polymath is, understood in a few seconds. */
+.composer h1#research-title { font-size: clamp(34px, 5.4vw, 54px); max-width: 720px; }
+.hero-lede { font-size: 18px; line-height: 1.6; color: var(--muted); margin: 0 0 8px; max-width: 640px; }
+.hero-bridge { margin: 32px 0 44px; }
+.hero-bridge-scene { display: grid; grid-template-columns: 1fr minmax(160px, 260px) 1fr; grid-template-rows: auto auto; align-items: end; column-gap: 14px; }
+.hero-bridge-field { grid-row: 1; padding-bottom: 2px; font-family: var(--serif); font-size: 21px; color: var(--ink); animation: hero-field-in .9s ease-out both; }
+.hero-bridge-field.is-left { grid-column: 1; text-align: right; }
+.hero-bridge-field.is-right { grid-column: 3; text-align: left; animation-delay: .25s; }
+.hero-bridge-arc { grid-column: 2; grid-row: 1; width: 100%; height: 70px; overflow: visible; }
+.hero-bridge-arc path { fill: none; stroke: var(--accent); stroke-width: 1.6; stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 1; animation: hero-arc-draw 1.4s cubic-bezier(.4, 0, .2, 1) .35s forwards; vector-effect: non-scaling-stroke; }
+.hero-bridge-arc circle { fill: var(--accent); }
+.hero-bridge-shared { grid-column: 2; grid-row: 2; margin-top: -40px; text-align: center; font-family: var(--serif); font-style: italic; font-size: 15px; color: var(--accent); animation: hero-field-in .8s ease-out 1.2s both; }
+.hero-bridge figcaption { margin-top: 18px; text-align: center; font-size: 13px; color: var(--muted); }
+@keyframes hero-arc-draw { to { stroke-dashoffset: 0; } }
+@keyframes hero-field-in { from { clip-path: inset(0 0 100% 0); transform: translateY(6px); } to { clip-path: inset(0 0 -20% 0); } }
+.calm .mode-description { font-size: 15px; margin: 0 4px 16px; max-width: 640px; }
+@media (max-width: 760px) {
+  .hero-lede { font-size: 17px; }
+  .hero-bridge { margin: 24px 0 32px; }
+  .hero-bridge-scene { grid-template-columns: 1fr 96px 1fr; column-gap: 8px; }
+  .hero-bridge-field { font-size: 16px; }
+  .hero-bridge-arc { height: 48px; }
+  .hero-bridge-shared { margin-top: 8px; font-size: 14px; grid-column: 1 / -1; }
+}
+@media (prefers-reduced-motion: reduce) { .hero-bridge * { animation: none !important; stroke-dashoffset: 0 !important; } }

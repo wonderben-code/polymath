@@ -73,6 +73,7 @@ the result summary, then evidence and the step-by-step record behind
 ## What changed
 
 - **Places:** Research, Your library, Frontier and About replace the long single page. The public library and operator desk sit quietly in the footer.
+- **First five seconds:** the home page says what Polymath is before anything else. A fixed headline ("Find the hidden connections between fields of science."), one plain sentence, and a quiet arc between two fields that cycles through long-established textbook links (heat flow and option pricing, ant colonies and internet routing, epidemics and rumours). The illustration is labelled as examples, never as Polymath findings, and stays still under reduced motion.
 - **Research:** a centred composer with one primary button and one availability line. Opening or starting an investigation glides to it.
 - **Focus view:** a finished investigation leads with its result. The Observatory and the step-by-step record fold into "How Polymath worked". A live run leads with the Observatory and offers "Notify me when it's done".
 - **Calm honesty:** the ordinary current-finding status is one quiet line, and the claim-label guide folds away. The funded-access details fold away too. Anything that needs attention (a superseded or unsupported finding, a paused service) keeps its full notice.
