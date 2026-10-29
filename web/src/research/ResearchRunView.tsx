@@ -23,11 +23,11 @@ const terminalStatuses = new Set(['succeeded', 'failed', 'cancelled', 'interrupt
 const modeNames = { explore: 'Explore', ask: 'Ask', surprise: 'Surprise me' }
 const states: Record<string, { label: string; description: string }> = {
   queued: { label: 'Queued', description: 'The investigation is waiting to begin.' },
-  running: { label: 'Investigating', description: 'Follow the recorded research activity below.' },
+  running: { label: 'Investigating', description: 'Polymath is working. Watch each step as it happens, or ask to be told when it is done.' },
   waiting_retry: { label: 'Waiting', description: 'The investigation is waiting before its next permitted attempt.' },
   cancel_requested: { label: 'Cancellation requested', description: 'Further research is being stopped. An operation already in progress may still finish.' },
   cancelled: { label: 'Cancelled', description: 'This investigation has stopped. Completed evidence is retained; an operation already sent may still incur usage.' },
-  succeeded: { label: 'Complete', description: 'Review the recorded outcome and its supporting material below.' },
+  succeeded: { label: 'Complete', description: 'Here is what Polymath found, with every source you can check.' },
   failed: { label: 'Could not complete', description: 'The investigation stopped before completing. Any saved evidence remains available.' },
   interrupted: { label: 'Interrupted', description: 'The investigation paused unexpectedly. Saved evidence is retained, and research will not restart automatically.' },
 }
