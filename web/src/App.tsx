@@ -266,6 +266,14 @@ export function App() {
 
           <KnowledgeBrowser enabled={workspace.phase === 'ready'} onOpenRun={openRun} onOpenFinding={openFinding} refreshToken={`${workspace.activeRun?.result_id ?? ''}:${assessmentRefresh}:${discoveryRefresh}`} canInvestigate={workspace.canSubmit && !artifactBusy && !assessmentBusy} investigating={workspace.submitting} onInvestigateBridges={workspace.investigateBridges} csrfToken={workspace.csrfToken} onSessionExpired={workspace.invalidateSession} onAssessmentApplied={assessmentChanged} onAssessmentBusyChange={setAssessmentBusy} />
 
+          <section className="intelligence-section" id="intelligence" aria-labelledby="intelligence-title">
+            <div className="approach-heading"><span className="eyebrow">THE RESEARCH INTELLIGENCE</span><h2 id="intelligence-title">Meta’s Muse Spark decides each step. <em>Polymath keeps it honest.</em></h2></div>
+            <div className="principle"><span className="principle-number">i</span><h3>Chooses where to look</h3><p>The model picks every next action: search for support or counterevidence, read an abstract or a chosen section of a paper, revisit earlier findings, or stop.</p></div>
+            <div className="principle"><span className="principle-number">ii</span><h3>Picks its own fields</h3><p>In Surprise me, the model selects distant fields itself and explains why. No list of fields is supplied.</p></div>
+            <div className="principle"><span className="principle-number">iii</span><h3>Argues against itself</h3><p>Every connection must carry the strongest objection the model found, its verdict on it, and a search for prior work.</p></div>
+            <div className="principle"><span className="principle-number">iv</span><h3>Bounded by evidence</h3><p>Polymath accepts only quotations that match text it actually saved, and reserves each model call against a hard budget before it is sent.</p></div>
+          </section>
+
           <section className="approach-section" id="approach" aria-labelledby="approach-title">
             <div className="approach-heading"><span className="eyebrow">HOW WE INVESTIGATE</span><h2 id="approach-title">Follow the evidence.<br /> <em>Keep the questions open.</em></h2></div>
             <div className="principle"><span className="principle-number">01</span><h3>Read across boundaries</h3><p>Find where distant disciplines describe a shared structure in different words.</p></div>
