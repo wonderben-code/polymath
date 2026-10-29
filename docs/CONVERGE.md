@@ -14,7 +14,7 @@ only; how well it works with Meta's live model is still to be shown.
 2. Optionally writes a question or theme.
 3. Chooses **how many fields** (a slider marked 5, 12, 30, 100, with **More**
    up to 200), and optionally names fields as chips. Polymath spreads the rest
-   across a catalogue of 202 disciplines in 16 domains, taking turns across
+   across a catalogue of 203 important science and engineering fields in 16 domains (from quantum technology, energy and biotechnology to space, computing and AI), taking turns across
    domains so the circle holds distant fields, not near neighbours.
 4. Sets a **spending ceiling**, and sees a plain estimate of how many
    investigations fit inside it.

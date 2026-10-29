@@ -93,7 +93,7 @@ export function ConvergeComposer({ csrfToken, ready, onCreated, onSessionExpired
 
       <div className="converge-setting">
         <label htmlFor={`${uid}-field`}>Fields you want included (optional)</label>
-        <p className="converge-hint">Polymath spreads the rest across the whole map of knowledge, so the circle holds distant fields.</p>
+        <p className="converge-hint">Polymath fills the rest from over 200 of the most important fields of science and engineering, spread across domains so the circle holds distant fields.</p>
         <div className="converge-chips">
           {chosen.map((name) => <span key={name} className="converge-chip">{name}<button type="button" aria-label={`Remove ${name}`} onClick={() => setChosen((items) => items.filter((item) => item !== name))}>×</button></span>)}
           <input id={`${uid}-field`} value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={onKey} placeholder={chosen.length ? 'Add another…' : 'Type a field, then press Enter'} list={`${uid}-suggest`} maxLength={100} disabled={chosen.length >= count} />
