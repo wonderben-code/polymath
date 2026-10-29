@@ -913,9 +913,7 @@ def live_shaped_html(body="<h1>Findings</h1><p>Exact synthetic evidence appears 
     return (
         '<!DOCTYPE html><html lang="en"><head><title>Synthetic</title></head><body>'
         '<header><a class="header-button" title="Report" href="#" title="Report an issue">'
-        'Report</a></header><article class="ltx_document">'
-        + body
-        + "</article></body></html>"
+        'Report</a></header><article class="ltx_document">' + body + "</article></body></html>"
     ).encode()
 
 
