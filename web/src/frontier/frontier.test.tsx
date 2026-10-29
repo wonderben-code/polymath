@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { parseProgramme } from './client'
 import type { FrontierNode } from './client'
-import { FrontierMap, layout } from './FrontierMap'
+import { FrontierMap, FrontierOutline, layout } from './FrontierMap'
 import { FrontierWorkspace } from './FrontierWorkspace'
 import { frontierReport } from './report'
 
@@ -90,6 +90,20 @@ describe('frontier report', () => {
     expect(report).toContain('weakest top-level branch is **open frontier**')
     expect(report).toContain('## Open frontier\n\n- An open synthetic gap')
     expect(report).not.toContain('<b>')
+  })
+})
+
+describe('frontier outline', () => {
+  it('nests children under their parent and selects a node from the list', async () => {
+    const onSelect = vi.fn()
+    render(<FrontierOutline nodes={programme().nodes} selectedId={ROOT} onSelect={onSelect} />)
+    const outline = screen.getByRole('navigation', { name: 'Solve path outline' })
+    const question = screen.getByRole('button', { name: /Question · Surveyed/ })
+    expect(question).toHaveAttribute('aria-pressed', 'true')
+    expect(question.closest('li')?.querySelector('ol')).toHaveTextContent('A named synthetic gap')
+    await userEvent.click(screen.getByRole('button', { name: /Gap · Waiting/ }))
+    expect(onSelect).toHaveBeenCalledWith(GAP)
+    expect(outline).toBeInTheDocument()
   })
 })
 

@@ -60,3 +60,15 @@
 @keyframes frontier-blink { 0%, 100% { opacity: .35; } 50% { opacity: 1; } }
 @media (max-width: 760px) { .frontier-workspace { padding: 24px 18px; } .frontier-programme-heading { flex-direction: column; } .frontier-heading h2 { font-size: 26px; } }
 @media (prefers-reduced-motion: reduce) { .frontier-workspace * { animation: none !important; } }
+
+.frontier-outline { margin-top: 14px; }
+.frontier-outline ol { list-style: none; margin: 0; padding: 0 0 0 18px; border-left: 1px solid #d5dbcf; }
+.frontier-outline > ol { padding-left: 0; border-left: 0; }
+.frontier-outline li { margin: 6px 0; }
+.frontier-outline button { display: grid; grid-template-columns: 12px 1fr; column-gap: 10px; row-gap: 2px; width: 100%; text-align: left; padding: 9px 12px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--ink, #253d38); cursor: pointer; }
+.frontier-outline button:hover, .frontier-outline button[aria-pressed='true'] { background: #fffef9; border-color: #d5dbcf; }
+.frontier-outline button:focus-visible { outline: 3px solid #af7942; outline-offset: 2px; }
+.frontier-outline .frontier-swatch { margin-top: 3px; grid-row: span 2; }
+.frontier-outline-kind { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: #4e5d55; }
+.frontier-outline-text { font-family: 'Iowan Old Style', 'Palatino Linotype', Georgia, serif; font-size: 15px; line-height: 1.45; }
+@media (max-width: 760px) { .frontier-map { max-height: 320px; } }

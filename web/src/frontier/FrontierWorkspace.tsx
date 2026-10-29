@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { OwnedRun } from '../research/client'
 import { attachFrontierRun, changeProgramme, FrontierApiError, listProgrammes, loadProgramme, nextFrontierAction, pruneFrontierNode } from './client'
 import type { FrontierNodeStatus, FrontierProgramme, FrontierSummary } from './client'
-import { FrontierMap, STATUS_LABELS } from './FrontierMap'
+import { FrontierMap, FrontierOutline, STATUS_LABELS } from './FrontierMap'
 import { frontierReport } from './report'
 import './frontier.css'
 
@@ -150,6 +150,7 @@ export function FrontierWorkspace({ enabled, csrfToken, canSubmit, focusId, subm
         {running && notifyControl}
         <ul className="frontier-legend" aria-label="Frontier status legend">{counts.map(([key, count]) => <li key={key}><span className={`frontier-swatch status-${key}`} aria-hidden="true" />{STATUS_LABELS[key]} <strong>{count}</strong></li>)}</ul>
         <FrontierMap nodes={programme.nodes} selectedId={selectedNode} onSelect={setSelectedNode} />
+        <FrontierOutline nodes={programme.nodes} selectedId={selectedNode} onSelect={setSelectedNode} />
         {node && <article className="frontier-detail" aria-label="Selected frontier node">
           <span className="eyebrow accent">{node.kind.toUpperCase()} · {STATUS_LABELS[node.resolved_status]}</span>
           <p className="frontier-detail-statement">{node.statement}</p>

@@ -83,3 +83,23 @@ export function FrontierMap({ nodes, selectedId, onSelect }: { nodes: FrontierNo
     </div>
   )
 }
+
+/** The same tree as an indented list: easy to read on a phone and with a screen reader. */
+export function FrontierOutline({ nodes, selectedId, onSelect }: { nodes: FrontierNode[]; selectedId: string | null; onSelect: (id: string) => void }) {
+  const children = new Map<string | null, FrontierNode[]>()
+  for (const node of nodes) children.set(node.parent_id, [...(children.get(node.parent_id) ?? []), node])
+  for (const list of children.values()) list.sort((left, right) => left.ordinal - right.ordinal)
+  const branch = (parent: string | null) => {
+    const list = children.get(parent) ?? []
+    if (!list.length) return null
+    return <ol>{list.map((node) => <li key={node.id}>
+      <button type="button" aria-pressed={selectedId === node.id} onClick={() => onSelect(node.id)}>
+        <span className={`frontier-swatch status-${node.resolved_status}`} aria-hidden="true" />
+        <span className="frontier-outline-kind">{KIND_LABELS[node.kind]} · {STATUS_LABELS[node.resolved_status]}</span>
+        <span className="frontier-outline-text">{node.statement}</span>
+      </button>
+      {branch(node.id)}
+    </li>)}</ol>
+  }
+  return <nav className="frontier-outline" aria-label="Solve path outline">{branch(null)}</nav>
+}
