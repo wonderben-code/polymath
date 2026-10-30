@@ -23,21 +23,30 @@ Judges and visitors see every option:
   Meta. Polymath stays a free tool, not a business that pays for usage or
   manages billing.
 
-## Open decision (30 October 2026)
+## Decision on own keys (30 October 2026)
 
-The owner asked whether asking visitors for their Meta key is wise ("never
-share your key"). Proposed instead: **Run it yourself.** Polymath is free to
-use on the site, and for unlimited use people run their own copy with their
-own key, which never leaves their machine. This needs a short guide and a
-button on the site. It awaits the owner's answer. Until then, item 1 below is
-on hold; items 2 to 4 are unaffected.
+Everything happens on the website; Polymath is for scientists, not developers.
+"Run it yourself" was considered and rejected. The own-key option is
+**held only while your research runs**:
+
+- The key lives only in the visitor's browser tab memory (not saved to disk),
+  and is gone when the tab closes.
+- It is sent over HTTPS only when an investigation starts.
+- On the server it is held encrypted for that investigation alone and erased
+  when the investigation ends: succeeded, failed, cancelled or interrupted.
+  It is never persisted beyond that, never logged and never shown.
+- If an interrupted run is resumed, the browser supplies the key again.
+- The visitor sets a spending ceiling. Each investigation shows who pays and
+  confirms "your key has been erased" at the end.
+- The site's wording must stay accurate: "used only while your research runs,
+  then erased", never "we never store it".
 
 ## What gets built, in order
 
 1. **Bring your own Meta key** (before submission)
-   - A visitor enters their key once over HTTPS. It is stored encrypted with a
-     server-only key, never returned to the browser, never logged, and removed
-     at once by *Forget my key*.
+   - Held only while your research runs (see the decision above): kept in
+     browser memory, sent per investigation, held encrypted on the server for
+     that run only, then erased.
    - The key is checked before first use with a free, no-completion request.
    - The visitor sets their **own spending ceiling**; each run on their key is
      reserved and settled against it, just like the owner's ledger.
