@@ -1,5 +1,6 @@
 """Validated server-side configuration; credentials never enter public responses."""
 
+import base64
 import re
 from functools import lru_cache
 from pathlib import Path
@@ -58,6 +59,19 @@ class Settings(BaseSettings):
     )
     publication_publisher_name: str | None = Field(default=None, min_length=1, max_length=200)
     publication_destinations: tuple[Literal["sandbox", "production"], ...] = ()
+    # Connect Zenodo for every visitor (docs/CONNECT_ZENODO.md). A destination is
+    # offered only when its OAuth client ID and secret are both configured.
+    visitor_zenodo_enabled: bool = False
+    zenodo_connection_key: SecretStr | None = None
+    public_site_origin: str | None = Field(
+        default=None, pattern=r"^https?://[A-Za-z0-9.-]+(:[0-9]{1,5})?$"
+    )
+    zenodo_sandbox_client_id: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_.-]{1,200}$")
+    zenodo_sandbox_client_secret: SecretStr | None = None
+    zenodo_production_client_id: str | None = Field(
+        default=None, pattern=r"^[A-Za-z0-9_.-]{1,200}$"
+    )
+    zenodo_production_client_secret: SecretStr | None = None
     frontend_dist: Path | None = Field(
         default=None, validation_alias=AliasChoices("FRONTEND_DIST", "STATIC_DIR")
     )
@@ -78,6 +92,9 @@ class Settings(BaseSettings):
         "operator_bootstrap_token",
         "zenodo_sandbox_token",
         "zenodo_production_token",
+        "zenodo_connection_key",
+        "zenodo_sandbox_client_secret",
+        "zenodo_production_client_secret",
         mode="before",
     )
     @classmethod
@@ -187,6 +204,29 @@ class Settings(BaseSettings):
         ):
             raise ValueError("META_MODEL must be an explicit bounded model identifier")
         return normalized
+
+    @model_validator(mode="after")
+    def require_visitor_zenodo_configuration(self) -> "Settings":
+        if self.visitor_zenodo_enabled:
+            if self.zenodo_connection_key is None or self.public_site_origin is None:
+                raise ValueError("Visitor Zenodo requires a connection key and the site origin")
+            try:
+                key = base64.b64decode(self.zenodo_connection_key.get_secret_value(), validate=True)
+            except ValueError:
+                key = b""
+            if len(key) != 32:
+                raise ValueError("ZENODO_CONNECTION_KEY must be 32 random bytes in base64")
+        return self
+
+    @property
+    def visitor_zenodo_destinations(self) -> tuple[Literal["sandbox", "production"], ...]:
+        if not self.visitor_zenodo_enabled:
+            return ()
+        pairs = (
+            ("sandbox", self.zenodo_sandbox_client_id, self.zenodo_sandbox_client_secret),
+            ("production", self.zenodo_production_client_id, self.zenodo_production_client_secret),
+        )
+        return tuple(name for name, client, secret in pairs if client and secret)
 
     @property
     def meta_configured(self) -> bool:

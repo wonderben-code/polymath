@@ -9,7 +9,7 @@ Polymath is a free public tool, like a research assistant anyone can open.
 Judges and visitors see every option:
 
 - **Sign in, or continue as a guest.** Both work fully; guests lose nothing.
-- **Use it free, or connect your own Meta API key** for heavier use.
+- **Use it free (limited), or run your own copy** for heavier use; "Connect your Meta account" appears only as a labelled vision.
 - **Connect your own Zenodo** to publish discoveries under your own name.
   Nobody can ever publish to the owner's Zenodo account except the owner.
 
@@ -47,7 +47,7 @@ Ways forward:
 
 ## What gets built, in order
 
-1. **Ways to use Polymath** (before submission)
+1. **Ways to use Polymath** (before submission) · **built 30 Oct**
    - Free, right here: "a few investigations a day", showing how many are left
      today.
    - Run your own Polymath: an open-source guide; the visitor's Meta key never
@@ -58,7 +58,7 @@ Ways forward:
      not a working-looking button, because Meta does not offer this publicly.
    - Where: an About page section, plus a quiet line under the composer.
 
-2. **Free-use switch** (before submission)
+2. **Free-use switch** (before submission) · **built 30 Oct** (`PUBLIC_MAX_DELEGATION_SECONDS`)
    - Already exists: an owner-funded public delegation with per-visitor caps,
      an exact deadline and an explicit Stop (docs/PUBLIC_RESEARCH_ACCESS.md).
    - Change: the maximum delegation lifetime (currently 24 hours) becomes a
@@ -68,7 +68,10 @@ Ways forward:
      visitor".
 
 3. **Connect Zenodo for every visitor** (before submission; live test after
-   deployment)
+   deployment) · **built 30 Oct**, see [CONNECT_ZENODO.md](CONNECT_ZENODO.md):
+   connect/disconnect, and publish any written finding with an exact review
+   (practice or permanent). Still to build: the publishing levels/autopilot
+   for visitors' own connections (today they publish one finding at a time).
    - A *Connect Zenodo* button uses Zenodo's OAuth sign-in (sandbox and
      production) with the `deposit:write` and `deposit:actions` scopes.
    - Tokens are stored encrypted per visitor and deleted on *Disconnect*.
@@ -84,7 +87,7 @@ Ways forward:
      papers), GitHub or Google.
    - Signing in keeps work forever and across devices; guest work is carried
      into the account.
-   - Own key and Zenodo connections follow the account.
+   - Zenodo connections follow the account.
    - Needs the owner to register free OAuth apps with those providers after
      deployment.
 

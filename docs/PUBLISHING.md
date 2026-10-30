@@ -86,7 +86,13 @@ for the sandbox, production, both or neither, and under which publisher
 name. Connecting the owner's account stays a server setting, which the
 deployment guide covers in one step.
 
-## Phase 2 (proposed, needs the owner's go-ahead): "Connect Zenodo" for everyone
+## Phase 2: "Connect Zenodo" for everyone
+
+**Built 30 October 2026 as a separate visitor path; see
+[CONNECT_ZENODO.md](CONNECT_ZENODO.md).** It leaves the operator publisher code
+below untouched instead of adding a second authority to it. Visitors publish
+one finding at a time today; the four levels for visitors come next. The
+original proposal follows for reference.
 
 A **Connect Zenodo** button lets any person sign in with their own Zenodo
 account, using Zenodo's standard OAuth login and the `deposit:write` scope,

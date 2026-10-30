@@ -47,6 +47,11 @@ from polymath.models import ResearchRun
 from polymath.publishing_models import PublishingItem, PublishingPreference
 from polymath.research.discovery import DiscoveryLimits
 from polymath.stage_owners import StageOwnerError, has_stage_intent, intent_sha256, load_stage_owner
+from polymath.visitor_zenodo_models import (
+    VisitorPublication,
+    ZenodoConnection,
+    ZenodoOAuthState,
+)
 
 pytestmark = pytest.mark.integration
 database = database_fixture
@@ -99,7 +104,8 @@ async def test_populated_surprise_migration_round_trip_changes_only_three_owner_
         store.list_stages(partial_owner, partial_id),
     )
     # Tables created after 0024 cannot exist at that revision: 0025's own
-    # tables and the later Frontier (0026), Converge (0027) and publishing (0028) tables.
+    # tables and the later Frontier (0026), Converge (0027), publishing (0028) and
+    # visitor Zenodo (0029) tables.
     later = {
         model.__tablename__
         for model in (
@@ -110,6 +116,9 @@ async def test_populated_surprise_migration_round_trip_changes_only_three_owner_
             ConvergeStep,
             PublishingPreference,
             PublishingItem,
+            ZenodoOAuthState,
+            ZenodoConnection,
+            VisitorPublication,
         )
     }
     excluded = {model.__tablename__ for model in MODELS} | later | {"alembic_version"}

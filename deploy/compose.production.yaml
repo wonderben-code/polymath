@@ -132,11 +132,25 @@ services:
       app:
         condition: service_healthy
 
+  # Connect Zenodo for every visitor (docs/CONNECT_ZENODO.md); start with
+  # --profile zenodo once VISITOR_ZENODO_ENABLED and the OAuth apps are set.
+  visitor-zenodo-worker:
+    <<: *app
+    profiles: [zenodo]
+    command: ["/app/backend/.venv/bin/python", "-m", "polymath.visitor_zenodo_worker"]
+    networks: [internal, egress]
+    restart: on-failure:3
+    stop_grace_period: 60s
+    depends_on:
+      app:
+        condition: service_healthy
+
 networks:
   # The database network has no route to the internet.
   internal:
     internal: true
-  # Public HTTPS traffic between the proxy and the API only.
+  # Public HTTPS traffic between the proxy and the API. With Connect Zenodo on,
+  # the API also makes one outbound sign-in exchange with zenodo.org per connection.
   edge:
     ipam:
       config:

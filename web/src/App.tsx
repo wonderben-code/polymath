@@ -17,6 +17,7 @@ import { NativeResearchNotice } from './research/NativeResearchNotice'
 import { FrontierWorkspace } from './frontier/FrontierWorkspace'
 import { ConvergeComposer } from './converge/ConvergeComposer'
 import { PublishingSection } from './publishing/PublishingSection'
+import { CALLBACK_PATH, YourZenodo } from './zenodo/YourZenodo'
 import { ConvergeWorkspace } from './converge/ConvergeWorkspace'
 import { HeroBridge } from './HeroBridge'
 import { WaysToUse } from './WaysToUse'
@@ -28,6 +29,7 @@ import { createProgramme, FrontierApiError } from './frontier/client'
 type Mode = 'explore' | 'ask' | 'surprise'
 
 function placeFor(pathname: string): Place {
+  if (pathname === CALLBACK_PATH) return 'library'
   return PLACES.find((item) => item.path !== '/' && (pathname === item.path || pathname === `${item.path}/`))?.id ?? 'research'
 }
 
@@ -330,6 +332,7 @@ export function App() {
             <KnowledgeBrowser enabled={workspace.phase === 'ready'} onOpenRun={openRun} onOpenFinding={openFindingHere} refreshToken={`${workspace.activeRun?.result_id ?? ''}:${assessmentRefresh}:${discoveryRefresh}`} canInvestigate={workspace.canSubmit && !artifactBusy && !assessmentBusy} investigating={workspace.submitting} onInvestigateBridges={investigateBridges} csrfToken={workspace.csrfToken} onSessionExpired={workspace.invalidateSession} onAssessmentApplied={assessmentChanged} onAssessmentBusyChange={setAssessmentBusy} deeperFrom={deeperFrom} onDeeperShown={() => setDeeperFrom(null)} />
           </>}
           <div hidden={place !== 'library'}>
+            <YourZenodo csrfToken={workspace.csrfToken} enabled={workspace.phase === 'ready'} />
             <PublishingSection csrfToken={workspace.csrfToken} enabled={workspace.phase === 'ready'} native={workspace.native.submission ?? undefined} />
           </div>
 

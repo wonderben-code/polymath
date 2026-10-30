@@ -1,0 +1,58 @@
+/* Your Zenodo: one quiet row per site, then the records that came of it. */
+.zenodo { max-width: 760px; margin: 0 auto 64px; padding-top: 40px; border-top: 1px solid var(--hairline, #e2e4da); }
+.zenodo h2 { font-family: var(--serif, Georgia, serif); font-weight: 400; font-size: 26px; margin: 0 0 8px; scroll-margin-top: 24px; }
+.zenodo-lede { font-size: 16px; line-height: 1.65; color: var(--muted, #56645c); margin: 0 0 18px; max-width: 620px; }
+.zenodo-message { font-size: 15px; line-height: 1.6; color: var(--ink, #1f332c); margin: 10px 0; }
+.zenodo button, .zenodo-publish button { border: 1px solid #9cbcae; border-radius: 999px; background: #fffefb; padding: 9px 18px; font-size: 14px; color: #234e3d; cursor: pointer; }
+.zenodo button:disabled, .zenodo-publish button:disabled { opacity: .5; cursor: not-allowed; }
+.zenodo button.zenodo-primary, .zenodo-publish button.zenodo-primary { background: var(--accent, #266b58); border-color: var(--accent, #266b58); color: #fffef7; }
+.zenodo-destinations { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--hairline, #e2e4da); }
+.zenodo-destinations li { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 16px 4px; border-bottom: 1px solid var(--hairline, #e2e4da); }
+.zenodo-destinations li > div { display: grid; gap: 3px; }
+.zenodo-destination-name { font-family: var(--serif, Georgia, serif); font-size: 18px; color: var(--ink, #1f332c); display: flex; align-items: baseline; gap: 10px; }
+.zenodo-destinations .zenodo-destination-name::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: #b8bfb6; transform: translateY(-2px); }
+.zenodo-destinations .is-connected .zenodo-destination-name::before { background: var(--accent, #266b58); }
+.zenodo-destination-line { font-size: 14px; line-height: 1.55; color: var(--muted, #56645c); }
+.zenodo-records { margin-top: 32px; }
+.zenodo-records h3 { font-family: var(--serif, Georgia, serif); font-weight: 400; font-size: 21px; margin: 0 0 10px; }
+.zenodo-records ul { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--hairline, #e2e4da); }
+.zenodo-record { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 14px 4px; border-bottom: 1px solid var(--hairline, #e2e4da); }
+.zenodo-record > div:first-child { display: grid; gap: 3px; min-width: 0; }
+.zenodo-record-title { font-family: var(--serif, Georgia, serif); font-size: 16px; color: var(--ink, #1f332c); }
+.zenodo-record-meta { font-size: 13px; color: var(--muted, #56645c); overflow-wrap: anywhere; }
+.zenodo-record.is-published .zenodo-record-meta { color: var(--accent, #266b58); }
+.zenodo-record-actions { display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
+.zenodo-record-actions a, .zenodo-earlier a, .zenodo-outcome a { color: var(--accent, #266b58); }
+
+/* Publish to your Zenodo, under a written finding. */
+.zenodo-publish { margin: 28px 0 8px; padding: 22px 24px; border: 1px solid var(--hairline, #e2e4da); border-radius: 18px; background: #fffefb; }
+.zenodo-publish-head { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+.zenodo-publish h3 { font-family: var(--serif, Georgia, serif); font-weight: 400; font-size: 20px; margin: 0; }
+.zenodo-earlier { list-style: none; margin: 12px 0 0; padding: 0; font-size: 14px; color: var(--muted, #56645c); display: grid; gap: 4px; }
+.zenodo-connect-first p { font-size: 15px; line-height: 1.6; color: var(--ink, #1f332c); margin: 14px 0 12px; }
+.zenodo-connect-first > div, .zenodo-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+.zenodo-where { border: 0; padding: 0; margin: 18px 0 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.zenodo-where legend { font-weight: 600; font-size: 15px; margin-bottom: 10px; padding: 0; }
+.zenodo-where label { position: relative; display: grid; gap: 4px; padding: 14px 16px 14px 44px; border: 1px solid var(--hairline, #e2e4da); border-radius: 14px; cursor: pointer; }
+.zenodo-where input { position: absolute; left: 16px; top: 17px; accent-color: var(--accent, #266b58); width: 16px; height: 16px; }
+.zenodo-where label.is-chosen { border-color: #9cbcae; background: #eef2ec; }
+.zenodo-where label.is-unavailable { opacity: .6; cursor: not-allowed; }
+.zenodo-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 18px; margin-top: 18px; }
+.zenodo-grid label { display: grid; gap: 6px; font-size: 14px; color: var(--muted, #56645c); }
+.zenodo-grid label.is-wide { grid-column: 1 / -1; }
+.zenodo-grid input, .zenodo-grid select, .zenodo-grid textarea { padding: 9px 12px; border: 1px solid var(--hairline, #e2e4da); border-radius: 10px; background: #fffefb; font: inherit; font-size: 15px; color: var(--ink, #1f332c); }
+.zenodo-grid textarea { resize: vertical; line-height: 1.55; }
+.zenodo-grid input[aria-invalid='true'] { border-color: #b4553f; }
+.zenodo-review { margin-top: 18px; }
+.zenodo-review-where { font-size: 13px; letter-spacing: .04em; text-transform: uppercase; color: var(--accent, #266b58); margin: 0 0 6px; }
+.zenodo-review h4 { font-family: var(--serif, Georgia, serif); font-weight: 400; font-size: 22px; margin: 0 0 6px; color: var(--ink, #1f332c); }
+.zenodo-review-authors { font-size: 14px; color: var(--muted, #56645c); margin: 0 0 12px; }
+.zenodo-review-summary { font-size: 15px; line-height: 1.65; color: var(--ink, #1f332c); white-space: pre-line; margin: 0 0 12px; }
+.zenodo-fingerprint summary { cursor: pointer; font-size: 14px; color: var(--accent, #266b58); }
+.zenodo-fingerprint p { font-size: 12px; color: var(--muted, #56645c); overflow-wrap: anywhere; font-family: ui-monospace, monospace; }
+.zenodo-confirm { margin-top: 16px; padding: 20px 22px; border-radius: 16px; background: #fbf6e8; border: 1px solid #ead9b0; }
+.zenodo-confirm h5 { margin: 0 0 6px; font-family: var(--serif, Georgia, serif); font-weight: 400; font-size: 19px; }
+.zenodo-confirm p { margin: 0; font-size: 15px; line-height: 1.6; }
+.zenodo-outcome { font-size: 15px; margin: 16px 0 0; color: var(--ink, #1f332c); }
+.zenodo-outcome.is-published { color: var(--accent, #266b58); }
+@media (max-width: 760px) { .zenodo-where, .zenodo-grid { grid-template-columns: 1fr; } .zenodo-record, .zenodo-destinations li { flex-direction: column; align-items: flex-start; } }
