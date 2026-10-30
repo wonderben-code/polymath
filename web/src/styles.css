@@ -417,3 +417,40 @@ body { background: var(--paper); color: var(--ink); font-size: 16px; line-height
 @media (prefers-reduced-motion: reduce) { .deeper-diagram * { animation: none !important; stroke-dashoffset: 0 !important; opacity: 1 !important; } }
 .knowledge-bridge-more > summary { cursor: pointer; padding: 10px 0; font-size: 14px; color: var(--accent); }
 .calm .knowledge-bridge-choices label { border-color: var(--hairline); border-radius: 12px; background: #fbfaf6; }
+
+/* Calm pass 2: the remaining screens speak the same quiet language. */
+.calm .public-intro, .calm .public-controls, .calm .public-empty, .calm .public-library-list, .calm .budget-intro { max-width: 760px; margin-left: auto; margin-right: auto; }
+.calm .public-intro { margin-top: 56px; }
+.calm .public-intro h1, .calm .budget-intro h1 { font-family: var(--serif); font-weight: 400; font-size: clamp(34px, 5vw, 48px); letter-spacing: -1px; line-height: 1.12; text-wrap: balance; }
+.calm .public-intro p, .calm .budget-intro > p { font-size: 17px; line-height: 1.65; color: var(--muted); }
+.calm .public-notice { display: flex; gap: 10px; align-items: baseline; padding: 0; border: 0; background: none; font-size: 14px; color: var(--muted); }
+.calm .public-notice::before { content: ''; width: 7px; height: 7px; flex-shrink: 0; border-radius: 50%; background: #9db2a6; transform: translateY(-1px); }
+.calm .public-controls { align-items: center; flex-wrap: wrap; }
+.calm .public-controls label { font-size: 14px; font-weight: 500; flex-basis: 100%; }
+.calm .public-controls input { border-radius: 999px; border-color: var(--hairline); padding: 12px 20px; font-size: 16px; }
+.calm .public-empty { padding: 32px 36px; border: 0; border-radius: 18px; background: #f0efe7; }
+.calm .public-library-card { border-color: var(--hairline); border-radius: 18px; }
+.calm .sharing-warning, .calm .budget-warning, .calm .discovery-warning, .calm .artifact-message, .calm .publication-message { border: 0; border-radius: 12px; background: #f1efe7; font-size: 14px; line-height: 1.6; }
+.calm .discovery-note, .calm .budget-note, .calm .publication-field-note, .calm .public-map-note { font-size: 14px; line-height: 1.6; }
+.calm .sharing-actions button, .calm .public-controls button, .calm .sharing-record button, .calm .artifact-error button,
+.calm .budget-actions button, .calm .budget-button, .calm .discovery-workspace button, .calm .explore-collection article button,
+.calm .publication-history button, .calm .publication-operator-session button, .calm .publication-login button, .calm .publication-creator > button {
+  border-radius: 999px; border-color: #9cbcae; background: #fffefb; padding: 9px 18px; font-size: 14px; color: #234e3d;
+}
+.calm .public-controls button[type='button'] { border: 0; background: none; padding: 9px 4px; color: var(--muted); text-decoration: underline; text-underline-offset: 3px; }
+.calm .sharing-actions button.sharing-grant { background: var(--accent); border-color: var(--accent); color: #fffef7; }
+.calm .explore-collection, .calm .discovery-workspace, .calm .budget-shell section, .calm .publication-panel { border-color: var(--hairline); border-radius: 20px; }
+.calm .explore-collection { max-width: 880px; background: #fbfaf6; }
+.calm .explore-totals { border: 0; border-radius: 14px; }
+.calm .explore-totals dt { font-size: 13px; }
+.calm .budget-intro { margin-top: 56px; }
+.budget-safety { margin-top: 12px; }
+.budget-safety > summary { cursor: pointer; padding: 6px 0; font-size: 15px; color: var(--accent); }
+.calm .budget-shell textarea, .calm .budget-shell input { border-radius: 12px; border-color: var(--hairline); }
+.calm .budget-actions button[aria-pressed='true'] { background: var(--accent); border-color: var(--accent); color: #fffef7; }
+.calm .budget-shell main > *:not(.budget-intro) { max-width: 880px; margin-left: auto; margin-right: auto; }
+.calm .budget-shell section { border-radius: 20px; }
+.calm .budget-table { font-size: 13px; }
+.calm .budget-card { max-width: 880px; margin-left: auto; margin-right: auto; border-color: var(--hairline); border-radius: 20px; }
+.calm .budget-shell main > .budget-actions, .calm .budget-shell main > .budget-note { max-width: 880px; margin-left: auto; margin-right: auto; }
+.calm .budget-field input { border-radius: 12px; border-color: var(--hairline); }

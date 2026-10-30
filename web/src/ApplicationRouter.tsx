@@ -13,5 +13,5 @@ export function ApplicationRouter({ pathname = window.location.pathname }: { pat
     const match = /^\/shared\/([A-Za-z0-9_-]{43})\/?$/.exec(pathname)
     return <PublicFindingPage publicId={match?.[1] ?? null} />
   }
-  return <Suspense fallback={<BootMark label="Opening the research desk…" />}><PrivateApp /></Suspense>
+  return <Suspense fallback={<BootMark label="Opening Polymath…" />}><PrivateApp /></Suspense>
 }

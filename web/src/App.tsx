@@ -19,18 +19,12 @@ import { ConvergeComposer } from './converge/ConvergeComposer'
 import { PublishingSection } from './publishing/PublishingSection'
 import { ConvergeWorkspace } from './converge/ConvergeWorkspace'
 import { HeroBridge } from './HeroBridge'
+import { PLACES, SiteHeader } from './shell/SiteChrome'
+import type { Place } from './shell/SiteChrome'
 import { CompletionToast, NotifyToggle, useNotifier, useRunCompletion } from './notify/notifier'
 import { createProgramme, FrontierApiError } from './frontier/client'
 
 type Mode = 'explore' | 'ask' | 'surprise'
-type Place = 'research' | 'library' | 'frontier' | 'about'
-
-const PLACES: { id: Place; label: string; path: string }[] = [
-  { id: 'research', label: 'Research', path: '/' },
-  { id: 'library', label: 'Your library', path: '/your-research' },
-  { id: 'frontier', label: 'Frontier', path: '/frontier' },
-  { id: 'about', label: 'About', path: '/about' },
-]
 
 function placeFor(pathname: string): Place {
   return PLACES.find((item) => item.path !== '/' && (pathname === item.path || pathname === `${item.path}/`))?.id ?? 'research'
@@ -249,15 +243,7 @@ export function App() {
     <NativeResearchProvider value={workspace.native}>
       <a className="skip-link" href="#workspace">Skip to main content</a>
       <div className="page-shell calm">
-        <header className="site-header">
-          <a className="brand" href="/" aria-label="Polymath home" onClick={(event) => { event.preventDefault(); go('research') }}>
-            <span className="brand-symbol" aria-hidden="true">p<span>·</span></span>
-            <span>polymath</span>
-          </a>
-          <nav className="place-navigation" aria-label="Polymath">
-            {PLACES.map((item) => <a key={item.id} href={item.path} aria-current={place === item.id ? 'page' : undefined} onClick={(event) => { event.preventDefault(); go(item.id) }}>{item.label}{item.id === 'frontier' && <span className="nav-badge">Experimental</span>}</a>)}
-          </nav>
-        </header>
+        <SiteHeader current={place} onNavigate={go} />
 
         <main id="workspace">
           {place === 'research' && <>

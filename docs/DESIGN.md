@@ -88,3 +88,29 @@ screenshots reviewed against the principles above. Backend behaviour unchanged.
 (home, bridge result, answer result, live run, library, Frontier with an open
 programme and its list, About, public library and budget desk, each at 1280
 and 390 px).
+
+## Calm pass 2 (30 October 2026)
+
+**Audit:**
+- The public library and operator desk still used the old shell: "Research
+  desk", a different header and footer, square boxes and a wall of notes. To a
+  visitor they felt like a different website.
+- The Share and Write panels, the Surprise and Explore collection views, and
+  the publishing screens kept boxy buttons and small grey text.
+
+**Changes:**
+- **One site chrome:** `SiteHeader` and `SiteFooter` are shared by every page,
+  so the public library, shared findings and the operator desk feel like the
+  same place.
+- **Public library:** a centred column, a shorter introduction, a one-line
+  note instead of a boxed notice, a rounded search field and a quiet reload link.
+- **Operator desk:** a plain-words introduction ("Nothing here spends until you
+  arm it"), with the full safety notes folded behind *How this desk keeps
+  spending safe*. The selected workspace is clearly marked, in 880 px cards.
+- **The remaining panels share one language:** pill buttons, soft notices
+  without hard borders, rounded cards and a 13–14 px floor for supporting text.
+- **Wording:** "research desk" is gone from visitor-facing text.
+
+**Verification:** 948 web tests pass; axe finds zero violations on 20 views at
+1280 and 390 px; screenshots were reviewed. The Surprise ladder and Explore
+collection views were restyled through shared rules but not seeded visually.
