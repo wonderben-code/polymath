@@ -23,6 +23,15 @@ Judges and visitors see every option:
   Meta. Polymath stays a free tool, not a business that pays for usage or
   manages billing.
 
+## Open decision (30 October 2026)
+
+The owner asked whether asking visitors for their Meta key is wise ("never
+share your key"). Proposed instead: **Run it yourself.** Polymath is free to
+use on the site, and for unlimited use people run their own copy with their
+own key, which never leaves their machine. This needs a short guide and a
+button on the site. It awaits the owner's answer. Until then, item 1 below is
+on hold; items 2 to 4 are unaffected.
+
 ## What gets built, in order
 
 1. **Bring your own Meta key** (before submission)
