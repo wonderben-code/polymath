@@ -43,7 +43,7 @@ the configured publisher. Everything is switched off by default.
 - **Calm, legible state.** One place shows: connected or not, the chosen
   level, what is being written, what is ready, and what is published.
 
-## Phase 1 (build now): approval levels and the publishing autopilot
+## Phase 1 (built 30 October 2026): approval levels and the publishing autopilot
 
 For the publisher, the person signed in to publish under the server's
 Zenodo connection. A **Publishing** section in Your library holds four
@@ -112,6 +112,21 @@ Why it is a separate decision: it changes who can publish through Polymath
 It also cannot be fully verified until the site is live on a public URL with
 Zenodo reachable.
 
+## Connecting Zenodo for the owner (Phase 1)
+
+On the server, alongside the existing publication settings, set:
+
+- `PUBLICATION_APPROVAL_ENABLED=true`
+- `OPERATOR_BOOTSTRAP_TOKEN`: a strong, server-only code
+- `PUBLICATION_PUBLISHER_ID` and `PUBLICATION_PUBLISHER_NAME`
+- `PUBLICATION_DESTINATIONS`, for example `["sandbox"]` first
+- `ZENODO_SANDBOX_TOKEN`: a personal token from sandbox.zenodo.org with
+  `deposit:write` and `deposit:actions`
+- `PUBLICATION_EXECUTION_ENABLED=true` for the API and the publication worker
+
+Then sign in under *Publish to Zenodo* in Your library and choose a level.
+Production adds `"production"` and `ZENODO_PRODUCTION_TOKEN`.
+
 ## Verification plan (Phase 1)
 
 - PostgreSQL tests:
@@ -125,3 +140,26 @@ Zenodo reachable.
   existing APIs in order and stopping at level 2.
 - Accessibility audit and screenshots.
 - Live Zenodo sandbox publication remains for key day and deployment.
+
+## Verification (30 October 2026)
+
+- **PostgreSQL:** 8 tests cover:
+  - every level, with level 2 stopping at ready
+  - level 3 approving, queuing and recording publication
+  - the production confirmation, and lowering the level never letting a
+    production-ready item through
+  - exact links only, settings validation, the full-text bar and the daily cap
+  - switching on never sweeping up earlier work
+  - routes needing a publisher session, and the plain status route
+- **0024 round trip:** passes, now excluding the 0028 tables.
+- **Web:** 4 tests cover:
+  - the ordinary routes called in order, with each exact result attached
+  - refusing a changed record
+  - the not-connected wording, with no operator request
+  - the four levels, the one-time confirmation, and a one-tap Publish
+- **Local server:** with publishing configured for the sandbox and execution
+  off, signing in, choosing *Draft for me*, entering an author and saving
+  worked; the preference was stored. Screenshots were reviewed at 1440 px and
+  390 px.
+- **Not yet done:** a live Zenodo sandbox publication, and live Meta writing
+  (key day and deployment).

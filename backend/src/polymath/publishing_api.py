@@ -126,7 +126,7 @@ def create_publishing_router(
         _, actor = publisher(request)
         return call(lambda: store.preferences(actor))
 
-    @router.put("/preferences")
+    @router.post("/preferences")
     def put_preferences(body: Preferences, request: Request) -> dict:
         _, actor = publisher(request, write=True)
         return call(

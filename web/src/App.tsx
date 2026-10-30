@@ -16,6 +16,7 @@ import { NativeResearchProvider } from './research/nativeContext'
 import { NativeResearchNotice } from './research/NativeResearchNotice'
 import { FrontierWorkspace } from './frontier/FrontierWorkspace'
 import { ConvergeComposer } from './converge/ConvergeComposer'
+import { PublishingSection } from './publishing/PublishingSection'
 import { ConvergeWorkspace } from './converge/ConvergeWorkspace'
 import { HeroBridge } from './HeroBridge'
 import { CompletionToast, NotifyToggle, useNotifier, useRunCompletion } from './notify/notifier'
@@ -338,6 +339,9 @@ export function App() {
             <header className="place-heading"><h1>Your library</h1><p>Everything you have saved in this browser: findings, the papers behind them, how they connect, and the literature you are watching.</p></header>
             <KnowledgeBrowser enabled={workspace.phase === 'ready'} onOpenRun={openRun} onOpenFinding={openFindingHere} refreshToken={`${workspace.activeRun?.result_id ?? ''}:${assessmentRefresh}:${discoveryRefresh}`} canInvestigate={workspace.canSubmit && !artifactBusy && !assessmentBusy} investigating={workspace.submitting} onInvestigateBridges={investigateBridges} csrfToken={workspace.csrfToken} onSessionExpired={workspace.invalidateSession} onAssessmentApplied={assessmentChanged} onAssessmentBusyChange={setAssessmentBusy} deeperFrom={deeperFrom} onDeeperShown={() => setDeeperFrom(null)} />
           </>}
+          <div hidden={place !== 'library'}>
+            <PublishingSection csrfToken={workspace.csrfToken} enabled={workspace.phase === 'ready'} native={workspace.native.submission ?? undefined} />
+          </div>
 
           {place === 'frontier' && <section className="composer frontier-composer" aria-labelledby="frontier-composer-title">
             <p className="composer-tagline">Frontier research · Experimental</p>
