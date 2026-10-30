@@ -17,8 +17,10 @@ import { NativeResearchNotice } from './research/NativeResearchNotice'
 import { FrontierWorkspace } from './frontier/FrontierWorkspace'
 import { ConvergeComposer } from './converge/ConvergeComposer'
 import { PublishingSection } from './publishing/PublishingSection'
+import { CALLBACK_PATH, YourZenodo } from './zenodo/YourZenodo'
 import { ConvergeWorkspace } from './converge/ConvergeWorkspace'
 import { HeroBridge } from './HeroBridge'
+import { WaysToUse } from './WaysToUse'
 import { PLACES, SiteHeader } from './shell/SiteChrome'
 import type { Place } from './shell/SiteChrome'
 import { CompletionToast, NotifyToggle, useNotifier, useRunCompletion } from './notify/notifier'
@@ -27,6 +29,7 @@ import { createProgramme, FrontierApiError } from './frontier/client'
 type Mode = 'explore' | 'ask' | 'surprise'
 
 function placeFor(pathname: string): Place {
+  if (pathname === CALLBACK_PATH) return 'library'
   return PLACES.find((item) => item.path !== '/' && (pathname === item.path || pathname === `${item.path}/`))?.id ?? 'research'
 }
 
@@ -96,7 +99,7 @@ function StatusLine({ label, value, state }: { label: string; value: string; sta
   )
 }
 
-function AboutPlace() {
+function AboutPlace({ remaining, daily }: { remaining?: number | null; daily?: number | null }) {
   return <div className="about-place">
     <header className="place-heading"><h1>How Polymath works</h1><p>Polymath is an AI research partner that reads across disciplines at once. It looks for places where distant fields describe the same hidden structure in different words, tries hard to break every connection it finds, and links each claim to the exact source passage.</p></header>
     <section className="about-section" aria-labelledby="intelligence-title">
@@ -117,6 +120,7 @@ function AboutPlace() {
         <div><dt>Model assessments</dt><dd>Confidence, novelty and objections are the model’s judgement, not independent verification. A limited search cannot prove a connection is new.</dd></div>
       </dl>
     </section>
+    <WaysToUse remaining={remaining} daily={daily} />
   </div>
 }
 
@@ -238,6 +242,7 @@ export function App() {
 
   const statusText = connection === 'loading' ? 'Checking the research service…' : artifactBusy ? 'A formalisation or writing task is running below.' : assessmentBusy ? 'An evidence reassessment is running in your library.' : researchReady ? 'Ready. Your investigation is saved to this browser.' : unavailable
   const recent = workspace.runs
+  const freeAccess = workspace.native.access?.audience === 'public_sessions' ? workspace.native.access : null
 
   return (
     <NativeResearchProvider value={workspace.native}>
@@ -289,6 +294,7 @@ export function App() {
                 {mode === 'surprise' && workspace.discoveryIntent && <details className="calm-details"><summary>About this run’s limits</summary><p>This approved discovery run can save up to {workspace.discoveryIntent.max_stages} evidence-backed bridges, with local depth up to {workspace.discoveryIntent.max_depth}. The model chooses whether to explore, deepen, connect saved stages or stop. The ceilings do not promise a discovery.</p></details>}
               </form>
               <p className="availability-note" id="research-availability" role="status">{statusText}</p>
+              <p className="ways-line">{freeAccess?.remaining_session_jobs_today != null && freeAccess.limits ? `Free · ${freeAccess.remaining_session_jobs_today} of ${freeAccess.limits.max_jobs_per_session_day} investigations left today · ` : ''}<a href="/about#ways" onClick={(event) => { event.preventDefault(); go('about'); window.setTimeout(() => document.getElementById('ways')?.scrollIntoView?.(), 50) }}>Ways to use Polymath</a></p>
               {notice && <p className="composer-alert" role="alert">{notice}</p>}
               {!(workspace.native.phase === 'disabled' && !workspace.native.access) && <NativeResearchNotice context={workspace.native} />}
             </section>
@@ -326,6 +332,7 @@ export function App() {
             <KnowledgeBrowser enabled={workspace.phase === 'ready'} onOpenRun={openRun} onOpenFinding={openFindingHere} refreshToken={`${workspace.activeRun?.result_id ?? ''}:${assessmentRefresh}:${discoveryRefresh}`} canInvestigate={workspace.canSubmit && !artifactBusy && !assessmentBusy} investigating={workspace.submitting} onInvestigateBridges={investigateBridges} csrfToken={workspace.csrfToken} onSessionExpired={workspace.invalidateSession} onAssessmentApplied={assessmentChanged} onAssessmentBusyChange={setAssessmentBusy} deeperFrom={deeperFrom} onDeeperShown={() => setDeeperFrom(null)} />
           </>}
           <div hidden={place !== 'library'}>
+            <YourZenodo csrfToken={workspace.csrfToken} enabled={workspace.phase === 'ready'} />
             <PublishingSection csrfToken={workspace.csrfToken} enabled={workspace.phase === 'ready'} native={workspace.native.submission ?? undefined} />
           </div>
 
@@ -347,7 +354,7 @@ export function App() {
             <FrontierWorkspace enabled={workspace.phase === 'ready'} csrfToken={workspace.csrfToken} canSubmit={workspace.canSubmit && !artifactBusy && !assessmentBusy} focusId={frontierFocus} onFinished={onFrontierFinished} notifyControl={<NotifyToggle notifier={notifier} />} submit={(frontierMode, goal, parents) => workspace.submit(frontierMode, goal, parents)} onOpenRun={openRun} onSessionExpired={workspace.invalidateSession} />
           </div>
 
-          {place === 'about' && <AboutPlace />}
+          {place === 'about' && <AboutPlace remaining={freeAccess?.remaining_session_jobs_today} daily={freeAccess?.limits?.max_jobs_per_session_day} />}
         </main>
         <CompletionToast notifier={notifier} />
         <footer className="site-footer">

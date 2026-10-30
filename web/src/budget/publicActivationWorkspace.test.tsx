@@ -69,11 +69,11 @@ describe('explicit public funding workspace', () => {
     fireEvent.change(screen.getByLabelText('Exact public funding deadline in UTC'), { target: { value: '2026-10-28T13:00:00Z' } })
     expect(screen.queryByRole('region', { name: 'Exact public funding approval' })).not.toBeInTheDocument(); expect(requests.posts()).toHaveLength(1)
   })
-  it('rejects a deadline beyond 24h before preview and makes no write', async () => {
+  it('rejects a deadline beyond the allowed window before preview and makes no write', async () => {
     const requests = server(); render(<PublicActivationWorkspace {...settings()} />); await ready()
     fireEvent.change(screen.getByLabelText('Exact saved readiness attestation'), { target: { value: READINESS_ID } }); fireEvent.change(screen.getByLabelText('Exact passed protocol receipt'), { target: { value: RECEIPT_ID } })
     for (const checkbox of within(screen.getByRole('group', { name: 'Fresh human review' })).getAllByRole('checkbox')) fireEvent.click(checkbox)
-    const body = publicPreviewRequest(); fireEvent.change(screen.getByLabelText('Reviewed public funding JSON'), { target: { value: JSON.stringify({ review: body.review, provider_account_attestation: body.provider_account_attestation, public_limits: body.public_limits }) } }); fireEvent.change(screen.getByLabelText('Exact public funding deadline in UTC'), { target: { value: '2026-10-30T00:00:00Z' } }); fireEvent.click(screen.getByRole('button', { name: 'Preview exact public funding' }))
+    const body = publicPreviewRequest(); fireEvent.change(screen.getByLabelText('Reviewed public funding JSON'), { target: { value: JSON.stringify({ review: body.review, provider_account_attestation: body.provider_account_attestation, public_limits: body.public_limits }) } }); fireEvent.change(screen.getByLabelText('Exact public funding deadline in UTC'), { target: { value: new Date(Date.now() + 15 * 86400000).toISOString() } }); fireEvent.click(screen.getByRole('button', { name: 'Preview exact public funding' }))
     await screen.findByRole('alert'); expect(requests.posts()).toHaveLength(0)
   })
   it('recovers a committed lost response through owned history without a second activation', async () => {

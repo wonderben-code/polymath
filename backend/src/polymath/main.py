@@ -64,6 +64,8 @@ from polymath.publication_runtime import (
 from polymath.publishing_api import create_publishing_router
 from polymath.run_api import create_run_router
 from polymath.sharing_api import create_sharing_router
+from polymath.visitor_zenodo import VisitorZenodoPolicy
+from polymath.visitor_zenodo_api import create_visitor_zenodo_router
 
 
 def migration_heads() -> set[str]:
@@ -162,7 +164,10 @@ def create_app(
             api_key=settings.model_api_key,
         )
     if public_policy is None:
-        public_policy = PublicResearchPolicy(enabled=settings.public_meta_research_enabled)
+        public_policy = PublicResearchPolicy(
+            enabled=settings.public_meta_research_enabled,
+            max_delegation_seconds=settings.public_max_delegation_seconds,
+        )
     if research_availability is None:
 
         def research_availability() -> bool:
@@ -300,6 +305,11 @@ def create_app(
         )
     )
     application.include_router(
+        create_visitor_zenodo_router(
+            application.state.engine, VisitorZenodoPolicy.from_settings(settings)
+        )
+    )
+    application.include_router(
         create_budget_admin_router(
             application.state.engine,
             readiness_policy=readiness_policy,
@@ -385,7 +395,8 @@ def create_app(
             or request.url.path.startswith("/api/v1/shares")
             or request.url.path.startswith("/shared/")
             or request.url.path.startswith("/api/v1/budget")
-            or request.url.path in ("/library", "/library/", "/shared", "/operator/budget")
+            or request.url.path
+            in ("/library", "/library/", "/shared", "/operator/budget", "/zenodo/callback")
         ):
             response.headers["Cache-Control"] = "no-store"
             response.headers["X-Content-Type-Options"] = "nosniff"

@@ -56,6 +56,9 @@ from polymath.meta_research_contracts import (
 PUBLIC_RESEARCH_PROTOCOL = "polymath-meta-public-research-v1"
 PUBLIC_ACCESS_PROTOCOL = "polymath-research-access-v1"
 MAX_PUBLIC_DELEGATION_SECONDS = 86400
+# A server may allow one explicit delegation to span a judging period; the
+# default stays one day and every grant still has an exact reviewed deadline.
+MAX_PUBLIC_DELEGATION_CEILING_SECONDS = 14 * 86400
 MAX_PUBLIC_MANIFEST_BYTES = 262144
 
 
@@ -146,7 +149,7 @@ class PublicResearchPolicy:
         if type(self.enabled) is not bool or not isinstance(self.resources, PublicResourceLimits):
             raise ValueError("invalid_public_research_policy")
         for name, ceiling in (
-            ("max_delegation_seconds", MAX_PUBLIC_DELEGATION_SECONDS),
+            ("max_delegation_seconds", MAX_PUBLIC_DELEGATION_CEILING_SECONDS),
             ("max_jobs_per_session_day", 12),
             ("max_jobs_per_day", 50),
             ("max_active_jobs", 5),

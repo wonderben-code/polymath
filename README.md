@@ -18,6 +18,7 @@ Created 27 October 2026. Every push to `main` is Bitcoin-timestamped through Ope
 - **Write and publish.** Plain summary or formal paper → approve → DOI on Zenodo.
 - **Surprise me**. Polymath picks the fields itself and goes hunting for convergences, and you watch it think.
 - **Converge (experimental).** Choose how many fields (up to 200) and, if you like, which ones. Polymath connects them, then finds what those connections share, level after level, drawn as an ensō with the deepest convergence at its centre.
+- **Your own Zenodo.** Any visitor can connect their own Zenodo account and publish a finding under their own name, after reviewing the exact record. Nobody can publish to anyone else's account.
 - **Publish to Zenodo, your way.** Choose once: ask every time, draft for me, publish to the sandbox, or publish for real with a one-time confirmation, an evidence bar and a daily cap. Every automatic step is recorded with the choice that allowed it.
 - **Go deeper.** Any saved connection can be combined with others to find the structure they share, and again from there.
 - **Frontier (experimental).** Give it an unsolved problem: it surveys the literature, names the gaps, searches other fields for solutions, breaks stubborn gaps into smaller steps and maps the path, with every node labelled by how well it is supported.
@@ -42,7 +43,8 @@ Created 27 October 2026. Every push to `main` is Bitcoin-timestamped through Ope
 | [docs/EXPLORE_COLLECTION.md](docs/EXPLORE_COLLECTION.md) | Model-ranked Explore collections, exact replay and remaining release verification |
 | [docs/PUBLIC_RESEARCH_ACCESS.md](docs/PUBLIC_RESEARCH_ACCESS.md) | Controlled visitor access, explicit durable owner funding, shared-ledger quotas and resource controls; disabled by default |
 | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Production stack, host comparison, launch, backups and quarantined restore |
-| [docs/PUBLISHING.md](docs/PUBLISHING.md) | Publishing levels, the publishing autopilot and the Connect Zenodo proposal |
+| [docs/PUBLISHING.md](docs/PUBLISHING.md) | Publishing levels and the publishing autopilot (site publisher) |
+| [docs/CONNECT_ZENODO.md](docs/CONNECT_ZENODO.md) | Connect Zenodo for every visitor: OAuth, encrypted tokens, exact records |
 | [docs/CONVERGE.md](docs/CONVERGE.md) | Experimental Converge mode: many fields, their connections and deeper levels |
 | [docs/FRONTIER.md](docs/FRONTIER.md) | Experimental Frontier mode specification (draft for review) |
 | [docs/EXPERIENCE.md](docs/EXPERIENCE.md) | End-to-end experience and visualisation plan |

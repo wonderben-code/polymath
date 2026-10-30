@@ -446,7 +446,10 @@ async def run(
             research_policy=research,
             readiness_policy=readiness,
             operator_policy=operator,
-            public_policy=PublicResearchPolicy(enabled=settings.public_meta_research_enabled),
+            public_policy=PublicResearchPolicy(
+                enabled=settings.public_meta_research_enabled,
+                max_delegation_seconds=settings.public_max_delegation_seconds,
+            ),
             openalex_api_key=settings.openalex_api_key,
         )
         if once:

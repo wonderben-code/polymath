@@ -119,6 +119,8 @@ export function PublishingSection({ csrfToken, enabled, native }: PublishingSect
     : `Connected to Zenodo ${destinations.length === 2 ? 'sandbox and production' : destinations[0] === 'production' ? 'production' : 'sandbox'} as ${status.publisher}.`
   const creator = draft?.creators[0] ?? { name: '', affiliation: null, orcid: null }
 
+  // Visitors publish through Your Zenodo; this is the site publisher's own path.
+  if (status && !status.configured) return null
   return (
     <section className="publishing" aria-labelledby={`${uid}-title`}>
       <h2 id={`${uid}-title`}>Publish to Zenodo</h2>

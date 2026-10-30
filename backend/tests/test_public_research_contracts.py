@@ -258,7 +258,7 @@ def test_resource_policy_hash_binds_body_sse_and_attempt_limits():
     [
         {"enabled": 1},
         {"max_delegation_seconds": True},
-        {"max_delegation_seconds": 86401},
+        {"max_delegation_seconds": 14 * 86400 + 1},
         {"max_jobs_per_day": 51},
         {"resources": {}},
     ],
@@ -483,3 +483,20 @@ def test_access_caps_are_canonical_strings_and_active_owner_rule_is_strict():
     ):
         with pytest.raises(ValidationError):
             PublicAccessLimits.model_validate(value | change)
+
+
+def test_a_server_may_allow_one_delegation_to_span_a_judging_period():
+    from polymath.config import Settings
+    from polymath.public_research_contracts import (
+        MAX_PUBLIC_DELEGATION_CEILING_SECONDS,
+        PublicResearchPolicy,
+    )
+
+    assert PublicResearchPolicy().max_delegation_seconds == MAX_PUBLIC_DELEGATION_SECONDS
+    two_weeks = PublicResearchPolicy(max_delegation_seconds=MAX_PUBLIC_DELEGATION_CEILING_SECONDS)
+    assert two_weeks.max_delegation_seconds == 14 * 86400
+    with pytest.raises(ValueError, match="invalid_public_research_policy"):
+        PublicResearchPolicy(max_delegation_seconds=MAX_PUBLIC_DELEGATION_CEILING_SECONDS + 1)
+    assert Settings(_env_file=None).public_max_delegation_seconds == 86400
+    with pytest.raises(ValueError):
+        Settings(_env_file=None, public_max_delegation_seconds=15 * 86400)

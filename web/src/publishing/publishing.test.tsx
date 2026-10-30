@@ -49,11 +49,12 @@ describe('publishing autopilot steps', () => {
 })
 
 describe('publishing section', () => {
-  it('says plainly when Zenodo is not connected and never asks about a publisher session', async () => {
+  it('stays out of visitors’ way where the site has no publisher, and never asks about a publisher session', async () => {
     const calls: string[] = []
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => { calls.push(String(input)); return Response.json({ configured: false, publisher: null, destinations: [], publishing_runs: false }) }))
-    render(<PublishingSection csrfToken={BROWSER_CSRF} enabled />)
-    expect(await screen.findByText('Zenodo is not connected on this server yet.')).toBeInTheDocument()
+    const { container } = render(<PublishingSection csrfToken={BROWSER_CSRF} enabled />)
+    await waitFor(() => expect(calls).toContain('/api/v1/publishing/status'))
+    await waitFor(() => expect(container).toBeEmptyDOMElement())
     expect(calls.some((url) => url.includes('/operator/'))).toBe(false)
   })
 
