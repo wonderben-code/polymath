@@ -23,27 +23,33 @@ Judges and visitors see every option:
   Meta. Polymath stays a free tool, not a business that pays for usage or
   manages billing.
 
-## Decision on own keys (30 October 2026)
+## Decision on own keys (30 October 2026): not built
 
-Everything happens on the website; Polymath is for scientists, not developers.
-"Run it yourself" was considered and rejected. The own-key option is
-**held only while your research runs**:
+Meta's Terms of Service (https://dev.meta.ai/legal/terms-of-service, read
+30 October 2026):
 
-- The key lives only in the visitor's browser tab memory (not saved to disk),
-  and is gone when the tab closes.
-- It is sent over HTTPS only when an investigation starts.
-- On the server it is held encrypted for that investigation alone and erased
-  when the investigation ends: succeeded, failed, cancelled or interrupted.
-  It is never persisted beyond that, never logged and never shown.
-- If an interrupted run is resumed, the browser supplies the key again.
-- The visitor sets a spending ceiling. Each investigation shows who pays and
-  confirms "your key has been erased" at the end.
-- The site's wording must stay accurate: "used only while your research runs,
-  then erased", never "we never store it".
+- Section 3.1: "You may not share, sell, or transfer your Meta Model API key
+  with any third party without our prior written permission."
+- Section 10.1 forbids using the Services "on behalf of any third party", or
+  providing access "through any model aggregator, API gateway, proxy, or
+  similar offering … except as expressly authorized by Meta in writing."
+
+A visitor giving Polymath their key, in any form, would breach these terms,
+so the own-key option is **removed**. The owner's free mode is compliant:
+Section 1 allows products in which "End Users … interface with the Services".
+
+Ways forward:
+
+1. Ask Meta through the hackathon (organisers, or Discord #office-hours) whether
+   an approved "connect your Meta account" option or written permission
+   exists. Build only what Meta approves.
+2. After judging: a few free runs per visitor per day on the owner's key, with
+   firm caps.
+3. Later: a sponsor or partner path.
 
 ## What gets built, in order
 
-1. **Bring your own Meta key** (before submission)
+1. ~~Bring your own Meta key~~ (removed; see the decision above. The notes below are kept for history)
    - Held only while your research runs (see the decision above): kept in
      browser memory, sent per investigation, held encrypted on the server for
      that run only, then erased.
