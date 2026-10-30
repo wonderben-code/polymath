@@ -23,6 +23,7 @@ from polymath import (  # noqa: F401
     public_resource_models,
     publication_job_models,
     publication_models,
+    publishing_models,
     readiness_models,
     scientific_context_models,
     sharing_models,
