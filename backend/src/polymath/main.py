@@ -162,7 +162,10 @@ def create_app(
             api_key=settings.model_api_key,
         )
     if public_policy is None:
-        public_policy = PublicResearchPolicy(enabled=settings.public_meta_research_enabled)
+        public_policy = PublicResearchPolicy(
+            enabled=settings.public_meta_research_enabled,
+            max_delegation_seconds=settings.public_max_delegation_seconds,
+        )
     if research_availability is None:
 
         def research_availability() -> bool:

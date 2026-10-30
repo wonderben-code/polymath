@@ -145,6 +145,7 @@ async def test_enabled_cli_composes_public_flag_without_changing_private_configu
             SimpleNamespace(
                 paid_meta_research_enabled=True,
                 public_meta_research_enabled=public_enabled,
+                public_max_delegation_seconds=14 * 86400,
                 openalex_api_key=None,
             ),
             once=True,
@@ -153,6 +154,8 @@ async def test_enabled_cli_composes_public_flag_without_changing_private_configu
         == 0
     )
     assert captured[0]["public_policy"].enabled is public_enabled
+    # The API and the worker must build the same policy, including its window.
+    assert captured[0]["public_policy"].max_delegation_seconds == 14 * 86400
     assert captured[0]["openalex_api_key"] is None
     assert captured[0]["research_policy"].paid_research_enabled is True
     assert captured[1] == "disposed"

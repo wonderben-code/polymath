@@ -29,7 +29,7 @@ The last full SC release `a95011a` passed 3,939 tests: 1,863 unit, 1,232 Postgre
 Meta intelligence chooses research directions and adapts to evidence. Application code enforces tool contracts, evidence integrity, durable execution, permissions, and budgets. Preferred model: Muse Spark; verify availability and capabilities, using another capable Meta model if needed. Do not silently use a non-Meta model. Changes to product scope or major architecture decisions should be explained to Eks before replacing this baseline.
 
 ## Agreed next build (30 Oct 2026)
-Polymath becomes a public tool: sign in or continue as a guest, free use or your own Meta key, and Connect Zenodo for every visitor. The order, decisions and owner actions are in `docs/PUBLIC_TOOL_PLAN.md`; read it before continuing that work.
+Polymath becomes a public tool: sign in or continue as a guest, free use (shown as limited) or run your own copy, and Connect Zenodo for every visitor. Visitors never paste Meta keys (Meta ToS 3.1); "Connect your Meta account" is shown only as a labelled vision. The order, decisions and owner actions are in `docs/PUBLIC_TOOL_PLAN.md`; read it before continuing that work.
 
 ## Fixed constraints
 - The intelligence runs on **Meta's AI** (Muse Spark via the Meta Model API). Creative, non-trivial use of Meta tooling is 25% of the judging.

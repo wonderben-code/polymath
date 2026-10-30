@@ -35,6 +35,9 @@ requires an explicit confirmation of the displayed manifest/hash; it sends no
 request merely because the page opened or a checkbox changed.
 
 Choose a maximum delegation lifetime of 24 hours for the first implementation.
+(30 October 2026: `PUBLIC_MAX_DELEGATION_SECONDS` lets a server allow up to 14 days so one
+reviewed delegation can cover a judging period. The default stays 24 hours, and the
+exact deadline, Stop, caps and every per-call check are unchanged.)
 The operator selects the actual deadline. It cannot exceed the proposal,
 fresh human review, provider-funding attestation or server maximum. Authentication
 must still be valid after lock waits and at issuance commit, but the public

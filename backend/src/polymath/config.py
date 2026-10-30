@@ -45,6 +45,8 @@ class Settings(BaseSettings):
     paid_meta_probe_enabled: bool = False
     paid_meta_research_enabled: bool = False
     public_meta_research_enabled: bool = False
+    # The longest single free-use delegation an operator may approve (1 h to 14 days).
+    public_max_delegation_seconds: int = Field(default=86400, ge=3600, le=14 * 86400)
     public_resource_limits_enabled: bool = False
     native_budget_account_id: str | None = Field(
         default=None, min_length=1, max_length=120, pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,119}$"
