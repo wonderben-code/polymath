@@ -61,6 +61,7 @@ from polymath.publication_runtime import (
     configured_publication_policies,
     publication_execution_available,
 )
+from polymath.publishing_api import create_publishing_router
 from polymath.run_api import create_run_router
 from polymath.sharing_api import create_sharing_router
 
@@ -363,6 +364,14 @@ def create_app(
             policy=publication_policy,
             operator_policy=operator_policy,
             availability=publication_availability,
+        )
+    )
+    application.include_router(
+        create_publishing_router(
+            application.state.engine,
+            publication_policy=publication_policy,
+            operator_policy=operator_policy,
+            execution_available=publication_availability,
         )
     )
 
