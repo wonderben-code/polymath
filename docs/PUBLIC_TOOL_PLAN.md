@@ -16,12 +16,10 @@ Judges and visitors see every option:
 ## Business model (owner's strategy)
 
 - **During the hackathon and judging:** free use is on, funded by the owner's
-  Meta credits within per-visitor caps. The own-key option is visible and
-  working.
-- **After judging:** free use is switched off, or reduced to a few free runs.
-  People bring their own Meta key, so the relationship is between each user and
-  Meta. Polymath stays a free tool, not a business that pays for usage or
-  manages billing.
+  Meta credits within per-visitor caps, and shown as limited.
+- **After judging:** free use is reduced to a few runs, or switched off. Heavy
+  users run their own copy, or connect their Meta account if Meta offers it.
+  Polymath stays a free tool, not a billing business.
 
 ## Decision on own keys (30 October 2026): not built
 
@@ -49,25 +47,16 @@ Ways forward:
 
 ## What gets built, in order
 
-1. ~~Bring your own Meta key~~ (removed; see the decision above. The notes below are kept for history)
-   - Held only while your research runs (see the decision above): kept in
-     browser memory, sent per investigation, held encrypted on the server for
-     that run only, then erased.
-   - The key is checked before first use with a free, no-completion request.
-   - The visitor sets their **own spending ceiling**; each run on their key is
-     reserved and settled against it, just like the owner's ledger.
-   - Every run says who pays: "Running on your Meta key" or "Running on
-     Polymath's free allowance".
-   - Technical shape:
-     - A third research audience, `own_key`, beside `operator_browser` and
-       `public_sessions`.
-     - A per-visitor budget account with its own manifest and approval
-       (the visitor is the authority for their own money).
-     - The worker claims own-key runs and builds each call's client from that
-       visitor's decrypted key. The model client is already created per call.
-   - Constraint: the owner's existing paid path must stay byte-for-byte
-     unchanged and regression-tested, because key day depends on it. No paid
-     call is made before the owner authorises paid testing.
+1. **Ways to use Polymath** (before submission)
+   - Free, right here: "a few investigations a day", showing how many are left
+     today.
+   - Run your own Polymath: an open-source guide; the visitor's Meta key never
+     leaves their own server. Fully compliant.
+   - Connect your Meta account: a clearly labelled "Coming soon · proposed Meta
+     integration" card explaining how a Meta sign-in would let people use their
+     own allowance without Polymath ever seeing, storing or sharing a key. It is
+     not a working-looking button, because Meta does not offer this publicly.
+   - Where: an About page section, plus a quiet line under the composer.
 
 2. **Free-use switch** (before submission)
    - Already exists: an owner-funded public delegation with per-visitor caps,
