@@ -19,16 +19,14 @@ from urllib.parse import quote, urlsplit, urlunsplit
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-META_COMPLETIONS_URL = "https://api.meta.ai/v1/chat/completions"
-READINESS_PROTOCOL = "polymath-meta-readiness-v1"
 # Per-call ceilings a reviewed proposal may choose. The first live runs showed a
 # three-bridge Explore needs far more than 20 calls, and real cost was about a
-# cent a call, so the ceilings rose from 20 calls and 90,000 characters.
-MAX_MODEL_CALLS = 80
-MAX_CONTEXT_CHARACTERS = 240_000
-# Proposals of at most this many calls keep the original fixed action budgets, so
-# every profile derived before the change is byte-identical.
-LEGACY_CALL_CEILING = 20
+# cent a call, so the ceilings rose from 20 calls and 90,000 characters. The
+# controllers enforce the same ceilings (polymath.native_ceilings).
+from polymath.native_ceilings import MAX_CONTEXT_CHARACTERS, MAX_MODEL_CALLS
+
+META_COMPLETIONS_URL = "https://api.meta.ai/v1/chat/completions"
+READINESS_PROTOCOL = "polymath-meta-readiness-v1"
 MAX_HARD_CAP_MICRODOLLARS = 150_000_000
 MAX_READINESS_BYTES = 65_536
 MAX_PRICE_RATE = 9_000_000_000_000_000

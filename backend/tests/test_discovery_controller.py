@@ -689,16 +689,19 @@ def test_stage_assessment_rejects_fabricated_calibration_and_bad_text(changes):
         StageAssessment.model_validate_json(json.dumps(assessment_data() | changes))
 
 
-def test_assessment_score_is_required_and_ordinary_limits_remain_sixteen():
+def test_assessment_score_is_required_and_limits_share_the_native_ceiling():
+    from polymath.native_ceilings import MAX_MODEL_CALLS
+
     value = assessment_data()
     del value["confidence_score"]
     with pytest.raises(ValidationError):
         StageAssessment.model_validate_json(json.dumps(value))
+    assert ResearchLimits(max_actions=20).max_actions == 20
     with pytest.raises(ValueError):
-        ResearchLimits(max_actions=20)
+        ResearchLimits(max_actions=MAX_MODEL_CALLS + 1)
     assert DiscoveryLimits(max_actions=20, model_timeout_seconds=90).max_actions == 20
     with pytest.raises(ValueError):
-        DiscoveryLimits(max_actions=21)
+        DiscoveryLimits(max_model_calls=MAX_MODEL_CALLS, max_actions=MAX_MODEL_CALLS + 1)
 
 
 def test_ordinary_bridge_schema_does_not_gain_ladder_fields():

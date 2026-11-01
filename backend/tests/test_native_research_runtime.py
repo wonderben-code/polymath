@@ -74,10 +74,10 @@ def test_native_extension_still_rejects_unbounded_or_wrong_deadlines(timeout):
 
 def test_native_extension_retains_existing_action_output_and_context_bounds():
     for changes in (
-        {"max_model_calls": 21},
-        {"max_actions": 17},
+        {"max_model_calls": 81},
+        {"max_actions": 81},
         {"max_output_tokens": 4097},
-        {"max_context_characters": 90001},
+        {"max_context_characters": 240001},
         {"tool_timeout_seconds": 61},
     ):
         with pytest.raises(ValueError):
@@ -258,4 +258,4 @@ def test_optional_native_ladder_uses_its_pinned_twenty_action_profile_only():
     assert runtime_profile.limits.model_timeout_seconds == 75
     assert ResearchLimits().max_actions == 12
     with pytest.raises(ValueError):
-        ResearchLimits(max_actions=20)
+        ResearchLimits(max_actions=81)

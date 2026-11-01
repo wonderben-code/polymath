@@ -30,7 +30,6 @@ from polymath.meta_probe_contracts import (
     _assess_reported_meta_usage,
 )
 from polymath.meta_readiness_contracts import (
-    LEGACY_CALL_CEILING,
     MAX_CONTEXT_CHARACTERS,
     MAX_MODEL_CALLS,
     META_COMPLETIONS_URL,
@@ -42,6 +41,7 @@ from polymath.meta_readiness_contracts import (
     proposal_sha256,
     quote_proposal,
 )
+from polymath.native_ceilings import LEGACY_CALL_CEILING
 from polymath.scientific_context_contracts import (
     ArtifactScientificContextIntent,
     AskOverviewIntent,

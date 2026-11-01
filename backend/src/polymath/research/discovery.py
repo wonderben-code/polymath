@@ -15,6 +15,7 @@ from polymath.discovery_contracts import (
     StageContext,
     StageParentFinding,
 )
+from polymath.native_ceilings import MAX_MODEL_CALLS
 from polymath.research.controller import ResearchLimits
 from polymath.research.models import (
     FieldSelection,
@@ -118,15 +119,15 @@ class DiscoveryLimits(ResearchLimits):
     def __post_init__(self):
         ResearchLimits(
             max_model_calls=self.max_model_calls,
-            max_actions=min(self.max_actions, 16),
+            max_actions=self.max_actions,
             max_repairs=self.max_repairs,
             max_output_tokens=self.max_output_tokens,
             max_context_characters=self.max_context_characters,
             tool_timeout_seconds=self.tool_timeout_seconds,
             model_timeout_seconds=min(self.model_timeout_seconds, 60.0),
         )
-        if type(self.max_actions) is not int or not 1 <= self.max_actions <= 20:
-            raise ValueError("discovery max_actions must be between1 and20")
+        if type(self.max_actions) is not int or not 1 <= self.max_actions <= MAX_MODEL_CALLS:
+            raise ValueError(f"discovery max_actions must be between 1 and {MAX_MODEL_CALLS}")
         if type(self.model_timeout_seconds) not in (int, float) or (
             not math.isfinite(self.model_timeout_seconds)
             or not 0.001 <= self.model_timeout_seconds <= 90
