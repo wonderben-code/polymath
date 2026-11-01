@@ -1,5 +1,7 @@
 # Switching on Sign in and Connect Zenodo
 
+Handing this to Claude in Chrome? Use the fuller [HANDOVER_SIGN_IN.md](HANDOVER_SIGN_IN.md).
+
 Polymath already has the features **Sign in** (with ORCID, GitHub or Google) and
 **Connect Zenodo** (each visitor publishes to their own Zenodo account). They
 belong to every visitor, not to the owner.
