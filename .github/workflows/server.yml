@@ -1,0 +1,50 @@
+# Run one named maintenance task on the production server over SSH.
+# Only repository collaborators can start it. It does nothing until the owner
+# adds two repository secrets: SERVER_SSH_KEY and SERVER_HOST_KEY.
+# Remove SERVER_SSH_KEY to revoke. Output is redacted on the server.
+name: Server task
+
+on:
+  workflow_dispatch:
+    inputs:
+      task:
+        description: "Task"
+        required: true
+        default: status
+        type: choice
+        options: [status, update, restart, logs, diagnose, account, holds, settle-hold, sql, rotate-operator-code, shell]
+      argument:
+        description: "Argument (service name, run id, SQL, or a command line)"
+        required: false
+        default: ""
+        type: string
+
+concurrency:
+  group: server-task
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SERVER_HOST: ${{ vars.SERVER_HOST || '167.172.85.85' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare SSH
+        env:
+          SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
+          HOST_KEY: ${{ secrets.SERVER_HOST_KEY }}
+        run: |
+          if [ -z "$SSH_KEY" ]; then echo "SERVER_SSH_KEY is not set; nothing to do."; exit 1; fi
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/server && chmod 600 ~/.ssh/server
+          if [ -n "$HOST_KEY" ]; then printf '%s\n' "$HOST_KEY" > ~/.ssh/known_hosts; else ssh-keyscan -t ed25519 "$SERVER_HOST" > ~/.ssh/known_hosts 2>/dev/null; fi
+      - name: Run the task
+        env:
+          TASK: ${{ inputs.task }}
+          ARGUMENT: ${{ inputs.argument }}
+        run: |
+          echo "== $TASK ${ARGUMENT:+(with an argument)}"
+          ssh -i ~/.ssh/server -o BatchMode=yes -o ConnectTimeout=20 "root@$SERVER_HOST" \
+            "bash -s -- $(printf '%q ' "$TASK" "$ARGUMENT")" < scripts/server-task.sh
