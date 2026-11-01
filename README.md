@@ -51,6 +51,7 @@ Created 27 October 2026. Every push to `main` is Bitcoin-timestamped through Ope
 | [docs/PUBLISHING.md](docs/PUBLISHING.md) | Publishing levels and the publishing autopilot (site publisher) |
 | [docs/ACCOUNTS.md](docs/ACCOUNTS.md) | Sign in with ORCID, GitHub or Google, or continue as a guest |
 | [docs/CONNECT_ZENODO.md](docs/CONNECT_ZENODO.md) | Connect Zenodo for every visitor: OAuth, encrypted tokens, exact records |
+| [docs/SIGN_IN_SETUP.md](docs/SIGN_IN_SETUP.md) | Switching on Sign in and Connect Zenodo: register the free apps, then one helper command |
 | [docs/CONVERGE.md](docs/CONVERGE.md) | Experimental Converge mode: many fields, their connections and deeper levels |
 | [docs/FRONTIER.md](docs/FRONTIER.md) | Experimental Frontier mode specification (draft for review) |
 | [docs/EXPERIENCE.md](docs/EXPERIENCE.md) | End-to-end experience and visualisation plan |

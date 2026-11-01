@@ -131,7 +131,7 @@ Owner:
 - [x] Host and domain: askpolymath.com on DigitalOcean (deployed 1 Nov)
 - [ ] Paid testing authorised in your own words, with the cap (USD 120 suggested)
 - [ ] OpenAlex logo file (openalex.org blocks automated downloads; Claude in Chrome can fetch it)
-- [ ] Optional: OAuth apps for sign-in (ORCID, GitHub, Google) and Zenodo (sandbox, production)
+- [ ] Sign-in and Zenodo apps registered and saved with `scripts/connect-sign-in.sh` ([SIGN_IN_SETUP.md](SIGN_IN_SETUP.md))
 - [ ] Demo video recorded and uploaded
 - [ ] Submission form completed and confirmation saved
 
