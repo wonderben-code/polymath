@@ -284,3 +284,34 @@ def test_api_requires_a_session_and_csrf_and_never_echoes_input(database):
         assert (
             client.post(f"/api/v1/studio/{identifier}/resume", headers=headers).status_code == 409
         )
+
+
+def test_an_interrupted_inspiration_run_is_cancelled_so_the_next_stage_can_start(database):
+    # Live, a stage run stopped at its limit stayed "interrupted", kept counting
+    # as the visitor's one active investigation, and the Studio waited "until live
+    # research is available" for good. Absorbing it now cancels it (the owner's
+    # own free cancellation) and the step is retried.
+    from test_frontier import assign
+
+    from polymath.jobs import JobRepository
+
+    token, store = owner(database), StudioStore(database)
+    programme = store.create(token, BRIEF, SPECS)
+    attach(
+        store,
+        token,
+        programme,
+        step(store, token, programme),
+        answer_run(database, token, gaps=["Quiet lift?", "Light blades?"]),
+    )
+    inspire = step(store, token, programme)
+    jobs = JobRepository(database)
+    run = jobs.create(mode="explore", goal="Synthetic inspiration")
+    assign(database, run.id, token)
+    lease = jobs.claim_next("synthetic-studio", lease_seconds=300)
+    jobs.interrupt(lease)
+    assert jobs.get(run.id).status == "interrupted"
+    attach(store, token, programme, inspire, run.id)
+    retried = step(store, token, programme)
+    assert jobs.get(run.id).status == "cancelled"
+    assert retried["step_id"] == inspire["step_id"] and retried["state"] == "due"

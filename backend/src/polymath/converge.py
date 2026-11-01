@@ -26,7 +26,7 @@ from polymath.access_models import ResearchRunAccess
 from polymath.budget_models import BudgetReservation
 from polymath.converge_fields import CATALOGUE, clean, match, normalise, spread
 from polymath.converge_models import ConvergeProgramme, ConvergeStep
-from polymath.frontier import TERMINAL_RUN_STATUSES, _clip, _saved_finding
+from polymath.frontier import TERMINAL_RUN_STATUSES, _clip, _saved_finding, release_interrupted_run
 from polymath.lineage_models import ResearchRunParent
 from polymath.models import ResearchRun
 from polymath.research.models import BridgeFinding
@@ -450,6 +450,7 @@ class ConvergeStore:
             run = session.get(ResearchRun, step.run_id)
             if run is None or run.status not in TERMINAL_RUN_STATUSES:
                 continue
+            release_interrupted_run(session, run)
             result_id, finding = (
                 _saved_finding(session, run) if run.status == "succeeded" else (None, None)
             )
