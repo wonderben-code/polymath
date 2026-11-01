@@ -20,6 +20,7 @@ import { PublishingSection } from './publishing/PublishingSection'
 import { CALLBACK_PATH, YourZenodo } from './zenodo/YourZenodo'
 import { AccountControl } from './account/AccountControl'
 import { Story } from './Story'
+import { Credits } from './Credits'
 import { ConvergeWorkspace } from './converge/ConvergeWorkspace'
 import { HeroBridge } from './HeroBridge'
 import { WaysToUse } from './WaysToUse'
@@ -139,8 +140,9 @@ function AboutPlace({ remaining, daily }: { remaining?: number | null; daily?: n
     <WaysToUse remaining={remaining} daily={daily} />
     <section className="about-section about-credits" aria-labelledby="credits-title">
       <h2 id="credits-title">Made for the Meta hackathon</h2>
-      <p>Built for the Meta Global AI Developer Hackathon with Cerebral Valley. The research intelligence is Meta’s Muse Spark. Polymath reads from arXiv and OpenAlex, publishes to Zenodo (operated by CERN), and is open source.</p>
+      <p>Created for the Meta Global AI Developer Hackathon with Cerebral Valley. The research intelligence is Meta’s Muse Spark. Polymath is open source.</p>
     </section>
+    <Credits />
   </div>
 }
 
@@ -348,7 +350,7 @@ export function App() {
               {workspace.nextCursor && <button className="history-more" type="button" disabled={workspace.loadingMore} onClick={() => void workspace.loadMore()}>{workspace.loadingMore ? 'Loading more…' : 'Load earlier investigations'}</button>}
               {workspace.error && <p className="history-error" role="alert">{workspace.error}</p>}
             </section>}
-            {!converging && !workspace.activeRun && !selectedFindingId && !workspace.selectedId && <Story onFrontier={() => go('frontier')} />}
+            {!converging && !workspace.activeRun && !selectedFindingId && !workspace.selectedId && <><Story onFrontier={() => go('frontier')} /><Credits /></>}
           </>}
 
           {place === 'library' && <>

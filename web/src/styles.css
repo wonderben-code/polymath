@@ -506,3 +506,13 @@ body { background: var(--paper); color: var(--ink); font-size: 16px; line-height
 .story-uses a { color: var(--ink); }
 .story-why { margin: 0; color: var(--muted); font-size: 15px; line-height: 1.75; }
 @media (max-width: 760px) { .story-steps { grid-template-columns: 1fr 1fr; } .story-columns { grid-template-columns: 1fr; gap: 28px; } }
+
+/* Credits: who Polymath is built with and where its knowledge comes from. */
+.credits { max-width: 760px; margin: 48px auto 24px; padding-top: 28px; border-top: 1px solid var(--line); display: grid; grid-template-columns: 1.3fr 1fr 1fr; gap: 28px; }
+.credits h2 { margin: 0 0 12px; font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.credits ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.credits li { display: grid; gap: 2px; }
+.credits strong { font-size: 16px; font-weight: 600; color: var(--ink); letter-spacing: -.1px; }
+.credits strong::before { content: ''; display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 8px; vertical-align: 2px; background: var(--spectrum); }
+.credits span { font-size: 13px; color: var(--muted); }
+@media (max-width: 760px) { .credits { grid-template-columns: 1fr; gap: 22px; } }
