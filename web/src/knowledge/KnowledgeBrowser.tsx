@@ -11,6 +11,8 @@ import { DeeperDiagram } from '../deeper/DeeperDiagram'
 import './knowledge.css'
 
 const FINDINGS_SHOWN = 8
+// Prism: each field on the map has its own spectrum colour.
+const MAP_SPECTRUM = ['var(--violet)', 'var(--blue)', 'var(--teal)', 'var(--green)', 'var(--amber)', 'var(--rose)']
 
 export interface KnowledgeBrowserProps {
   enabled: boolean
@@ -91,9 +93,9 @@ function MapView({ data, selected, onSelect, onOpenRun, onOpenSource, onOpenFind
               ? <path key={edge.id} d={`M ${start.x} ${start.y} Q ${start.x - 100} ${(start.y + end.y) / 2} ${end.x} ${end.y}`} fill="none" className={`knowledge-edge edge-${edge.kind}`} />
               : <line key={edge.id} x1={start.x} y1={start.y} x2={end.x} y2={end.y} className={`knowledge-edge edge-${edge.kind}`} />
           })}</g>
-          {visible.map((node) => {
+          {visible.map((node, index) => {
             const point = locations.get(node.id)!
-            return <g key={node.id} role="button" tabIndex={0} aria-label={`Select map node: ${kinds[node.kind]} ${node.label}`} aria-pressed={selected === node.id} onClick={() => onSelect(node.id)} onKeyDown={(event) => keyboard(event, node.id)} className={`knowledge-map-node node-${node.kind}`} transform={`translate(${point.x} ${point.y})`}>
+            return <g key={node.id} role="button" tabIndex={0} aria-label={`Select map node: ${kinds[node.kind]} ${node.label}`} aria-pressed={selected === node.id} onClick={() => onSelect(node.id)} onKeyDown={(event) => keyboard(event, node.id)} className={`knowledge-map-node node-${node.kind}`} style={node.kind === 'field' ? { ['--field' as string]: MAP_SPECTRUM[index % MAP_SPECTRUM.length] } : undefined} transform={`translate(${point.x} ${point.y})`}>
               <title>{node.label}</title><circle r="12" /><text x="20" y="4">{shortLabel(node.label)}</text>
             </g>
           })}

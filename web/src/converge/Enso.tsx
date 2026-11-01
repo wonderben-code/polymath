@@ -69,6 +69,9 @@ function label(step: ConvergeStep, fields: ConvergeProgramme['fields']): string 
   return `Level ${step.level} convergence across ${names.length} fields: ${step.title ?? 'still being tested'}. ${state}.`
 }
 
+// Prism: each field takes a spectrum colour, shown once it connects.
+const SPECTRUM = ['var(--violet)', 'var(--blue)', 'var(--teal)', 'var(--green)', 'var(--amber)', 'var(--rose)']
+
 export function Enso({ programme, selectedId, onSelect, seeking }: { programme: ConvergeProgramme; selectedId: string | null; onSelect: (id: string) => void; seeking: boolean }) {
   const count = programme.fields.length
   const placed = placeSteps(programme)
@@ -81,7 +84,7 @@ export function Enso({ programme, selectedId, onSelect, seeking }: { programme: 
     <div className={`enso${count > 12 ? ' is-crowded' : ''}`} role="group" aria-label={`A circle of ${count} fields with ${placed.filter((item) => item.step.status === 'held').length} connections that hold`}>
       <svg viewBox={`0 0 ${SIZE} ${SIZE}`} className={seeking ? 'is-seeking' : undefined}>
         <defs>
-          <radialGradient id="enso-glow"><stop offset="0%" stopColor="#e8c45a" stopOpacity=".55" /><stop offset="100%" stopColor="#e8c45a" stopOpacity="0" /></radialGradient>
+          <radialGradient id="enso-glow"><stop offset="0%" stopColor="#b86e00" stopOpacity=".55" /><stop offset="100%" stopColor="#b86e00" stopOpacity="0" /></radialGradient>
         </defs>
         <g aria-hidden="true">
           <circle className="enso-brush" cx={CENTER} cy={CENTER} r={RIM + 14} pathLength={1} />
@@ -96,7 +99,7 @@ export function Enso({ programme, selectedId, onSelect, seeking }: { programme: 
             const showLabel = count <= LABEL_LIMIT || highlighted.has(index)
             const outward = onRim(index, count, RIM + 36)
             const anchor = Math.abs(Math.cos(angle)) < 0.2 ? 'middle' : Math.cos(angle) > 0 ? 'start' : 'end'
-            return <g key={index} className={`enso-field origin-${field.origin}${field.touched ? ' is-touched' : ''}${highlighted.has(index) ? ' is-highlighted' : ''}`} style={{ animationDelay: `${Math.min(index * 18, 1600)}ms` }}>
+            return <g key={index} className={`enso-field origin-${field.origin}${field.touched ? ' is-touched' : ''}${highlighted.has(index) ? ' is-highlighted' : ''}`} style={{ animationDelay: `${Math.min(index * 18, 1600)}ms`, ['--field' as string]: SPECTRUM[index % SPECTRUM.length] }}>
               <circle cx={point.x} cy={point.y} r={star} />
               {showLabel && <text x={outward.x} y={outward.y + 4} textAnchor={anchor}>{field.name}</text>}
             </g>

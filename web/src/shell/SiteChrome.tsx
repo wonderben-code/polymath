@@ -30,7 +30,7 @@ export function SiteFooter({ children }: { children?: ReactNode }) {
   return (
     <footer className="site-footer">
       {children}
-      <span className="footer-links"><a href="/library">Public library</a><a href="/operator/budget">Operator desk</a><span>A personal project by Ekram Alam</span></span>
+      <span className="footer-links"><a href="/library">Public library</a><a href="/operator/budget">Operator desk</a><span>Built for the Meta Global AI Developer Hackathon with Cerebral Valley · Intelligence by Meta Muse Spark · A project by Ekram Alam</span></span>
     </footer>
   )
 }

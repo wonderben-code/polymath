@@ -63,7 +63,7 @@ export function FrontierMap({ nodes, selectedId, onSelect }: { nodes: FrontierNo
     <div className="frontier-map" role="region" aria-label="Frontier map" tabIndex={0}>
       <svg viewBox={`0 0 ${width} ${height}`} width={width} height={height} role="group" aria-label={`Frontier map with ${nodes.length} nodes`}>
         <defs>
-          <linearGradient id="frontier-edge" x1="0" x2="1"><stop offset="0%" stopColor="#9fb3a6" /><stop offset="100%" stopColor="#c7cfc2" /></linearGradient>
+          <linearGradient id="frontier-edge" x1="0" x2="1"><stop offset="0%" stopColor="#a9a59c" /><stop offset="100%" stopColor="#d6d2c9" /></linearGradient>
         </defs>
         {placed.map(({ node, x, y }) => {
           const parent = node.parent_id ? byId.get(node.parent_id) : undefined
