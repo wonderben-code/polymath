@@ -33,6 +33,8 @@ export interface StudioWorkspaceProps {
   enabled: boolean
   csrfToken: string | null
   canSubmit: boolean
+  /** Live research is switched off or not funded for this browser right now. */
+  paused?: boolean
   submit: (mode: 'ask' | 'explore', goal: string, parentResultIds: readonly string[]) => Promise<OwnedRun | undefined>
   onOpenRun: (id: string) => void
   onSolveGap: (gap: string) => void
@@ -92,7 +94,7 @@ function stageState(programme: StudioProgramme, stage: StudioStage): 'done' | 'r
   return 'waiting'
 }
 
-export function StudioWorkspace({ enabled, csrfToken, canSubmit, submit, onOpenRun, onSolveGap, onSessionExpired }: StudioWorkspaceProps) {
+export function StudioWorkspace({ enabled, csrfToken, canSubmit, paused = false, submit, onOpenRun, onSolveGap, onSessionExpired }: StudioWorkspaceProps) {
   const [brief, setBrief] = useState('')
   const [specs, setSpecs] = useState<string[]>([])
   const [spec, setSpec] = useState('')
@@ -285,6 +287,7 @@ export function StudioWorkspace({ enabled, csrfToken, canSubmit, submit, onOpenR
             <div className="prompt-footer"><button className="primary-button" type="submit" disabled={!ready || !brief.trim() || creating}>{creating ? 'Starting…' : 'Invent it'}</button></div>
           </div>
         </form>
+        {paused && <p className="studio-paused" role="status">Live inventing is paused right now. You can still write a brief, try the examples and see how it works; Studio starts inventing as soon as live research is switched on.</p>}
         <div className="studio-starters" aria-label="Try an example">
           {STARTERS.map((item) => <button key={item.label} type="button" onClick={() => { setBrief(item.brief); setSpecs(item.specs); setWildness(item.wildness); setSpec('') }}>{item.label}</button>)}
         </div>
