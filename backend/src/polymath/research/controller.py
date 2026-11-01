@@ -51,6 +51,7 @@ from polymath.research.models import (
     Usage,
     VerifiedQuote,
 )
+from polymath.research.reply import action_json
 
 if TYPE_CHECKING:
     from polymath.discovery_contracts import DiscoveryIntent, DiscoveryOutcome, DiscoverySink
@@ -925,7 +926,7 @@ class ResearchController:
                     else ask_adapter
                     if ask_adapter is not None
                     else ACTION_ADAPTER
-                ).validate_json(reply.content)
+                ).validate_json(action_json(reply.content))
                 if ask_adapter is not None:
                     from polymath.research.ask_overview import normalise_ask_overview_conclusion
 

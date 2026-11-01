@@ -32,6 +32,7 @@ from polymath.math_checks import FiniteCheckResult, FiniteConjecture, validate_c
 from polymath.research.controller import SAFE_MODEL_ERRORS
 from polymath.research.meta import ModelError, ModelReply, ResearchModel
 from polymath.research.models import ResearchEvent, Usage
+from polymath.research.reply import action_json
 
 
 class CheckTool(Protocol):
@@ -343,7 +344,7 @@ class ArtifactController:
                 return result("failed", error_code="model_invalid_response")
             messages.append({"role": "assistant", "content": reply.content})
             try:
-                action = ARTIFACT_ACTION_ADAPTER.validate_json(reply.content)
+                action = ARTIFACT_ACTION_ADAPTER.validate_json(action_json(reply.content))
             except ValidationError:
                 if await reject("invalid_artifact_action_schema"):
                     return result("failed", error_code="repair_limit")

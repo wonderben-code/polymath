@@ -53,6 +53,7 @@ from polymath.research.models import (
     Usage,
     _validate_public_text,
 )
+from polymath.research.reply import action_json
 
 if TYPE_CHECKING:
     from polymath.scientific_context_contracts import AskReassessmentOverviewIntent
@@ -416,7 +417,7 @@ class AssessmentController:
             try:
                 action = (
                     overview_adapter if overview_adapter is not None else ASSESSMENT_ACTION_ADAPTER
-                ).validate_json(reply.content)
+                ).validate_json(action_json(reply.content))
                 _validate_public_text(action.model_dump(mode="json"))
                 if overview_adapter is not None:
                     from polymath.assessment_overview import normalise_ask_reassessment_conclusion
