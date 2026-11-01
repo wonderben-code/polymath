@@ -71,6 +71,21 @@ describe('ephemeral same-browser native research context', () => {
     expect(props.onBrowserExpired).toHaveBeenCalledTimes(browser ? 1 : 0)
     expect(requests.fetch.mock.calls.every(([, options]) => options?.method === 'GET')).toBe(true)
   })
+  it('tries the access read again after a failed reply instead of waiting for a reload', async () => {
+    vi.useFakeTimers()
+    let reject = true
+    const requests = server((path) => reject && path === '/api/v1/research/access' ? Response.json({ detail: 'unavailable' }, { status: 503 }) : undefined)
+    const { result } = renderHook(() => useNativeResearchContext(settings()))
+    await flush(); await flush()
+    expect(result.current.phase).toBe('error'); expect(result.current.canSubmit).toBe(false)
+    const failedReads = requests.fetch.mock.calls.length
+    reject = false
+    await act(async () => { await vi.advanceTimersByTimeAsync(10000) })
+    await flush(); await flush()
+    expect(requests.fetch.mock.calls.length).toBeGreaterThan(failedReads)
+    expect(result.current.phase).toBe('ready'); expect(result.current.canSubmit).toBe(true)
+    expect(requests.fetch.mock.calls.every(([, options]) => options?.method === 'GET')).toBe(true)
+  })
   it('invalidates native authority after a rejected submission without expiring the owning browser or retrying a write', async () => {
     const requests = server(), props = settings(), { result } = renderHook(() => useNativeResearchContext(props))
     await waitFor(() => expect(result.current.phase).toBe('ready'))

@@ -9,6 +9,8 @@ import './frontier.css'
 const ACTION_LABELS = { survey: 'Surveying the literature', transfer: 'Searching other fields for a solution', decompose: 'Breaking the gap into smaller steps', attempt: 'Attempting a step', converge: 'Looking for a connection between the bridges' } as const
 const LEGEND: FrontierNodeStatus[] = ['supported', 'transferred', 'derived', 'conjectured', 'open', 'pending', 'skipped']
 const POLL_MS = 6000
+const RETRY_HOLD_MS = 30000
+const MAX_HOLDS = 10
 
 export interface FrontierWorkspaceProps {
   enabled: boolean
@@ -41,8 +43,13 @@ export function FrontierWorkspace({ enabled, csrfToken, canSubmit, focusId, subm
   const [status, setStatus] = useState('')
   const [error, setError] = useState('')
   const busy = useRef(false)
+  const holds = useRef(0)
+  const holdUntil = useRef(0)
   const canSubmitRef = useRef(canSubmit)
   canSubmitRef.current = canSubmit
+  // The tick awaits the server before submitting, so it must call the latest submit, not the one captured when the tick began (that one may predate the previous run finishing).
+  const submitRef = useRef(submit)
+  submitRef.current = submit
 
   const fail = useCallback((failure: unknown) => {
     const code = failure instanceof FrontierApiError ? failure.code : 'unavailable'
@@ -74,9 +81,16 @@ export function FrontierWorkspace({ enabled, csrfToken, canSubmit, focusId, subm
       setProgramme(updated)
       if (next.state === 'due') {
         if (!canSubmitRef.current) { setStatus('Waiting until live research is available for this browser.'); return }
+        if (Date.now() < holdUntil.current) return
         setStatus(`${ACTION_LABELS[next.action]}…`)
-        const run = await submit(next.mode, next.goal, next.parent_result_ids, { collection: false })
-        if (!run) { setRunning(false); setStatus('The next step could not be queued. Live research may be unavailable; the programme is saved.'); return }
+        const run = await submitRef.current(next.mode, next.goal, next.parent_result_ids, { collection: false })
+        if (!run) {
+          // A step that could not be queued (a blip, a restart, a rate limit) is tried again shortly; the programme stops only when it keeps failing.
+          holds.current += 1; holdUntil.current = Date.now() + RETRY_HOLD_MS
+          if (holds.current >= MAX_HOLDS) { setRunning(false); setStatus('The next step could not be queued. Live research may be unavailable; the programme is saved.'); return }
+          setStatus('The next step could not be queued yet. Trying again shortly; the programme is saved.'); return
+        }
+        holds.current = 0
         setProgramme(await attachFrontierRun(programme.id, csrfToken, { node_id: next.node_id, action: next.action, run_id: run.id }))
       } else if (next.state === 'waiting') {
         setStatus('An investigation for this programme is in progress.')
@@ -89,7 +103,7 @@ export function FrontierWorkspace({ enabled, csrfToken, canSubmit, focusId, subm
       setRunning(false)
       fail(failure)
     } finally { busy.current = false }
-  }, [programme, csrfToken, submit, fail, onFinished, refreshList])
+  }, [programme, csrfToken, fail, onFinished, refreshList])
 
   // The timer reads the latest step through a ref: each step updates the
   // programme, and restarting the effect on that change would loop.

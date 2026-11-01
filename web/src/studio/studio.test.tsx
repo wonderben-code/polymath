@@ -102,6 +102,19 @@ describe('Innovation Studio', () => {
     expect(screen.getByRole('list', { name: 'Progress' })).toBeVisible()
   })
 
+  it('keeps the programme running and tries again when a stage cannot be started', async () => {
+    server({
+      '/api/v1/studio': programme(),
+      [`/api/v1/studio/${PROGRAMME}/next`]: { next: { state: 'due', step_id: BRIEF_STEP, stage: 'brief', mode: 'ask', goal: 'Design brief: …', parent_result_ids: [] }, programme: programme() },
+    })
+    const props = workspace({ submit: vi.fn(async () => undefined) as never })
+    await userEvent.type(screen.getByLabelText('What would you like to create?'), BRIEF)
+    await userEvent.click(screen.getByRole('button', { name: 'Invent it' }))
+    await waitFor(() => expect(props.submit).toHaveBeenCalledTimes(1))
+    expect(await screen.findByText('The next stage could not be started yet. Trying again shortly; your brief is saved.')).toBeVisible()
+    expect(screen.queryByRole('button', { name: 'Continue inventing' })).toBeNull()
+  })
+
   it('presents the invention, its sources, engineering and stress test, and every way to take it further', async () => {
     server({ '/api/v1/studio': { programmes: [designed] }, [`/api/v1/studio/${PROGRAMME}`]: designed })
     const props = workspace()
