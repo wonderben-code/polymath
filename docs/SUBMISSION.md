@@ -131,9 +131,15 @@ Owner:
 - [x] Host and domain: askpolymath.com on DigitalOcean (deployed 1 Nov)
 - [ ] Paid testing authorised in your own words, with the cap (USD 120 suggested)
 - [ ] OpenAlex logo file (openalex.org blocks automated downloads; Claude in Chrome can fetch it)
-- [ ] Sign-in and Zenodo apps registered and saved with `scripts/connect-sign-in.sh` ([SIGN_IN_SETUP.md](SIGN_IN_SETUP.md))
+- [x] Sign-in (ORCID, GitHub, Google) and Zenodo (production, sandbox) apps registered, saved and tested live on 1 Nov ([SIGN_IN_SETUP.md](SIGN_IN_SETUP.md))
+- [x] Privacy policy and terms live; Google sign-in app published (In production)
 - [ ] Demo video recorded and uploaded
 - [ ] Submission form completed and confirmation saved
+
+Known external windows: Zenodo scheduled maintenance Tue 3 Nov, 08:00 to 08:15 UTC
+(Connect and publishing briefly unavailable). ORCID sign-in uses the free Public
+API, which is for non-commercial use; a commercial Polymath would need ORCID
+membership.
 
 Engineering (evidence in [PROGRESS.md](PROGRESS.md)):
 
