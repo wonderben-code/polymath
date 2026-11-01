@@ -18,7 +18,7 @@ function Legal({ eyebrow, title, lede, children }: { eyebrow: string; title: str
       {children}
       <footer className="legal-contact">
         <h2>Questions</h2>
-        <p>Write to <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>, or open an issue at <a href={ISSUES} rel="noreferrer">github.com/wonderben-code/polymath</a>. Polymath is a project by Ekram Alam.</p>
+        <p>Write to <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>, or open an issue at <a href={ISSUES} rel="noreferrer">github.com/wonderben-code/polymath</a>. Polymath was designed and built by Ekram Alam.</p>
         <p className="legal-also">{title === 'Privacy policy' ? <a href="/terms">Terms of use</a> : <a href="/privacy">Privacy policy</a>} · <a href="/">Back to Polymath</a></p>
       </footer>
     </article>
