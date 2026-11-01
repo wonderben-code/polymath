@@ -44,9 +44,14 @@ def _operation(method: str, path: str, has_owner: bool) -> tuple[str | None, boo
             return "control", True, False
         # A Studio picture is a paid model submission, paced with the other
         # submissions rather than rationed as a free write.
-        if path.startswith("/api/v1/runs") or STUDIO_IMAGES.fullmatch(path) is not None or path in (
-            "/api/v1/artifacts/jobs",
-            "/api/v1/assessments/jobs",
+        if (
+            path.startswith("/api/v1/runs")
+            or STUDIO_IMAGES.fullmatch(path) is not None
+            or path
+            in (
+                "/api/v1/artifacts/jobs",
+                "/api/v1/assessments/jobs",
+            )
         ):
             return "submit", True, False
         if path.startswith("/api/v1/knowledge/watches"):
