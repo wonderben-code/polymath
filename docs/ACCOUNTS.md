@@ -51,6 +51,10 @@ A provider appears only when both of its credentials are set.
 
 ## Owner action after deployment
 
+Step by step, with a one-command helper that saves the secrets on the server:
+[SIGN_IN_SETUP.md](SIGN_IN_SETUP.md).
+
+
 Register a free OAuth app with each provider you want to offer, using the
 redirect URI `https://<your-domain>/account/callback`:
 

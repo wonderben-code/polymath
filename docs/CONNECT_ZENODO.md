@@ -89,6 +89,11 @@ A destination appears only when both of its OAuth credentials are set.
 
 ## Owner action after deployment
 
+Step by step, with a one-command helper (`scripts/connect-sign-in.sh`) that
+saves the secrets, switches the feature on and starts the worker:
+[SIGN_IN_SETUP.md](SIGN_IN_SETUP.md).
+
+
 Register a free OAuth application on each site:
 - https://sandbox.zenodo.org/account/settings/applications/
 - https://zenodo.org/account/settings/applications/

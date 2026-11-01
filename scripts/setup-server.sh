@@ -60,7 +60,10 @@ else
 fi
 
 echo "→ Building and starting (about 10 minutes the first time)"
-docker compose -f deploy/compose.production.yaml --env-file "$ENV" up -d --build --wait
+PROFILES=()
+# Connect Zenodo needs its worker once it is switched on (scripts/connect-sign-in.sh).
+grep -q '^VISITOR_ZENODO_ENABLED=true' "$ENV" && PROFILES=(--profile zenodo)
+docker compose -f deploy/compose.production.yaml --env-file "$ENV" "${PROFILES[@]}" up -d --build --wait
 
 echo
 if curl -fsS --max-time 20 "https://$DOMAIN/api/v1/readiness" >/dev/null 2>&1; then
@@ -70,3 +73,4 @@ else
 fi
 echo "Your operator code (keep it private) is shown by:  grep OPERATOR_BOOTSTRAP_TOKEN $DIR/$ENV"
 echo "Every spending and publishing switch is off until you turn it on."
+echo "To switch on Sign in and Connect Zenodo for visitors:  bash $DIR/scripts/connect-sign-in.sh"
