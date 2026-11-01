@@ -4,7 +4,7 @@
 
 > Science's hardest open problems increasingly sit *between* disciplines. A result in condensed-matter physics may already answer a question in biology, and neither community knows. The literature is too large for any human to span, but not for an intelligent agent.
 
-Built by Ekram Alam, as a solo personal project, for the **Meta Global AI Developer Hackathon 2026** (Indie Developer track). Polymath is **Meta × the world’s science**: Meta’s frontier Muse models (Muse Spark today, configurable to any stronger Meta model) bring the reasoning and creativity; Polymath brings the literature engine, evidence checks, memory and budget control. Native access and billing remain unverified, and paid execution is disabled.
+Created, designed and built by Ekram Alam, as a solo personal project, for the **Meta Global AI Developer Hackathon 2026** (Indie Developer track). Polymath is **Meta × the world’s science**: Meta’s frontier Muse models (Muse Spark today, configurable to any stronger Meta model) bring the reasoning and creativity; Polymath brings the literature engine, evidence checks, memory and budget control. Native access and billing remain unverified, and paid execution is disabled.
 
 **Live at https://askpolymath.com** (deployed 1 November 2026; live Meta research switches on after the key and spending limit are in place).
 
