@@ -276,7 +276,8 @@ export function App() {
   }
 
   const statusText = connection === 'loading' ? 'Checking the research service…' : artifactBusy ? 'A formalisation or writing task is running below.' : assessmentBusy ? 'An evidence reassessment is running in your library.' : researchReady ? 'Ready. Your investigation is saved to this browser.' : unavailable
-  const recent = workspace.runs
+  // A running investigation's live status replaces the list's stale copy.
+  const recent = workspace.runs.map((run) => workspace.activeRun && run.id === workspace.activeRun.id && run.status !== workspace.activeRun.status ? { ...run, status: workspace.activeRun.status } : run)
   const freeAccess = workspace.native.access?.audience === 'public_sessions' ? workspace.native.access : null
 
   return (

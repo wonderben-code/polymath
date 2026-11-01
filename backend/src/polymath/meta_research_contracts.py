@@ -30,6 +30,9 @@ from polymath.meta_probe_contracts import (
     _assess_reported_meta_usage,
 )
 from polymath.meta_readiness_contracts import (
+    LEGACY_CALL_CEILING,
+    MAX_CONTEXT_CHARACTERS,
+    MAX_MODEL_CALLS,
     META_COMPLETIONS_URL,
     Digest,
     EvidenceReferences,
@@ -120,7 +123,7 @@ def research_policy_sha256(policy: NativeResearchPolicy) -> str:
 
 class MetaResearchMessage(_ReadinessModel):
     role: Literal["system", "user", "assistant"]
-    content: Annotated[str, Field(min_length=1, max_length=90000)]
+    content: Annotated[str, Field(min_length=1, max_length=MAX_CONTEXT_CHARACTERS)]
 
     @field_validator("content")
     @classmethod
@@ -149,7 +152,7 @@ class MetaResearchPayload(_ReadinessModel):
 
     @model_validator(mode="after")
     def context_bound(self):
-        if sum(len(message.content) for message in self.messages) > 90000:
+        if sum(len(message.content) for message in self.messages) > MAX_CONTEXT_CHARACTERS:
             raise ValueError("native research context limit exceeded")
         return self
 
@@ -208,16 +211,23 @@ def research_step_sha256(
     )
 
 
+def action_budget(max_model_calls: int, legacy: int) -> int:
+    """Actions a controller may take: the original fixed budget for proposals of
+    at most 20 calls (so every historical profile derives identically), and one
+    action per call for larger reviewed budgets."""
+    return legacy if max_model_calls <= LEGACY_CALL_CEILING else max_model_calls
+
+
 class NativeTaskProfile(_ReadinessModel):
     task_kind: TaskKind
     controller_protocol: Annotated[str, Field(max_length=80)]
     controller_sha256: Digest
     request_protocol: Literal["polymath-meta-research-request-v1"] = REQUEST_PROTOCOL
-    max_model_calls: Annotated[int, Field(ge=1, le=20)]
-    max_actions: Annotated[int, Field(ge=1, le=16)]
+    max_model_calls: Annotated[int, Field(ge=1, le=MAX_MODEL_CALLS)]
+    max_actions: Annotated[int, Field(ge=1, le=MAX_MODEL_CALLS)]
     max_repairs: Literal[2] = 2
     max_output_tokens: Annotated[int, Field(ge=16, le=4096)]
-    max_context_characters: Annotated[int, Field(ge=1000, le=90000)]
+    max_context_characters: Annotated[int, Field(ge=1000, le=MAX_CONTEXT_CHARACTERS)]
     request_timeout_seconds: Annotated[float, Field(ge=0.001, le=60)]
     model_timeout_seconds: Annotated[float, Field(ge=30.001, le=90)]
     tool_timeout_seconds: Literal[5.0, 20.0]
@@ -229,8 +239,8 @@ class NativeTaskProfile(_ReadinessModel):
         artifact = self.task_kind in ("formalise", "write_summary", "write_paper")
         if (
             re.fullmatch(r"[a-z0-9-]{1,80}", self.controller_protocol) is None
-            or self.max_model_calls > (20 if research else 12)
-            or self.max_actions != (16 if research else 12)
+            or self.max_model_calls > (MAX_MODEL_CALLS if research else 12)
+            or self.max_actions != action_budget(self.max_model_calls, 16 if research else 12)
             or self.tool_timeout_seconds != (5.0 if artifact else 20.0)
             or self.model_timeout_seconds != self.request_timeout_seconds + 30.0
         ):
@@ -247,11 +257,11 @@ class NativeExploreCollectionProfile(_ReadinessModel):
     )
     controller_sha256: Digest
     request_protocol: Literal["polymath-meta-research-request-v1"] = REQUEST_PROTOCOL
-    max_model_calls: Annotated[int, Field(ge=1, le=20)]
-    max_actions: Literal[16] = 16
+    max_model_calls: Annotated[int, Field(ge=1, le=MAX_MODEL_CALLS)]
+    max_actions: Annotated[int, Field(ge=16, le=MAX_MODEL_CALLS)] = 16
     max_repairs: Literal[2] = 2
     max_output_tokens: Annotated[int, Field(ge=16, le=4096)]
-    max_context_characters: Annotated[int, Field(ge=1000, le=90000)]
+    max_context_characters: Annotated[int, Field(ge=1000, le=MAX_CONTEXT_CHARACTERS)]
     request_timeout_seconds: Annotated[float, Field(ge=0.001, le=60)]
     model_timeout_seconds: Annotated[float, Field(ge=30.001, le=90)]
     tool_timeout_seconds: Literal[20.0] = 20.0
@@ -702,11 +712,11 @@ class NativeDiscoveryProfile(_ReadinessModel):
     controller_protocol: Annotated[str, Field(pattern=r"^[a-z0-9-]{1,80}$")]
     controller_sha256: Digest
     request_protocol: Literal["polymath-meta-research-request-v1"] = REQUEST_PROTOCOL
-    max_model_calls: Annotated[int, Field(ge=1, le=20)]
-    max_actions: Literal[20] = 20
+    max_model_calls: Annotated[int, Field(ge=1, le=MAX_MODEL_CALLS)]
+    max_actions: Annotated[int, Field(ge=20, le=MAX_MODEL_CALLS)] = 20
     max_repairs: Literal[2] = 2
     max_output_tokens: Annotated[int, Field(ge=16, le=4096)]
-    max_context_characters: Annotated[int, Field(ge=1000, le=90000)]
+    max_context_characters: Annotated[int, Field(ge=1000, le=MAX_CONTEXT_CHARACTERS)]
     request_timeout_seconds: Annotated[float, Field(ge=0.001, le=60)]
     model_timeout_seconds: Annotated[float, Field(ge=30.001, le=90)]
     tool_timeout_seconds: Literal[20.0] = 20.0
@@ -764,7 +774,8 @@ def derive_discovery_ladder_profile(
     profile = NativeDiscoveryProfile(
         controller_protocol="polymath-meta-discovery-controller-v1",
         controller_sha256=discovery_controller_sha256(),
-        max_model_calls=min(limits.max_model_calls, 20),
+        max_model_calls=min(limits.max_model_calls, MAX_MODEL_CALLS),
+        max_actions=action_budget(min(limits.max_model_calls, MAX_MODEL_CALLS), 20),
         max_output_tokens=limits.max_output_tokens,
         max_context_characters=limits.max_context_characters,
         request_timeout_seconds=limits.request_timeout_seconds,
@@ -789,8 +800,11 @@ def derive_task_profiles(proposal: MetaReadinessProposal) -> tuple[NativeTaskPro
             task_kind=kind,
             controller_protocol=CONTROLLER_PROTOCOLS[kind],
             controller_sha256=controller_protocol_sha256(kind),
-            max_model_calls=min(limits.max_model_calls, 20 if research else 12),
-            max_actions=16 if research else 12,
+            max_model_calls=min(limits.max_model_calls, MAX_MODEL_CALLS if research else 12),
+            max_actions=action_budget(
+                min(limits.max_model_calls, MAX_MODEL_CALLS if research else 12),
+                16 if research else 12,
+            ),
             max_output_tokens=limits.max_output_tokens,
             max_context_characters=limits.max_context_characters,
             request_timeout_seconds=limits.request_timeout_seconds,
