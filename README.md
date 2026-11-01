@@ -6,6 +6,8 @@
 
 Built by Ekram Alam, as a solo personal project, for the **Meta Global AI Developer Hackathon 2026** (Indie Developer track). Meta Muse Spark is the target research intelligence; another verified capable Meta frontier model is allowed. Native access and billing remain unverified, and paid execution is disabled.
 
+**Live at https://askpolymath.com** (deployed 1 November 2026; live Meta research switches on after the key and spending limit are in place).
+
 Created 27 October 2026. Every push to `main` is Bitcoin-timestamped through OpenTimestamps (`.github/workflows/bitcoin-timestamp.yml`, proofs in `timestamps/`).
 
 ## What it lets you do
@@ -69,7 +71,7 @@ The implementation baseline is recorded in `docs/ARCHITECTURE.md`. The target is
 - [ ] B–C live gates: native model/billing verification, execution activation and scientific Explore evaluation
 - [x] D3 local contract/client: documented v1 API and standalone HTTP client, verified with real loopback worker journeys
 - [x] D2 implementation: funded visitor sessions, persistent resource controls and public browser/API/client access; local mock verification
-- [ ] D live gates: public URL, hosted access/operations and deployed external-client verification
+- [ ] D live gates: public URL ✓ (https://askpolymath.com, 1 Nov), hosted access/operations and deployed external-client verification
 - [x] E1–E3: Ask and Surprise Me implementation, verified through synthetic worker/browser journeys
 - [ ] E4: live Meta/source evaluation and scientific quality review
 - [x] F3–F5 implementation: higher-level research, scheduled collection and cited reassessment
