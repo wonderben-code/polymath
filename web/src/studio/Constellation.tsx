@@ -7,12 +7,28 @@ const CENTRE = [230, 160] as const
 
 function clip(value: string, max: number): string { return value.length > max ? `${value.slice(0, max - 1).trimEnd()}…` : value }
 
+/** Up to two short lines that fit inside the invention's circle. */
+export function wrapLabel(value: string, width = 12): string[] {
+  const words = value.split(/\s+/).filter(Boolean)
+  const lines: string[] = []
+  let line = ''
+  for (const word of words) {
+    const next = line ? `${line} ${word}` : word
+    if (next.length <= width || !line) { line = next; continue }
+    lines.push(line); line = word
+    if (lines.length === 2) break
+  }
+  if (lines.length < 2 && line) lines.push(line)
+  const used = lines.join(' ').length
+  return lines.slice(0, 2).map((item, index) => clip(index === 1 && used < value.replace(/\s+/g, ' ').trim().length ? `${item}…` : item, width + 1))
+}
+
 /** Where the ideas came from: each inspiration in its field's colour, flowing into the invention. */
 export function Constellation({ programme }: { programme: StudioProgramme }) {
   const reading = readStudio(programme)
   const inspirations = programme.steps.filter((step) => step.stage === 'inspire').slice(0, SLOTS.length)
   const designing = programme.steps.some((step) => step.stage === 'design' && step.status !== 'done')
-  const label = reading.design ? clip(reading.design.title, 30) : designing ? 'Inventing…' : 'Your invention'
+  const label = wrapLabel(reading.design ? reading.design.title.split(':')[0] : designing ? 'Inventing…' : 'Your invention')
   const described = inspirations.map((step) => step.finding?.kind === 'bridge' ? `${step.finding.field_left}: ${step.finding.title}` : null).filter(Boolean).join('; ')
   return (
     <figure className="constellation">
@@ -39,9 +55,9 @@ export function Constellation({ programme }: { programme: StudioProgramme }) {
           )
         })}
         <circle cx={CENTRE[0]} cy={CENTRE[1]} r={36} className={`constellation-core${reading.design ? ' is-made' : ''}`} />
-        <text x={CENTRE[0]} y={CENTRE[1] + 4} textAnchor="middle" className="constellation-core-label">{clip(label, 18)}</text>
+        <text x={CENTRE[0]} y={CENTRE[1] + (label.length > 1 ? -3 : 4)} textAnchor="middle" className="constellation-core-label">{label.map((line, index) => <tspan key={index} x={CENTRE[0]} dy={index ? 14 : 0}>{line}</tspan>)}</text>
       </svg>
-      <figcaption>Where the ideas came from</figcaption>
+      <figcaption>Idea map</figcaption>
     </figure>
   )
 }

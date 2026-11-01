@@ -153,3 +153,15 @@ describe('Innovation Studio', () => {
     expect(screen.queryByRole('button', { name: 'Download the design dossier' })).toBeNull()
   })
 })
+
+describe('constellation label', () => {
+  it('fits a long name into two short lines', async () => {
+    const { wrapLabel } = await import('./Constellation')
+    expect(wrapLabel('Hush')).toEqual(['Hush'])
+    expect(wrapLabel('Your invention')).toEqual(['Your', 'invention'])
+    const lines = wrapLabel('A self-repairing electrode that learns from damage')
+    expect(lines).toHaveLength(2)
+    expect(lines.every((line) => line.length <= 13)).toBe(true)
+    expect(lines[1].endsWith('…')).toBe(true)
+  })
+})
