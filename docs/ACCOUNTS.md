@@ -65,7 +65,11 @@ redirect URI `https://<your-domain>/account/callback`:
 
 ## What is verified
 
-All verification is local. Twelve PostgreSQL tests use fake providers:
+**Live on askpolymath.com (1 November 2026):** real sign-in with ORCID, GitHub
+and Google completed and returned signed in, sign-out worked, and the Google app
+is published (In production) with privacy and terms links. No redirect errors.
+
+Locally, twelve PostgreSQL tests use fake providers:
 - the first sign-in carries guest work over;
 - another device opens the same work and gets its own guest work back on
   sign-out;

@@ -113,7 +113,11 @@ levels and autopilot in Your library are unchanged.
 
 ## What is verified
 
-All verification so far is local, against mock HTTP. That covers the token
+**Live on askpolymath.com (1 November 2026):** Connect completed against both
+zenodo.org and sandbox.zenodo.org (scopes `deposit:write deposit:actions`), with
+the worker healthy. Nothing has been published live yet.
+
+Locally, against mock HTTP. That covers the token
 exchange, encryption binding, ownership, the full publish path, the
 unknown-outcome handling and Disconnect. Native Zenodo OAuth and a live sandbox
 publication still need to be tested after deployment.
