@@ -18,10 +18,11 @@ def test_schema_is_generated_once_per_object_and_copied(monkeypatch):
         calls.append(self)
         return original(self, *args, **kwargs)
 
+    expected = ACTION_ADAPTER.json_schema()
     monkeypatch.setattr(TypeAdapter, "json_schema", counting)
     first = schema_cache.json_schema(ACTION_ADAPTER)
     second = schema_cache.json_schema(ACTION_ADAPTER)
-    assert first == second == ACTION_ADAPTER.json_schema()
+    assert first == second == expected
     assert first is not second
     first["mutated"] = True
     assert "mutated" not in schema_cache.json_schema(ACTION_ADAPTER)
