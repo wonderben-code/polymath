@@ -259,7 +259,7 @@ def test_resource_policy_hash_binds_body_sse_and_attempt_limits():
         {"enabled": 1},
         {"max_delegation_seconds": True},
         {"max_delegation_seconds": 14 * 86400 + 1},
-        {"max_jobs_per_day": 51},
+        {"max_jobs_per_day": 301},
         {"resources": {}},
     ],
 )

@@ -460,6 +460,8 @@ async def run(
             public_policy=PublicResearchPolicy(
                 enabled=settings.public_meta_research_enabled,
                 max_delegation_seconds=settings.public_max_delegation_seconds,
+                max_jobs_per_session_day=settings.public_max_jobs_per_session_day,
+                max_jobs_per_day=settings.public_max_jobs_per_day,
             ),
             openalex_api_key=settings.openalex_api_key,
         )

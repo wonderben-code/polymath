@@ -67,14 +67,17 @@ settings values.
 ## Part B: switch on live Meta research, Studio pictures and free use (paid)
 
 **Start Part B only after Eks has said, in his own words, that paid testing may
-begin, and with what cap.** The plan below uses USD 120. Nothing spends money
-until step B3.
+begin, and with what cap.** The plan below uses a USD 145 total cap (USD 5 below
+the USD 150 credits as a margin) and USD 75 a day. Nothing spends money until
+step B3.
 
 ### Six facts that shape the plan
 
-1. **Some account limits are permanent.** The hard cap (USD 120), the daily cap
-   (USD 30) and the concurrent-call limit (4) are fixed by the first saved
-   proposal and can never change. Enter them carefully in B2.
+1. **Some account limits are permanent.** The hard cap (USD 145), the daily cap
+   (USD 75) and the concurrent-call limit (4) are fixed by the first saved
+   proposal and can never change. They're set for the whole journey (testing,
+   demo and judging). Visitor limits sit underneath them and can be changed
+   later. Enter them carefully in B2.
 2. **A private operator research window lasts about 20 minutes.** Signing in
    again ends it. Use it only for the quick first check (B5). For real testing,
    including Studio, use **visitor funding (B6)**, which lasts up to 14 days and
@@ -145,7 +148,7 @@ OPERATOR_ACTOR_ID=owner
 OPERATOR_DISPLAY_NAME=Owner
 BUDGET_READINESS_ENABLED=true
 BUDGET_ADMIN_ACTOR_IDS=["owner"]
-BUDGET_MAX_HARD_CAP_MICRODOLLARS=120000000
+BUDGET_MAX_HARD_CAP_MICRODOLLARS=145000000
 NATIVE_BUDGET_ACCOUNT_ID=polymath-meta
 PAID_META_PROBE_ENABLED=false
 PAID_META_RESEARCH_ENABLED=false
@@ -212,7 +215,7 @@ Eks hashes the billing screenshot on his Mac with `shasum -a 256 <file>`.
     {"url": "https://dev.meta.ai/docs/reasoning", "content_sha256": "<same hash as above>"}
   ],
   "application_limits": {"max_output_tokens": 4096, "max_context_characters": 90000, "max_model_calls": 12, "request_timeout_seconds": 60},
-  "account": {"account_id": "polymath-meta", "hard_cap_microdollars": 120000000, "daily_cap_microdollars": 30000000, "run_cap_microdollars": 5000000, "max_in_flight": 4},
+  "account": {"account_id": "polymath-meta", "hard_cap_microdollars": 145000000, "daily_cap_microdollars": 75000000, "run_cap_microdollars": 5000000, "max_in_flight": 4},
   "native_status": "not_run",
   "execution_available": false
 }
@@ -226,7 +229,7 @@ Eks hashes the billing screenshot on his Mac with `shasum -a 256 <file>`.
      few cents.
 6. Press **Save this disabled proposal**.
 7. Press **Inspect account: polymath-meta**. Expect:
-   - Hard cap $120, daily cap $30, max concurrent 4.
+   - Hard cap $145, daily cap $75, max concurrent 4.
    - Execution Disabled, kill switch **On**, Frozen No, committed $0.
 
 ### B3. One paid verification call (the first spend: cents, with a $1.35 hold until it settles)
@@ -243,7 +246,7 @@ Expect `"verification_available":true`.
 
 **Prepare the attestation JSON now.** You'll reuse it in B5 and B6. Enter the
 figures actually shown on Meta's dashboard. `provider_hard_cap_microdollars` is
-Meta's spend limit (USD 150), which must be at least 120000000.
+Meta's spend limit (USD 150), which must be at least 145000000.
 
 ```json
 {
@@ -271,7 +274,7 @@ dc --profile research run --rm --no-deps research-worker /app/backend/.venv/bin/
 3. Choose the saved `polymath-meta · muse-spark-1.3` attestation.
 4. Paste the attestation JSON.
 5. Press **Preview exact one-call manifest**. The 5 minutes start now.
-6. Check the preview shows model `muse-spark-1.3`, $1.345536 and the $120 cap.
+6. Check the preview shows model `muse-spark-1.3`, $1.345536 and the $145 cap.
 7. Tick the approval box.
 8. Press **Arm and queue THIS one call**.
 9. Immediately run the worker command. Expect `Meta verification worker result:
@@ -349,7 +352,7 @@ Prepare the review JSON, with observed_at set to UTC now minus 2 minutes:
 6. Paste the review JSON.
 7. Paste the B3 attestation, with its observed_at updated.
 8. Press **Preview exact research activation**. Check the model, $1.345536 per
-   call and the $120 / $30 caps.
+   call and the $145 / $75 caps.
 9. Tick the approval box.
 10. Press **Activate research for THIS operator and browser**.
 11. Press **Open research workspace**. Run Explore: *self-organised
@@ -374,6 +377,8 @@ research.
    PUBLIC_RESOURCE_LIMITS_ENABLED=true
    PUBLIC_META_RESEARCH_ENABLED=true
    PUBLIC_MAX_DELEGATION_SECONDS=1209600
+   PUBLIC_MAX_JOBS_PER_SESSION_DAY=30
+   PUBLIC_MAX_JOBS_PER_DAY=200
    ```
 3. Restart and check:
    ```bash
@@ -399,19 +404,25 @@ research.
              "evidence": [{"url": "https://dev.meta.ai/docs/pricing-rate-limits", "content_sha256": "<hash>"}]},
   "provider_account_attestation": { <the B3 attestation with observed_at updated> },
   "public_limits": {
-    "public_total_cap_microdollars": 80000000,
-    "public_daily_cap_microdollars": 20000000,
-    "session_total_cap_microdollars": 6000000,
-    "session_daily_cap_microdollars": 3000000
+    "public_total_cap_microdollars": 40000000,
+    "public_daily_cap_microdollars": 30000000,
+    "session_total_cap_microdollars": 20000000,
+    "session_daily_cap_microdollars": 15000000,
+    "max_jobs_per_session_day": 30,
+    "max_jobs_per_day": 200
   },
   "discovery": {"protocol": "polymath-surprise-ladder-v1", "max_stages": 3, "max_depth": 2}
 }
 ```
 
-   In plain terms:
-   - **Public:** USD 80 in total, USD 20 a day.
-   - **Each visitor:** USD 6 in total, USD 3 a day.
+   These are the **testing** limits:
+   - **Public:** USD 40 in total, USD 30 a day.
+   - **Each visitor:** USD 20 in total, USD 15 a day, and up to 30
+     investigations a day.
    - **Pictures:** up to USD 4 a day, on top, within the account caps.
+
+   Before judging, Claude Code sends new, generous limits and this delegation is
+   replaced.
 
 10. Press **Preview exact public funding** and check it.
 11. Tick the box.
@@ -459,3 +470,59 @@ paints the gallery, one picture at a time. Check the account after: holds $0.
   ```
 - **After judging** (after 16 Nov): **Stop this public funding**, then
   **Disable the shared account**, then switch everything off as above.
+
+## Part C: the live test ladder (cheap; about USD 6–12 in total)
+
+**Goal:** prove every feature works with real Meta intelligence, as cheaply as
+possible, and save the results for the demo video. Run the tests **in order,
+one at a time**, and stop at the first problem.
+
+**Before C1:**
+1. In the browser used for testing, open https://askpolymath.com and **Sign in**
+   (for example with GitHub). Everything made while signed in is kept for a
+   year and appears on any device, which makes it demo material.
+2. On Eks's Mac, create a folder named **Polymath demo**. Save every download
+   and screenshot into it, named with the test number (for example
+   `C5-studio-dossier.html`).
+3. Keep a second tab on the operator desk
+   (https://askpolymath.com/operator/budget). After each test, press **Inspect
+   account: polymath-meta** and then **Refresh this account**, and note:
+   - **committed** (the total spent so far);
+   - **Open reserved holds**;
+   - **Unknown-outcome holds**.
+
+**After every test, report in this format:**
+
+```
+C<n> <name>: WORKS / PROBLEM
+What appeared: <one or two lines: fields, title, outcome, labels you saw>
+Time taken: <minutes>
+Spent so far: $<committed> · holds: open $<x>, unknown $<y>
+Saved: <file names and links>
+Anything odd: <exact text of any error, or "none">
+```
+
+**Stop immediately and report if:** any error appears, an unknown hold is above
+$0, one test costs more than USD 3 (USD 5 for Studio), or the total passes
+USD 15.
+
+| Test | How | Working looks like | Save for the demo |
+|---|---|---|---|
+| **C1 Explore** | Research tab, **01 Explore**, type *self-organised criticality*, start. | Live activity shows searches and readings. It ends with **either** a bridge (two fields, a mapping, quoted passages, the strongest objection and its verdict) **or** an honest "not enough evidence". Both are valid. | Screenshot of the result. **Report after C1 and wait for Claude Code's OK** (it checks the real cost per call). |
+| **C2 Ask** | **03 Ask**: *Why do phase transitions appear in how neural networks learn?* | Claims labelled Known, Postulated or Speculative, each with its own passages. | Screenshot. |
+| **C3 Surprise me** | **04 Surprise me**, start. | The model picks distant fields itself and explains why. | Screenshot. |
+| **C4 Solve** | **02 Solve**: *How could a battery keep its charge through ten thousand cycles without degrading?* | The lock and key picture; stages run one after another. The outcome is **found**, **forged**, **close fits** or **no key yet**, with evidence. | Screenshot of the outcome. |
+| **C5 Studio** | **Studio** tab, tap **A submarine inspired by whales**, then **Invent it**. **Keep the page open** for about 10–25 minutes. | The progress line moves through Brief, Inspiration, Invention, Engineering and Stress test. The idea map fills; the invention appears with "Working:" calculations; then the gallery paints 5–7 pictures one by one. | **Download the design dossier** (`C5-studio-dossier.html`), open it, and **Print, then Save as PDF** (`C5-studio-dossier.pdf`). Screenshots of the top of the page and the gallery. **Report after C5.** |
+| **C6 Converge** | Research, **05 Converge**. Theme *how systems remember*, **How many fields** 3, **Spending ceiling** 1.50, **Begin converging**. | The circle lights up as the fields connect. | Screenshot of the circle. |
+| **C7 Frontier** | **Frontier** tab: *How could batteries be recycled without loss of capacity?*, start, **Run programme**. **Press Pause once 3 investigations have finished.** | A map of gaps and steps, each labelled by its evidence. Each step has a **Solve this step** button (don't press it). | Screenshot of the map. |
+| **C8 Develop** | Open C1's finding (or any saved bridge) in **Your library**. Press **Formalise**, then **Write paper** with the conjecture included. | A conjecture with definitions, then a paper with exact citations. | Download the paper (`C8-paper`). |
+| **C9 Publish** | On the paper's finding, **Publish this…**, choose **Zenodo sandbox** (connect it first in **Your library, Publishing** if needed), **Review the record**, then **Yes, publish**. | A sandbox record with a DOI link. Sandbox records are practice only. | The record link. |
+| **C10 Share** | On the best finding, **Preview public snapshot**, then **Share this snapshot publicly**, then **Copy public link**. | A public page anyone can open, without signing in. | The public link. |
+
+**Final report after C10:** list every test's result, the total spent, the
+holds, the contents of the **Polymath demo** folder, and the public, Zenodo and
+library links. Claude Code then reviews the quality and fixes anything, and
+prepares **Part D: the demo run** (the most impressive investigations, recorded
+for the video) and **Part E: judging** (generous visitor limits up to the
+budget).
+
