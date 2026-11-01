@@ -54,6 +54,12 @@ class CreateProgramme(Strict):
     wildness: Literal["near", "far", "strange"] = "far"
 
 
+class PaintImage(Strict):
+    view: (
+        Literal["concept", "in_use", "schematic", "detail", "sequence", "scale", "origins"] | None
+    ) = None
+
+
 class AttachRun(Strict):
     step_id: str = Field(min_length=36, max_length=36)
     stage: Literal["brief", "inspire", "design", "engineer", "test"]
@@ -168,18 +174,28 @@ def create_studio_router(
     def list_images(programme_id: str, request: Request) -> dict:
         owner_hash = owner(request)
         if images is None:
-            return {"available": False, "images": []}
+            return {"available": False, "images": [], "plan": []}
+        identifier = _uuid(programme_id)
         return {
             "available": images.available,
-            "images": call(lambda: images.list(owner_hash, _uuid(programme_id))),
+            "images": call(lambda: images.list(owner_hash, identifier)),
+            "plan": call(lambda: images.plan(owner_hash, identifier)),
         }
 
     @router.post("/{programme_id}/images", status_code=202)
-    def render_image(programme_id: str, request: Request, background: BackgroundTasks) -> dict:
+    def render_image(
+        programme_id: str,
+        request: Request,
+        background: BackgroundTasks,
+        body: PaintImage | None = None,
+    ) -> dict:
         owner_hash = owner(request, write=True)
         if images is None:
             raise _PrivateHTTPException(503, "studio_images_unavailable")
-        image_id, reservation_id = call(lambda: images.request(owner_hash, _uuid(programme_id)))
+        view = body.view if body is not None else None
+        image_id, reservation_id = call(
+            lambda: images.request(owner_hash, _uuid(programme_id), view)
+        )
         # One request, after the reservation is committed; the browser polls the list.
         background.add_task(images.execute, image_id, reservation_id)
         return {"id": str(image_id), "status": "rendering"}

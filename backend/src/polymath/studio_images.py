@@ -22,6 +22,7 @@ import base64
 import binascii
 import hashlib
 import json
+import re
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -40,7 +41,22 @@ from polymath.studio_models import StudioImage
 IMAGES_URL = "https://api.meta.ai/v1/images/generations"
 MAX_RESPONSE_BYTES = 12_000_000
 MAX_IMAGE_BYTES = 8_000_000
-MAX_IMAGES_PER_INVENTION = 2
+VIEWS = ("concept", "in_use", "schematic", "detail", "sequence", "scale", "origins")
+CORE_VIEWS = ("concept", "in_use", "schematic", "detail", "origins")
+MAX_IMAGES_PER_INVENTION = 10
+PROCESS_WORDS = re.compile(
+    r"\b(deploy\w*|cycl\w*|phase\w*|stage[sd]?|sequence\w*|assembl\w*|unfold\w*|"
+    r"descen\w*|launch\w*|transform\w*|switch\w*|step\w*|grow\w*|self-repair\w*|"
+    r"fold\w*|reconfigur\w*)\b",
+    re.IGNORECASE,
+)
+SCALE_WORDS = re.compile(
+    r"\b(swarm|orbit\w*|planet\w*|star|sun|solar system|city|cities|ocean\w*|"
+    r"submarine\w*|ship\w*|building\w*|bridge\w*|satellite\w*|tower\w*|dam|"
+    r"implant\w*|neural|neuron\w*|cell\w*|micro\w*|nano\w*|molecul\w*|"
+    r"capillar\w*|insect\w*|tiny|giant|massive|kilomet\w*)\b",
+    re.IGNORECASE,
+)
 STALE_AFTER = timedelta(minutes=10)
 TIMEOUT_SECONDS = 150.0
 SIGNATURES = (
@@ -56,8 +72,8 @@ class ImagePolicy:
     model: str | None = None
     account_id: str | None = None
     price_microdollars: int = 10_000
-    global_daily_limit: int = 100
-    session_daily_limit: int = 3
+    global_daily_limit: int = 400
+    session_daily_limit: int = 28
 
     @property
     def configured(self) -> bool:
@@ -92,16 +108,96 @@ def mime_of(content: bytes) -> str | None:
     return next((mime for signature, mime in SIGNATURES if content.startswith(signature)), None)
 
 
-def image_prompt(title: str, explanation: str, parts: list[str]) -> str:
-    """A visual brief built only from the saved design text."""
+def plan_views(brief: str, title: str, explanation: str, mapping_count: int) -> list[str]:
+    """The gallery for one invention: five core views, plus up to two chosen from its content.
+
+    *How it works* joins when the design is a process or has many interacting parts;
+    *a sense of scale* joins when it is enormous or tiny. Returned in reading order.
+    """
+    text = f"{brief} {title} {explanation}"
+    chosen = set(CORE_VIEWS)
+    if mapping_count >= 3 or PROCESS_WORDS.search(text):
+        chosen.add("sequence")
+    if SCALE_WORDS.search(text):
+        chosen.add("scale")
+    return [view for view in VIEWS if view in chosen]
+
+
+def image_prompt(
+    view: str,
+    title: str,
+    explanation: str,
+    parts: list[str],
+    sources: list[tuple[str, str]] = (),
+    brief: str = "",
+    mechanism: str = "",
+) -> str:
+    """A visual brief for one view, built only from the saved design text.
+
+    Each invention's own title, mechanism, parts and sources shape every view, and
+    Meta's image model plans the composition from them, so no two inventions look
+    alike: a whale-like submarine and a Dyson swarm get entirely different scenes.
+    """
     features = "; ".join(part for part in parts if part)[:600]
-    prompt = (
-        f"Concept art of a new invention: {_clip(title, 200)}. {_clip(explanation, 1500)} "
-        + (f"Key parts: {features}. " if features else "")
-        + "Show one realistic, beautifully lit concept visualisation of the device, in the "
-        "style of a premium industrial design render, against a calm neutral background. "
-        "No text, labels or logos."
-    )
+    name = _clip(title, 200)
+    if view == "in_use":
+        prompt = (
+            f"The new invention {name} at work in the world it was designed for: "
+            f"{_clip(brief, 500)}. {_clip(explanation, 1000)} A cinematic, photorealistic scene "
+            "with natural light, showing the invention in action in its real setting. "
+            "No text, labels or logos."
+        )
+    elif view == "detail":
+        prompt = (
+            f"A macro close-up of the key mechanism of a new invention, {name}: "
+            f"{_clip(mechanism or features or explanation, 700)}. Show its surface, material and "
+            "fine structure in exquisite detail with shallow depth of field, like product "
+            "photography of a precision part. No text, labels or logos."
+        )
+    elif view == "sequence":
+        prompt = (
+            f"A three-panel illustrated sequence showing how a new invention, {name}, works, "
+            f"step by step: {_clip(explanation, 1200)} One consistent, beautifully designed "
+            "explainer style across the panels, read from left to right. "
+            "No text, numbers or labels."
+        )
+    elif view == "scale":
+        prompt = (
+            f"A dramatic sense-of-scale image of a new invention, {name}: "
+            f"{_clip(explanation, 800)} Show it beside familiar things, people or its "
+            "surroundings so its true size is instantly clear, in a wide, striking "
+            "composition. No text, labels or logos."
+        )
+    elif view == "concept":
+        prompt = (
+            f"Concept art of a new invention: {_clip(title, 200)}. {_clip(explanation, 1500)} "
+            + (f"Key parts: {features}. " if features else "")
+            + "Show one realistic, beautifully lit hero render of the invention in the setting "
+            "it was made for, in the style of a premium industrial design visualisation. "
+            "No text, labels or logos."
+        )
+    elif view == "schematic":
+        prompt = (
+            f"An engineering cutaway illustration of a new invention: {_clip(title, 200)}. "
+            f"{_clip(explanation, 1200)} "
+            + (f"Show how these parts fit together: {features}. " if features else "")
+            + "Exploded technical view in an elegant blueprint style: precise white and pale "
+            "gold line work on deep navy, with the internal structure and mechanisms clearly "
+            "visible. No text, numbers, labels or logos."
+        )
+    elif view == "origins":
+        origins = "; ".join(
+            f"{_clip(topic, 160)} (from {_clip(field, 80)})" for field, topic in sources
+        )
+        prompt = (
+            f"A natural-history study plate for a new invention, {_clip(title, 200)}, showing "
+            f"where its ideas came from: {_clip(origins, 900) or _clip(explanation, 900)}. "
+            "Draw each source as it exists in its own world, beside the part of the invention "
+            "it inspired, arranged as one elegant composition in the style of a museum "
+            "scientific illustration with soft watercolour and fine ink. No text or labels."
+        )
+    else:
+        raise StudioError("invalid_studio_request")
     return _clip(" ".join(prompt.split()), 3800)
 
 
@@ -190,8 +286,15 @@ class StudioImages:
 
     # Requests -----------------------------------------------------------------
 
-    def request(self, owner_hash: str, programme_id: uuid.UUID) -> tuple[uuid.UUID, uuid.UUID]:
-        """Reserve and claim one image. Returns (image id, reservation id)."""
+    def request(
+        self, owner_hash: str, programme_id: uuid.UUID, view: str | None = None
+    ) -> tuple[uuid.UUID, uuid.UUID]:
+        """Reserve and claim one image. Returns (image id, reservation id).
+
+        With no view named, the next missing one is painted (concept art first).
+        """
+        if view is not None and view not in VIEWS:
+            raise StudioError("invalid_studio_request")
         if not self.available:
             raise StudioError("studio_images_unavailable")
         policy = self.policy
@@ -227,8 +330,25 @@ class StudioImages:
                 >= policy.session_daily_limit
             ):
                 raise StudioError("studio_image_daily_limit")
+            painted = {image.view for image in images if image.status != "refused"}
+            plan = plan_views(
+                programme.brief, finding.title, finding.explanation, len(finding.mappings)
+            )
+            view = view or next((item for item in plan if item not in painted), "concept")
+            sources = [
+                (held.field_left, held.title)
+                for step in _steps(session, programme)
+                if step.stage == "inspire" and (held := _bridge(session, step)) is not None
+            ]
+            first = finding.mappings[0] if finding.mappings else None
             prompt = image_prompt(
-                finding.title, finding.explanation, [item.right for item in finding.mappings]
+                view,
+                finding.title,
+                finding.explanation,
+                [item.right for item in finding.mappings],
+                sources,
+                brief=programme.brief,
+                mechanism=f"{first.right}, inspired by {first.left}" if first else "",
             )
             user = hashlib.sha256(b"polymath-image-user\x00" + owner_hash.encode()).hexdigest()
             body = request_body(policy.model, prompt, user[:32])
@@ -255,6 +375,7 @@ class StudioImages:
                 owner_session_hash=owner_hash,
                 run_id=run.id,
                 prompt=prompt,
+                view=view,
             )
             session.add(image)
             session.flush()
@@ -365,6 +486,21 @@ class StudioImages:
 
     # Reads --------------------------------------------------------------------
 
+    def plan(self, owner_hash: str, programme_id: uuid.UUID) -> list[str]:
+        """The views chosen for this invention, or none before it is designed."""
+        with Session(self.engine) as session, session.begin():
+            programme = _programme(session, owner_hash, programme_id, lock=True)
+            StudioStore(self.engine)._absorb(session, programme)
+            design = next(
+                (step for step in _steps(session, programme) if step.stage == "design"), None
+            )
+            finding = _bridge(session, design) if design is not None else None
+            if finding is None:
+                return []
+            return plan_views(
+                programme.brief, finding.title, finding.explanation, len(finding.mappings)
+            )
+
     def list(self, owner_hash: str, programme_id: uuid.UUID) -> list[dict]:
         with Session(self.engine) as session, session.begin():
             programme = _programme(session, owner_hash, programme_id)
@@ -379,6 +515,7 @@ class StudioImages:
                     "id": str(row.id),
                     "status": row.status,
                     "error": row.error,
+                    "view": row.view,
                     "mime": row.mime,
                     "created_at": row.created_at.isoformat(),
                 }
