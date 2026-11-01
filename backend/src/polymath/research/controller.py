@@ -19,6 +19,7 @@ from polymath.literature.identity import (
     paper_aliases,
     validate_selected_paper_versions,
 )
+from polymath.native_ceilings import MAX_CONTEXT_CHARACTERS, MAX_MODEL_CALLS
 from polymath.research.meta import ModelError, ResearchModel
 from polymath.research.models import (
     ACTION_ADAPTER,
@@ -98,11 +99,11 @@ class ResearchLimits:
 
     def __post_init__(self) -> None:
         for name, value, low, high in (
-            ("max_model_calls", self.max_model_calls, 1, 20),
-            ("max_actions", self.max_actions, 1, 16),
+            ("max_model_calls", self.max_model_calls, 1, MAX_MODEL_CALLS),
+            ("max_actions", self.max_actions, 1, MAX_MODEL_CALLS),
             ("max_repairs", self.max_repairs, 0, 3),
             ("max_output_tokens", self.max_output_tokens, 16, 4096),
-            ("max_context_characters", self.max_context_characters, 1000, 90_000),
+            ("max_context_characters", self.max_context_characters, 1000, MAX_CONTEXT_CHARACTERS),
         ):
             if type(value) is not int or not low <= value <= high:
                 raise ValueError(f"{name} must be an integer between {low} and {high}")

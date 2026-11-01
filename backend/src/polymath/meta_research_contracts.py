@@ -30,7 +30,6 @@ from polymath.meta_probe_contracts import (
     _assess_reported_meta_usage,
 )
 from polymath.meta_readiness_contracts import (
-    LEGACY_CALL_CEILING,
     MAX_CONTEXT_CHARACTERS,
     MAX_MODEL_CALLS,
     META_COMPLETIONS_URL,
@@ -42,6 +41,7 @@ from polymath.meta_readiness_contracts import (
     proposal_sha256,
     quote_proposal,
 )
+from polymath.native_ceilings import LEGACY_CALL_CEILING
 from polymath.scientific_context_contracts import (
     ArtifactScientificContextIntent,
     AskOverviewIntent,
@@ -258,7 +258,8 @@ class NativeExploreCollectionProfile(_ReadinessModel):
     controller_sha256: Digest
     request_protocol: Literal["polymath-meta-research-request-v1"] = REQUEST_PROTOCOL
     max_model_calls: Annotated[int, Field(ge=1, le=MAX_MODEL_CALLS)]
-    max_actions: Annotated[int, Field(ge=16, le=MAX_MODEL_CALLS)] = 16
+    # Stage receipts carry the action ordinal (at most 16 in the archived protocol).
+    max_actions: Literal[16] = 16
     max_repairs: Literal[2] = 2
     max_output_tokens: Annotated[int, Field(ge=16, le=4096)]
     max_context_characters: Annotated[int, Field(ge=1000, le=MAX_CONTEXT_CHARACTERS)]
@@ -275,8 +276,13 @@ class NativeExploreCollectionProfile(_ReadinessModel):
     def original_research_limits(self):
         # A distinct DTO prevents an old typed binding from dropping the new
         # fields. Common quantitative rules remain the original implementation.
+        # The collection's own action budget stays at 16 (stage receipts carry the
+        # ordinal); the common rules are checked with the research action budget.
         NativeTaskProfile.model_validate_json(
-            _canonical(self.model_dump(mode="json", exclude={"collection_protocol", "max_bridges"}))
+            _canonical(
+                self.model_dump(mode="json", exclude={"collection_protocol", "max_bridges"})
+                | {"max_actions": action_budget(self.max_model_calls, 16)}
+            )
         )
         return self
 
@@ -492,6 +498,7 @@ def derive_explore_collection_profile(
             | {
                 "controller_protocol": "polymath-meta-explore-collection-v1",
                 "controller_sha256": explore_collection_controller_sha256(),
+                "max_actions": 16,
                 "max_bridges": intent.max_bridges,
             }
         )
@@ -713,7 +720,8 @@ class NativeDiscoveryProfile(_ReadinessModel):
     controller_sha256: Digest
     request_protocol: Literal["polymath-meta-research-request-v1"] = REQUEST_PROTOCOL
     max_model_calls: Annotated[int, Field(ge=1, le=MAX_MODEL_CALLS)]
-    max_actions: Annotated[int, Field(ge=20, le=MAX_MODEL_CALLS)] = 20
+    # Stage receipts carry the action ordinal (at most 20 in the archived protocol).
+    max_actions: Literal[20] = 20
     max_repairs: Literal[2] = 2
     max_output_tokens: Annotated[int, Field(ge=16, le=4096)]
     max_context_characters: Annotated[int, Field(ge=1000, le=MAX_CONTEXT_CHARACTERS)]
@@ -775,7 +783,7 @@ def derive_discovery_ladder_profile(
         controller_protocol="polymath-meta-discovery-controller-v1",
         controller_sha256=discovery_controller_sha256(),
         max_model_calls=min(limits.max_model_calls, MAX_MODEL_CALLS),
-        max_actions=action_budget(min(limits.max_model_calls, MAX_MODEL_CALLS), 20),
+        max_actions=20,
         max_output_tokens=limits.max_output_tokens,
         max_context_characters=limits.max_context_characters,
         request_timeout_seconds=limits.request_timeout_seconds,

@@ -29,6 +29,7 @@ from polymath.artifact_contracts import (
     validate_artifact_result,
 )
 from polymath.math_checks import FiniteCheckResult, FiniteConjecture, validate_check
+from polymath.native_ceilings import MAX_CONTEXT_CHARACTERS
 from polymath.research.controller import SAFE_MODEL_ERRORS
 from polymath.research.meta import ModelError, ModelReply, ResearchModel
 from polymath.research.models import ResearchEvent, Usage
@@ -55,7 +56,7 @@ class ArtifactLimits:
             ("max_actions", self.max_actions, 1, 12),
             ("max_repairs", self.max_repairs, 0, 3),
             ("max_output_tokens", self.max_output_tokens, 16, 4096),
-            ("max_context_characters", self.max_context_characters, 1000, 90_000),
+            ("max_context_characters", self.max_context_characters, 1000, MAX_CONTEXT_CHARACTERS),
         ):
             if type(value) is not int or not lower <= value <= upper:
                 raise ValueError(f"{name} must be an integer between {lower} and {upper}")

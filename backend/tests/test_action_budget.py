@@ -28,7 +28,14 @@ def test_profiles_for_legacy_budgets_are_unchanged_and_larger_budgets_get_one_ac
     assert (new["research"].max_model_calls, new["research"].max_actions) == (48, 48)
     # Short tasks keep their small budgets whatever the proposal allows.
     assert (new["write_paper"].max_model_calls, new["write_paper"].max_actions) == (12, 12)
+    # Stage receipts carry the action ordinal, bounded in the archived protocol,
+    # so Explore collections keep 16 actions and the ladder 20: the wider call
+    # budget pays for repairs and retries.
     explore = derive_explore_collection_profile(big, ExploreCollectionIntent(max_bridges=3))
-    assert (explore.profile.max_model_calls, explore.profile.max_actions) == (48, 48)
-    # Round trip through JSON keeps the widened profile valid.
-    assert json.loads(explore.profile.model_dump_json())["max_actions"] == 48
+    assert (explore.profile.max_model_calls, explore.profile.max_actions) == (48, 16)
+    assert json.loads(explore.profile.model_dump_json())["max_actions"] == 16
+    from polymath.discovery_contracts import DiscoveryIntent
+    from polymath.meta_research_contracts import derive_discovery_ladder_profile
+
+    ladder = derive_discovery_ladder_profile(big, DiscoveryIntent())
+    assert (ladder.profile.max_model_calls, ladder.profile.max_actions) == (48, 20)

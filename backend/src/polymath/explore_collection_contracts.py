@@ -21,6 +21,7 @@ from polymath.discovery_contracts import (
     StageCommitReceipt,
     StageContext,
 )
+from polymath.native_ceilings import MAX_MODEL_CALLS
 from polymath.research.models import (
     ArtifactId,
     BridgeFinding,
@@ -45,8 +46,12 @@ from polymath.research.models import (
 
 EXPLORE_COLLECTION_PROTOCOL = "polymath-explore-collection-v1"
 MAX_EXPLORE_BRIDGES = 4
+# The action budget is part of the archived protocol (stage receipts carry the
+# action ordinal), so it stays at 16. Only the model-call ceiling follows the
+# native ceilings: a wider call budget pays for repairs and retries, not for
+# more actions.
 MAX_EXPLORE_ACTIONS = 16
-MAX_EXPLORE_MODEL_CALLS = 20
+MAX_EXPLORE_MODEL_CALLS = MAX_MODEL_CALLS
 MAX_EXPLORE_PACKET_BYTES = 262_144
 ExploreModelRequestId = Annotated[str, StringConstraints(pattern=r"^model-[0-9]{4}$")]
 ExploreActionOrdinal = Annotated[int, Field(ge=1, le=MAX_EXPLORE_ACTIONS)]

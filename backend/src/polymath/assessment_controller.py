@@ -28,6 +28,7 @@ from polymath.assessment_contracts import (
     verify_assessment_quotes,
 )
 from polymath.full_text_contracts import FullTextIndex
+from polymath.native_ceilings import MAX_CONTEXT_CHARACTERS
 from polymath.research.controller import (
     SAFE_MODEL_ERRORS,
     _checked_full_text_index,
@@ -102,7 +103,7 @@ class AssessmentLimits:
             ("max_actions", self.max_actions, 1, 12),
             ("max_repairs", self.max_repairs, 0, 3),
             ("max_output_tokens", self.max_output_tokens, 16, 4096),
-            ("max_context_characters", self.max_context_characters, 1000, 90000),
+            ("max_context_characters", self.max_context_characters, 1000, MAX_CONTEXT_CHARACTERS),
             ("max_sources", self.max_sources, 1, 200),
         ):
             if type(value) is not int or not low <= value <= high:

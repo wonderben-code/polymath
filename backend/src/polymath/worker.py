@@ -1093,7 +1093,12 @@ class ResearchWorker:
         except asyncio.CancelledError:
             await asyncio.shield(self._stop(lease))
             raise
-        except (ExecutionStopped, Exception):
+        except (ExecutionStopped, Exception) as error:
+            # A run that cannot even be prepared is interrupted before any model
+            # call; the cause must reach the log, or it looks like a plain stop.
+            _LOG.exception(
+                "run %s could not be prepared: %s %s", lease.run_id, type(error).__name__, error
+            )
             await self._stop(lease)
             return WorkerOutcome(
                 (await asyncio.to_thread(self.jobs.get, lease.run_id)).status, str(lease.run_id)

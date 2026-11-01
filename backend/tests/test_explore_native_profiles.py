@@ -213,7 +213,7 @@ def test_explicit_collection_requires_the_saved_extension(public):
     [
         {"max_actions": 20},
         {"max_actions": True},
-        {"max_model_calls": 21},
+        {"max_model_calls": 81},
         {"tool_timeout_seconds": 5.0},
         {"max_bridges": 0},
         {"max_bridges": 5},
