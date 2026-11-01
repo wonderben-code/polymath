@@ -67,6 +67,13 @@ def application(public, *, injected=None, research_policy=None, public_policy=No
     )
 
 
+def pin_rate_clock(engine, monkeypatch):
+    """Keep consecutive requests in one fixed rate window across minute boundaries."""
+    with Session(engine) as session:
+        now = session.scalar(select(func.clock_timestamp()))
+    monkeypatch.setattr("polymath.public_resource_controls._now", lambda _: now)
+
+
 @pytest.mark.parametrize("custom", ["absent", "looser", "stricter"])
 def test_actual_app_always_combines_injected_limits_with_reviewed_bounds(
     readiness, custom, monkeypatch
@@ -74,11 +81,7 @@ def test_actual_app_always_combines_injected_limits_with_reviewed_bounds(
     public = public_delegation(
         readiness, limits(submit_session_per_minute=2 if custom == "stricter" else 1)
     )
-    # Both requests must fall in the same fixed minute window, even when the
-    # test happens to run across a minute boundary.
-    with Session(public.engine) as session:
-        now = session.scalar(select(func.clock_timestamp()))
-    monkeypatch.setattr("polymath.public_resource_controls._now", lambda _: now)
+    pin_rate_clock(public.engine, monkeypatch)
     resolver = (
         None
         if custom == "absent"
@@ -126,6 +129,7 @@ def test_saved_read_limits_survive_removed_keys_and_expired_issuer(readiness, mo
     policy = replace(public.active.policy, paid_research_enabled=False, api_key=None, model_id=None)
     monkeypatch.setattr(MetaModel, "__init__", lambda *a, **k: pytest.fail("Read constructed Meta"))
     app = application(public, research_policy=policy)
+    pin_rate_clock(public.engine, monkeypatch)
     assert app.state.public_resource_controls.current_limits().read_session_per_minute == 2
     with TestClient(app, base_url="https://fixture.test") as client:
         assert client.get("/api/v1/session").status_code == 200
@@ -227,7 +231,10 @@ async def test_actual_main_sse_chain_closes_at_resource_deadline_without_false_t
         app.state.engine.dispose()
 
 
-def test_injected_server_limits_cannot_enlarge_configured_policy_before_any_delegation(database):
+def test_injected_server_limits_cannot_enlarge_configured_policy_before_any_delegation(
+    database, monkeypatch
+):
+    pin_rate_clock(database, monkeypatch)
     injected = PublicResourceControls(
         database,
         PublicResourcePolicy(
