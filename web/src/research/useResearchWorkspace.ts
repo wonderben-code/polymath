@@ -122,7 +122,26 @@ export function useResearchWorkspace(enabled: boolean, researchAvailable: boolea
   }, [clearPrivateState])
 
   const native = useNativeResearchContext({ enabled: phase === 'ready' && enabled, csrfToken: csrf, required: nativeRequired, available: researchAvailable, onBrowserExpired: () => invalidate('session_expired') })
+  // A run the page still counts as active may have ended out of sight (an interrupted
+  // step cancelled by its programme, a stream that closed early); a programme waiting on
+  // it asks for the saved state again rather than waiting for a reload.
+  const runsRef = useRef<OwnedRun[]>([])
+  const refreshRuns = useCallback(async () => {
+    if (phase !== 'ready') return
+    const current = generation.current
+    const stale = runsRef.current.filter((run) => ['queued', 'running', 'waiting_retry', 'cancel_requested', 'interrupted'].includes(run.status))
+    for (const run of stale) {
+      try {
+        const response = await getResearchRun(run.id)
+        if (current !== generation.current) return
+        const fresh = remember(response)
+        setRuns((items) => updated(items, fresh))
+        setActiveRun((active) => active?.id === fresh.id ? latest(active, fresh) : active)
+      } catch { /* the next wait asks again */ }
+    }
+  }, [phase, remember])
   useEffect(() => { if (native.explorePhase === 'ready') rejectedExploreHash.current = null }, [native.explorePhase, native.exploreAccess])
+  runsRef.current = runs
   const ownActiveResearch = native.access?.audience === 'public_sessions' && runs.some((run) => ['queued', 'running', 'waiting_retry', 'cancel_requested', 'interrupted'].includes(run.status))
   const ladderProfile = native.activation?.discovery_ladder_profile?.profile
   const discoveryIntent = useMemo<DiscoveryIntent | null>(() => native.access?.audience === 'public_sessions' ? native.access.limits?.discovery_intent ?? null : ladderProfile ? { protocol: 'polymath-surprise-ladder-v1', max_stages: Math.min(3, ladderProfile.max_stages), max_depth: Math.min(2, ladderProfile.max_depth) } : null, [ladderProfile?.max_stages, ladderProfile?.max_depth, native.access])
@@ -411,6 +430,6 @@ export function useResearchWorkspace(enabled: boolean, researchAvailable: boolea
     canExplore: exploreSelectionReady(native),
     canSubmit: enabled && researchAvailable && native.canSubmit && !ownActiveResearch && !unconfirmedSubmission && phase === 'ready' && !!csrf && !submitting && !cancellingId,
     csrfToken: csrf, invalidateSession,
-    refresh, selectRun, loadMore, cancel, submit, investigateBridges, native, discoveryIntent, ownActiveResearch,
+    refresh, refreshRuns, selectRun, loadMore, cancel, submit, investigateBridges, native, discoveryIntent, ownActiveResearch,
   }
 }
