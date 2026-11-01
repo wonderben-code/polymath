@@ -210,6 +210,12 @@ describe('Innovation Studio', () => {
     expect(page.indexOf('Engineering cutaway')).toBeGreaterThan(page.indexOf('<h2>The invention</h2>'))
   })
 
+  it('says plainly when live inventing is paused', () => {
+    server({ '/api/v1/studio': { programmes: [] } })
+    workspace({ paused: true, canSubmit: false })
+    expect(screen.getByRole('status')).toHaveTextContent('Live inventing is paused right now.')
+  })
+
   it('says plainly when nothing held up', async () => {
     const none = programme({ status: 'completed', outcome: 'none', steps: [step({ status: 'done', outcome: 'insufficient_evidence', run_id: RUN, finding: { kind: 'insufficient_evidence' } })] })
     server({ '/api/v1/studio': { programmes: [none] }, [`/api/v1/studio/${PROGRAMME}`]: none })

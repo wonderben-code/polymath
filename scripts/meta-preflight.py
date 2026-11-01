@@ -42,6 +42,7 @@ PREFERRED_MODEL_PREFIX = "muse-spark"
 SPENDING_GATES = (
     "PAID_META_PROBE_ENABLED",
     "PAID_META_RESEARCH_ENABLED",
+    "PAID_META_IMAGE_ENABLED",
     "PUBLIC_META_RESEARCH_ENABLED",
     "PUBLICATION_EXECUTION_ENABLED",
 )
@@ -265,6 +266,13 @@ def check_key(config: Mapping[str, str], fetch: Fetch, report: Report) -> None:
         report.ok(f"META_MODEL {configured!r} is in the list")
     elif configured:
         report.fail(f"META_MODEL {configured!r} is not in the list")
+    image_model = config.get("META_IMAGE_MODEL", "").strip()
+    if image_model and image_model in models:
+        report.ok(f"META_IMAGE_MODEL {image_model!r} is in the list")
+    elif image_model:
+        report.fail(f"META_IMAGE_MODEL {image_model!r} is not in the list")
+    elif any(model.lower().startswith("muse-image") for model in models):
+        report.info("Muse Image is available for Studio pictures (META_IMAGE_MODEL is not set)")
 
 
 def run(

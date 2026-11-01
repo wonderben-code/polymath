@@ -62,7 +62,9 @@ fi
 echo "→ Building and starting (about 10 minutes the first time)"
 PROFILES=()
 # Connect Zenodo needs its worker once it is switched on (scripts/connect-sign-in.sh).
-grep -q '^VISITOR_ZENODO_ENABLED=true' "$ENV" && PROFILES=(--profile zenodo)
+grep -q '^VISITOR_ZENODO_ENABLED=true' "$ENV" && PROFILES+=(--profile zenodo)
+# Once paid research is on, the research worker must be rebuilt with the same code.
+grep -q '^PAID_META_RESEARCH_ENABLED=true' "$ENV" && PROFILES+=(--profile research)
 docker compose -f deploy/compose.production.yaml --env-file "$ENV" "${PROFILES[@]}" up -d --build --wait
 
 echo
