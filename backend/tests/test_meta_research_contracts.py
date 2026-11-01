@@ -350,6 +350,17 @@ def test_step_hash_binds_original_activation_profile_request_and_step_identity()
     )
 
 
+# A reply that refused the request before inference: no model, no usage, no content.
+REJECTED = {
+    "observed_model_id": None,
+    "input_tokens": None,
+    "output_tokens": None,
+    "content": None,
+    "finish_reason": None,
+    "error_code": "model_request_failed",
+}
+
+
 @pytest.mark.parametrize(
     "changes,status,cost,freeze",
     [
@@ -360,6 +371,10 @@ def test_step_hash_binds_original_activation_profile_request_and_step_identity()
         ({"input_tokens": None, "output_tokens": None}, "unknown", None, False),
         ({"input_tokens": 400000, "output_tokens": 5000}, "known", 410000, True),
         ({"input_tokens": 2**63 - 1}, "unknown", None, True),
+        (REJECTED | {"http_status": 400}, "known", 0, False),
+        (REJECTED | {"http_status": 429}, "known", 0, False),
+        (REJECTED | {"http_status": 500}, "unknown", None, False),
+        (REJECTED | {"http_status": 400, "observed_model_id": "alias"}, "unknown", None, True),
     ],
 )
 def test_usage_reuses_probe_accounting_without_parsing_scientific_actions(
