@@ -26,6 +26,7 @@ from polymath.meta_readiness_contracts import (
     proposal_sha256,
     quote_proposal,
 )
+from polymath.native_ceilings import MAX_OUTPUT_TOKENS
 
 MAX_COUNTED_MICRODOLLARS = 9_000_000_000_000_000
 PROBE_PROTOCOL = "polymath-meta-probe-v1"
@@ -132,7 +133,7 @@ PROBE_MESSAGES_V1 = (
 class MetaProbePayload(_ReadinessModel):
     model: ModelId
     messages: Annotated[tuple[MetaProbeMessage, ...], Field(min_length=2, max_length=2)]
-    max_tokens: Annotated[int, Field(ge=16, le=4096)]
+    max_tokens: Annotated[int, Field(ge=16, le=MAX_OUTPUT_TOKENS)]
     stream: Literal[False] = False
 
     @field_validator("messages", mode="before")

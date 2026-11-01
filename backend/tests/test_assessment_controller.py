@@ -809,7 +809,7 @@ async def test_worker_stop_control_is_not_swallowed_as_an_inconclusive_tool_fail
         ("max_actions", 0),
         ("max_repairs", True),
         ("max_sources", 201),
-        ("max_output_tokens", 4097),
+        ("max_output_tokens", 32769),
         ("tool_timeout_seconds", float("inf")),
     ],
 )

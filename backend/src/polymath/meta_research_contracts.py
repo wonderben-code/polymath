@@ -41,7 +41,7 @@ from polymath.meta_readiness_contracts import (
     proposal_sha256,
     quote_proposal,
 )
-from polymath.native_ceilings import LEGACY_CALL_CEILING
+from polymath.native_ceilings import LEGACY_CALL_CEILING, MAX_OUTPUT_TOKENS
 from polymath.scientific_context_contracts import (
     ArtifactScientificContextIntent,
     AskOverviewIntent,
@@ -135,7 +135,7 @@ class MetaResearchMessage(_ReadinessModel):
 class MetaResearchPayload(_ReadinessModel):
     model: ModelId
     messages: Annotated[tuple[MetaResearchMessage, ...], Field(min_length=1, max_length=64)]
-    max_tokens: Annotated[int, Field(ge=16, le=4096)]
+    max_tokens: Annotated[int, Field(ge=16, le=MAX_OUTPUT_TOKENS)]
     stream: Literal[False] = False
 
     @field_validator("messages", mode="before")
@@ -226,7 +226,7 @@ class NativeTaskProfile(_ReadinessModel):
     max_model_calls: Annotated[int, Field(ge=1, le=MAX_MODEL_CALLS)]
     max_actions: Annotated[int, Field(ge=1, le=MAX_MODEL_CALLS)]
     max_repairs: Literal[2] = 2
-    max_output_tokens: Annotated[int, Field(ge=16, le=4096)]
+    max_output_tokens: Annotated[int, Field(ge=16, le=MAX_OUTPUT_TOKENS)]
     max_context_characters: Annotated[int, Field(ge=1000, le=MAX_CONTEXT_CHARACTERS)]
     request_timeout_seconds: Annotated[float, Field(ge=0.001, le=60)]
     model_timeout_seconds: Annotated[float, Field(ge=30.001, le=90)]
@@ -264,7 +264,7 @@ class NativeExploreCollectionProfile(_ReadinessModel):
     # authority rather than as a storage failure.
     max_actions: Annotated[int, Field(ge=16, le=MAX_MODEL_CALLS)] = 16
     max_repairs: Literal[2] = 2
-    max_output_tokens: Annotated[int, Field(ge=16, le=4096)]
+    max_output_tokens: Annotated[int, Field(ge=16, le=MAX_OUTPUT_TOKENS)]
     max_context_characters: Annotated[int, Field(ge=1000, le=MAX_CONTEXT_CHARACTERS)]
     request_timeout_seconds: Annotated[float, Field(ge=0.001, le=60)]
     model_timeout_seconds: Annotated[float, Field(ge=30.001, le=90)]
@@ -732,7 +732,7 @@ class NativeDiscoveryProfile(_ReadinessModel):
     # so a fresh derivation always pins 20; the range keeps saved manifests readable.
     max_actions: Annotated[int, Field(ge=20, le=MAX_MODEL_CALLS)] = 20
     max_repairs: Literal[2] = 2
-    max_output_tokens: Annotated[int, Field(ge=16, le=4096)]
+    max_output_tokens: Annotated[int, Field(ge=16, le=MAX_OUTPUT_TOKENS)]
     max_context_characters: Annotated[int, Field(ge=1000, le=MAX_CONTEXT_CHARACTERS)]
     request_timeout_seconds: Annotated[float, Field(ge=0.001, le=60)]
     model_timeout_seconds: Annotated[float, Field(ge=30.001, le=90)]

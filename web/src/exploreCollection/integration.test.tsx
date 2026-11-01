@@ -31,12 +31,12 @@ function server(overrides?: (path: string, options?: RequestInit) => Response | 
 beforeEach(() => { vi.spyOn(Date, 'now').mockReturnValue(Date.parse(DATE)) })
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks() })
 describe('ordinary approved Explore variant', () => {
-  it.each([1, 2, 4])('automatically selects min(3,approved %s) in one pinned public POST despite duplicate clicks', async (maximum) => {
+  it.each([1, 2, 4])('automatically selects min(2,approved %s) in one pinned public POST despite duplicate clicks', async (maximum) => {
     const fetch = server((path) => path.endsWith('/explore-protocols') ? Response.json(cap(SHA, maximum)) : undefined), view = renderHook(() => useResearchWorkspace(true, true, true))
     await waitFor(() => expect(view.result.current.canExplore && view.result.current.canSubmit).toBe(true))
     await act(async () => { await Promise.all([view.result.current.submit('explore', 'Synthetic seeded question.'), view.result.current.submit('explore', 'Synthetic seeded question.')]) })
     const posts = fetch.mock.calls.filter(([, options]) => options?.method === 'POST'); expect(posts).toHaveLength(1)
-    expect(JSON.parse(String(posts[0][1]?.body))).toEqual({ mode: 'explore', goal: 'Synthetic seeded question.', expected_activation_sha256: SHA, explore_collection_intent: intent(Math.min(3, maximum)) }); expect(posts[0][1]?.headers).not.toHaveProperty('X-Operator-CSRF-Token')
+    expect(JSON.parse(String(posts[0][1]?.body))).toEqual({ mode: 'explore', goal: 'Synthetic seeded question.', expected_activation_sha256: SHA, explore_collection_intent: intent(Math.min(2, maximum)) }); expect(posts[0][1]?.headers).not.toHaveProperty('X-Operator-CSRF-Token')
   })
   it('preserves approved legacy seeded Explore and exact F3 parent requests without a collection opt-in', async () => {
     for (const parents of [[], ['21111111-1111-4111-8111-111111111111', '31111111-1111-4111-8111-111111111111']]) {

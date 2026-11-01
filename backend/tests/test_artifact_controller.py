@@ -552,7 +552,7 @@ async def test_worker_control_flow_cannot_be_swallowed_as_a_tool_observation():
         ("max_model_calls", 0),
         ("max_model_calls", True),
         ("max_actions", 13),
-        ("max_output_tokens", 4097),
+        ("max_output_tokens", 32769),
         ("max_repairs", -1),
         ("max_context_characters", 240001),
         ("tool_timeout_seconds", float("nan")),

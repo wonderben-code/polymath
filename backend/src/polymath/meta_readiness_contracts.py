@@ -23,7 +23,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 # three-bridge Explore needs far more than 20 calls, and real cost was about a
 # cent a call, so the ceilings rose from 20 calls and 90,000 characters. The
 # controllers enforce the same ceilings (polymath.native_ceilings).
-from polymath.native_ceilings import MAX_CONTEXT_CHARACTERS, MAX_MODEL_CALLS
+from polymath.native_ceilings import MAX_CONTEXT_CHARACTERS, MAX_MODEL_CALLS, MAX_OUTPUT_TOKENS
 
 META_COMPLETIONS_URL = "https://api.meta.ai/v1/chat/completions"
 READINESS_PROTOCOL = "polymath-meta-readiness-v1"
@@ -144,7 +144,7 @@ class PricingCeilings(_EvidenceGroup):
 
 
 class ApplicationLimits(_ReadinessModel):
-    max_output_tokens: Annotated[int, Field(ge=16, le=4096)]
+    max_output_tokens: Annotated[int, Field(ge=16, le=MAX_OUTPUT_TOKENS)]
     max_context_characters: Annotated[int, Field(ge=1000, le=MAX_CONTEXT_CHARACTERS)]
     max_model_calls: Annotated[int, Field(ge=1, le=MAX_MODEL_CALLS)]
     request_timeout_seconds: Annotated[float, Field(ge=0.001, le=60)]

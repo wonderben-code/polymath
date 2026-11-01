@@ -13,6 +13,8 @@ from typing import TYPE_CHECKING, Protocol
 import httpx
 from pydantic import SecretStr
 
+from polymath.native_ceilings import MAX_OUTPUT_TOKENS
+
 if TYPE_CHECKING:
     from polymath.meta_probe_contracts import MetaObservation, MetaProbeRequest
     from polymath.meta_research_contracts import MetaResearchRequest
@@ -305,8 +307,8 @@ class MetaModel:
     ) -> ModelReply:
         if not self._live_enabled:
             raise ModelError("live_model_disabled")
-        if type(max_output_tokens) is not int or not 16 <= max_output_tokens <= 4096:
-            raise ValueError("max_output_tokens must be between 16 and 4096")
+        if type(max_output_tokens) is not int or not 16 <= max_output_tokens <= MAX_OUTPUT_TOKENS:
+            raise ValueError(f"max_output_tokens must be between 16 and {MAX_OUTPUT_TOKENS}")
         if sum(len(message["content"]) for message in messages) > 90_000:
             raise ModelError("model_context_limit")
         try:

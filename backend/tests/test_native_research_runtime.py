@@ -76,7 +76,7 @@ def test_native_extension_retains_existing_action_output_and_context_bounds():
     for changes in (
         {"max_model_calls": 81},
         {"max_actions": 81},
-        {"max_output_tokens": 4097},
+        {"max_output_tokens": 32769},
         {"max_context_characters": 240001},
         {"tool_timeout_seconds": 61},
     ):

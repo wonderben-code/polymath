@@ -61,7 +61,7 @@ function probeRequest(value: unknown): MetaProbeRequest {
   if (item.method !== 'POST' || item.endpoint !== ENDPOINT || payload.stream !== false) return invalid()
   const messages = list(payload.messages, (raw) => { const message = object(raw, ['role', 'content']); return { role: member(message.role, ['system', 'user']), content: text(message.content, 1000) } }, 2, 2)
   if (messages[0].role !== 'system' || messages[0].content !== SYSTEM_MESSAGE || messages[1].role !== 'user' || messages[1].content !== USER_MESSAGE) return invalid()
-  return { method: 'POST', endpoint: ENDPOINT, payload: { model: model(payload.model), messages, max_tokens: integer(payload.max_tokens, 16, 4096), stream: false } }
+  return { method: 'POST', endpoint: ENDPOINT, payload: { model: model(payload.model), messages, max_tokens: integer(payload.max_tokens, 16, 32768), stream: false } }
 }
 export function parseMetaProbeManifest(value: unknown): MetaProbeManifest {
   const item = object(value, ['protocol', 'readiness_id', 'proposal_sha256', 'account_id', 'credential_binding_sha256', 'native_control_epoch', 'clear_kill_switch', 'request', 'request_sha256', 'request_timeout_seconds', 'input_reservation_microdollars', 'output_reservation_microdollars', 'reservation_microdollars', 'provider_account_attestation', 'valid_until'])
