@@ -244,6 +244,8 @@ export function App() {
   // storage are required as well; a capability flag alone cannot create a job.
   const frontierReady = workspace.phase === 'ready' && !!workspace.csrfToken && !creatingFrontier
   const researchReady = workspace.canSubmit && (mode !== 'ask' || workspace.canAsk) && (mode !== 'explore' || workspace.canExplore)
+  // The stage-by-stage autopilots (Solve, Converge, Studio, Frontier) submit Ask and Explore steps on their own, so they wait until both protocol selections are ready; otherwise a step started a second after the page loads is refused silently.
+  const autopilotReady = workspace.canSubmit && workspace.canAsk && workspace.canExplore && !artifactBusy && !assessmentBusy
   const researchConnected = researchReady && !artifactBusy && !assessmentBusy && (mode === 'surprise' || !!prompts[mode].trim())
   const unavailable = connection === 'offline'
     ? 'The research service could not be reached. Check the connection and try again.'
@@ -341,10 +343,10 @@ export function App() {
             </section>
           </>}
           <div hidden={!(place === 'research' && solving)}>
-            <SolveWorkspace enabled={workspace.phase === 'ready'} csrfToken={workspace.csrfToken} canSubmit={workspace.canSubmit && !artifactBusy && !assessmentBusy} focusId={solveFocus} submit={(solveMode, goal, parents) => workspace.submit(solveMode, goal, parents)} onOpenRun={(id) => { setSolving(false); openRun(id) }} onSessionExpired={workspace.invalidateSession} />
+            <SolveWorkspace enabled={workspace.phase === 'ready'} csrfToken={workspace.csrfToken} canSubmit={autopilotReady} focusId={solveFocus} submit={(solveMode, goal, parents) => workspace.submit(solveMode, goal, parents)} onOpenRun={(id) => { setSolving(false); openRun(id) }} onSessionExpired={workspace.invalidateSession} />
           </div>
           <div hidden={!(place === 'research' && converging)}>
-            <ConvergeWorkspace enabled={workspace.phase === 'ready'} csrfToken={workspace.csrfToken} canSubmit={workspace.canSubmit && !artifactBusy && !assessmentBusy} focusId={convergeFocus} onFinished={onConvergeFinished} notifyControl={<NotifyToggle notifier={notifier} />} submit={(convergeMode, goal, parents) => workspace.submit(convergeMode, goal, parents)} liveActivity={workspace.activeRun && workspace.events.length ? { runId: workspace.activeRun.id, summary: workspace.events[workspace.events.length - 1].summary } : null} onOpenRun={(id) => { setConvergeReading(id); openRun(id) }} onGoDeeper={goDeeper} onSessionExpired={workspace.invalidateSession} />
+            <ConvergeWorkspace enabled={workspace.phase === 'ready'} csrfToken={workspace.csrfToken} canSubmit={autopilotReady} focusId={convergeFocus} onFinished={onConvergeFinished} notifyControl={<NotifyToggle notifier={notifier} />} submit={(convergeMode, goal, parents) => workspace.submit(convergeMode, goal, parents)} liveActivity={workspace.activeRun && workspace.events.length ? { runId: workspace.activeRun.id, summary: workspace.events[workspace.events.length - 1].summary } : null} onOpenRun={(id) => { setConvergeReading(id); openRun(id) }} onGoDeeper={goDeeper} onSessionExpired={workspace.invalidateSession} />
           </div>
           {place === 'research' && !solving && (!converging || (convergeReading !== null && convergeReading === workspace.selectedId)) && <>
             <div ref={focusAnchor} className="focus-anchor" />
@@ -399,10 +401,10 @@ export function App() {
             {notice && <p className="composer-alert" role="alert">{notice}</p>}
           </section>}
           <div hidden={place !== 'studio'}>
-            <StudioWorkspace enabled={workspace.phase === 'ready'} csrfToken={workspace.csrfToken} canSubmit={workspace.canSubmit && !artifactBusy && !assessmentBusy} paused={workspace.phase === 'ready' && !workspace.canSubmit && !workspace.ownActiveResearch} submit={(studioMode, goal, parents) => workspace.submit(studioMode, goal, parents)} onOpenRun={openRun} onSolveGap={(gap) => { if (!workspace.csrfToken) return; void createSolve(workspace.csrfToken, { problem: gap.slice(0, 2000) }).then((programme) => { setSolveFocus(programme.id); setSolving(true); setConverging(false); go('research') }).catch(() => setNotice('Solve could not start for that step. Try again in a moment.')) }} onSessionExpired={workspace.invalidateSession} />
+            <StudioWorkspace enabled={workspace.phase === 'ready'} csrfToken={workspace.csrfToken} canSubmit={autopilotReady} paused={workspace.phase === 'ready' && !workspace.canSubmit && !workspace.ownActiveResearch} submit={(studioMode, goal, parents) => workspace.submit(studioMode, goal, parents)} onOpenRun={openRun} onSolveGap={(gap) => { if (!workspace.csrfToken) return; void createSolve(workspace.csrfToken, { problem: gap.slice(0, 2000) }).then((programme) => { setSolveFocus(programme.id); setSolving(true); setConverging(false); go('research') }).catch(() => setNotice('Solve could not start for that step. Try again in a moment.')) }} onSessionExpired={workspace.invalidateSession} />
           </div>
           <div hidden={place !== 'frontier'}>
-            <FrontierWorkspace enabled={workspace.phase === 'ready'} csrfToken={workspace.csrfToken} canSubmit={workspace.canSubmit && !artifactBusy && !assessmentBusy} focusId={frontierFocus} onFinished={onFrontierFinished} onSolveStep={(programmeId, nodeId) => { if (!workspace.csrfToken) return; void createSolve(workspace.csrfToken, { frontier_programme_id: programmeId, frontier_node_id: nodeId }).then((programme) => { setSolveFocus(programme.id); setSolving(true); setConverging(false); go('research') }).catch(() => undefined) }} notifyControl={<NotifyToggle notifier={notifier} />} submit={(frontierMode, goal, parents) => workspace.submit(frontierMode, goal, parents)} onOpenRun={openRun} onSessionExpired={workspace.invalidateSession} />
+            <FrontierWorkspace enabled={workspace.phase === 'ready'} csrfToken={workspace.csrfToken} canSubmit={autopilotReady} focusId={frontierFocus} onFinished={onFrontierFinished} onSolveStep={(programmeId, nodeId) => { if (!workspace.csrfToken) return; void createSolve(workspace.csrfToken, { frontier_programme_id: programmeId, frontier_node_id: nodeId }).then((programme) => { setSolveFocus(programme.id); setSolving(true); setConverging(false); go('research') }).catch(() => undefined) }} notifyControl={<NotifyToggle notifier={notifier} />} submit={(frontierMode, goal, parents) => workspace.submit(frontierMode, goal, parents)} onOpenRun={openRun} onSessionExpired={workspace.invalidateSession} />
           </div>
 
           {place === 'about' && <AboutPlace remaining={freeAccess?.remaining_session_jobs_today} daily={freeAccess?.limits?.max_jobs_per_session_day} />}
