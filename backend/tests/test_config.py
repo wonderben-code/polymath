@@ -226,3 +226,18 @@ def test_native_research_requires_full_explicit_server_configuration(changes):
             _env_file=None,
             **changes,
         )
+
+
+def test_the_shipped_settings_file_starts_with_its_empty_sign_in_ids(monkeypatch):
+    """Empty provider IDs in deploy/production.env mean "not set", never a startup failure."""
+    from pathlib import Path
+
+    example = Path(__file__).parents[2] / "deploy" / "production.env.example"
+    for line in example.read_text().splitlines():
+        if line and not line.startswith("#") and "=" in line:
+            name, value = line.split("=", 1)
+            monkeypatch.setenv(name, value)
+    monkeypatch.setenv("OPERATOR_BOOTSTRAP_TOKEN", "a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8s9T0")
+    settings = Settings(_env_file=None)
+    assert settings.github_client_id is None and settings.zenodo_sandbox_client_id is None
+    assert not settings.accounts_enabled and settings.visitor_zenodo_destinations == ()
