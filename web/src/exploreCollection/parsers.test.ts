@@ -30,7 +30,7 @@ describe('explicit separately versioned Explore capability and native review', (
   it.each([{ activation_sha256: null }, { activation_sha256: 'A'.repeat(64) }, { profiles: [] }, { model_id: 'secret' }, { account: 'private' }, { capabilities: [] }, { reason: 'invented' }, { protocol: 'polymath-research-access-v1' }])('rejects incoherence or forbidden projection data %s', (change) => expect(() => parseExploreCollectionAccess({ ...capability(), ...change })).toThrow())
   it('selects only the same-hash approved ordinary seeded variant; narrower requests never rewrite approved scope', () => {
     const approved = parseExploreCollectionAccess(capability()), initial = JSON.stringify(approved)
-    expect(chooseExploreIntent({ mode: 'explore', initialParentIds: [], expectedActivationSha256: SHA, access: approved })).toEqual({ protocol: 'polymath-explore-collection-v1', max_bridges: 3 })
+    expect(chooseExploreIntent({ mode: 'explore', initialParentIds: [], expectedActivationSha256: SHA, access: approved })).toEqual({ protocol: 'polymath-explore-collection-v1', max_bridges: 2 })
     expect(chooseExploreIntent({ mode: 'explore', initialParentIds: [], expectedActivationSha256: SHA, access: approved, requestedMaximum: 2 })?.max_bridges).toBe(2)
     expect(JSON.stringify(approved)).toBe(initial)
     expect(() => chooseExploreIntent({ mode: 'explore', initialParentIds: [], expectedActivationSha256: 'b'.repeat(64), access: approved })).toThrow()

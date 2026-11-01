@@ -25,6 +25,7 @@ export function chooseExploreIntent({ mode, initialParentIds, expectedActivation
   if (access.activation_sha256 !== expectedActivationSha256) return invalid()
   const approved = access.explore_collection_intent
   if (approved === null) { if (requestedMaximum !== undefined) return invalid(); return undefined }
-  const maximum = requestedMaximum === undefined ? Math.min(3, approved.max_bridges) : integer(requestedMaximum, 1, approved.max_bridges)
+  // Two bridges and their ranking fit the collection's 16-action budget; a third usually stops the run at its limit without a ranking.
+  const maximum = requestedMaximum === undefined ? Math.min(2, approved.max_bridges) : integer(requestedMaximum, 1, approved.max_bridges)
   return { protocol: 'polymath-explore-collection-v1', max_bridges: maximum }
 }
