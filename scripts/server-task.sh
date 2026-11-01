@@ -18,6 +18,19 @@ profiles() {
   echo "${list[@]:-}"
 }
 sql() { dc exec -T db psql -U polymath -d polymath -v ON_ERROR_STOP=1 "$@"; }
+# Recreating the research worker while a visitor's investigation is running
+# interrupts it, and an interrupted run waits for an explicit resume. Wait for
+# active work to finish first, up to DRAIN_MINUTES (default 12), then proceed.
+drain() {
+  local waited=0 active
+  while :; do
+    active=$(sql -Atc "SELECT count(*) FROM research_runs WHERE status IN ('queued','running','waiting_retry','cancel_requested')" 2>/dev/null || echo 0)
+    [ "${active:-0}" = 0 ] && { echo "drain: no active investigations"; return 0; }
+    [ "$waited" -ge $(( ${DRAIN_MINUTES:-12} * 60 )) ] && { echo "drain: $active still active after ${DRAIN_MINUTES:-12} minutes; proceeding"; return 0; }
+    [ "$waited" = 0 ] && echo "drain: waiting for $active active investigation(s) to finish"
+    sleep 15; waited=$((waited + 15))
+  done
+}
 app() { dc exec -T app /app/backend/.venv/bin/python "$@"; }
 
 cd "$DIR" || { echo "No checkout at $DIR"; exit 1; }
@@ -35,10 +48,12 @@ case "$TASK" in
     ;;
   update)
     git pull --ff-only
+    drain
     dc $(profiles) up -d --build --wait
     git log -1 --format='updated to %h'
     ;;
   restart)
+    drain
     dc $(profiles) up -d --wait
     ;;
   logs)
