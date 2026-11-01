@@ -95,8 +95,11 @@ and budgets; the model decides what to do.
 2. **Invention.** In Studio, the model abstracts a brief into functions, picks
    distant fields to search, then reasons beyond the sources to a new design,
    marking what is evidenced and what is its own invention, and works out the
-   engineering numbers. **Meta Muse Image** then paints each invention as
-   concept art from the saved design, on the same hard budget ledger.
+   engineering numbers. **Meta Muse Image** then paints a gallery of five to
+   seven pictures chosen for each invention (concept art, in its world, an
+   engineering cutaway, the key mechanism up close, where the ideas came from,
+   and how it works or its scale when they matter), all on the same hard
+   budget ledger.
 3. **Key finding and key forging.** In Solve, the model judges whether an
    existing answer fits, finds close fits in other fields and their exact
    shortfalls, then reasons over two to four of them to forge a combined
@@ -133,7 +136,7 @@ arrives.
 | Time | Show | Say |
 |---|---|---|
 | 0:00–0:12 | Home: "Discoveries hide between fields of science." | "Science is split into thousands of specialties. Polymath fuses Meta's frontier intelligence with an engine that reads across all of them, to solve and to invent." |
-| 0:12–0:55 | **Studio**: tap *A submarine inspired by whales*; the idea map lights up field by field; the Muse Image concept art appears; the invention, its engineering and calculations, the stress test | "Ask it to invent anything. Meta's frontier model turns the brief into the functions it needs; Polymath hunts the strangest corners of the world's science for mechanisms that already work; together they invent a new design, engineered with calculations and tested against the brief." |
+| 0:12–0:55 | **Studio**: tap *A submarine inspired by whales*; the idea map lights up field by field; the Muse Image gallery fills in, picture by picture; the invention, its engineering and calculations, the stress test | "Ask it to invent anything. Meta's frontier model turns the brief into the functions it needs; Polymath hunts the strangest corners of the world's science for mechanisms that already work; together they invent a new design, engineered with calculations and tested against the brief." |
 | 0:55–1:10 | *Download the design dossier*; *Continue in Meta AI* | "Take the design with you as a full dossier, or keep refining it with Meta AI." |
 | 1:10–1:40 | **Solve**: a real problem; close fits from two fields; the forged key in their colours | "Or describe a problem. Polymath looks for an answer anywhere in science, and if none fits, forges one from the closest answers in other fields." |
 | 1:40–2:00 | Open one investigation: the live timeline, a quoted passage, the strongest objection | "Every search is Muse Spark's choice, every claim links to its exact passage, and it argues against itself before showing you anything." |

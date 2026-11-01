@@ -93,17 +93,31 @@ That makes at most eight investigations per invention. Outcomes:
       visitors never paste Meta keys.
 - **Your inventions**: everything designed in this browser or account.
 
-## Concept art (Meta Muse Image, schema 0035)
+## The gallery (Meta Muse Image, schemas 0035 and 0036)
 
-Each invention can be painted by Meta's image model, `muse-image-1.0`.
-- **When it happens:** automatically once an invention is designed while the
-  page is open, and on request with *Paint the concept art* or *Paint another
-  view*. Each invention gets at most two pictures.
-- **Where it shows:** as the large picture under the invention's title,
-  captioned as an AI impression, and embedded in the downloadable dossier page.
-- **Prompt:** built on the server from the saved design text (title,
-  explanation, the parts it maps into), never from browser input. It always
-  asks for no text, labels or logos.
+Every invention gets a gallery of five to seven pictures painted by Meta's image
+model, `muse-image-1.0`. Each picture is placed beside the part of the story it
+shows, on the page and in the dossier.
+
+| View | Shown with | When |
+|---|---|---|
+| Concept art | under the title | always |
+| In its world | after the idea map | always |
+| Where the ideas came from (a natural-history plate of the sources) | the inspirations | always |
+| Engineering cutaway (blueprint) and the key mechanism up close | the invention, side by side | always |
+| How it works (a three-panel sequence) | engineering | when the design is a process, or has three or more mapped parts |
+| A sense of scale | the stress test | when the invention is enormous or tiny (a swarm, a city system, an implant, a cell) |
+
+**How the gallery is chosen.** Each prompt is built on the server from that
+invention's own brief, title, mechanism, parts and sources, never from browser
+input, and always asks for no text, labels or logos. Muse Image then plans each
+composition itself, so every invention gets its own pictures.
+
+**How it paints.** An invention designed while the page is open fills its
+gallery automatically, one picture at a time in reading order. Otherwise,
+*Paint the gallery* does the same. A view that was refused or held is never
+retried automatically. Each invention gets at most ten pictures, including
+repaints.
 
 **How the money is protected:**
 - Every picture is one `render_image` run with its own ledger cap of one call
@@ -113,7 +127,7 @@ Each invention can be painted by Meta's image model, `muse-image-1.0`.
     and `META_IMAGE_MODEL`);
   - that the account is armed for research;
   - the saved design;
-  - the per-invention, per-visitor (3 a day) and site (100 a day) limits.
+  - the per-invention (ten), per-visitor (28 a day) and site (400 a day) limits.
 
   It then reserves and claims the call with a narrow image permit that covers
   only render runs. Kill switch, freeze and the hard and daily caps all apply.
