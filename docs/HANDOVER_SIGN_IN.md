@@ -161,6 +161,8 @@ it right away means nothing gets lost.
    - If Google insists on extra fields before publishing (a privacy policy, for
      example), stop and tell Eks exactly what it asks for. Claude Code can add
      a page for it.
+   - Privacy policy link: `https://askpolymath.com/privacy`; terms of service
+     link: `https://askpolymath.com/terms` (both live after Part A).
 
 ## Part D: ORCID (about 4 minutes)
 
