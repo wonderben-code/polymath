@@ -1,3 +1,4 @@
+import { rigourLabel } from './rigour'
 import { useId } from 'react'
 import { ClaimBoundOverview } from '../scientificContext/ClaimBoundOverview'
 import type { ReactNode } from 'react'
@@ -305,7 +306,7 @@ export function ResearchRunView({ run, events, result, connection, onCancel, can
   const timeline = <section className="research-activity" aria-labelledby="research-activity-title"><div className="research-section-heading"><h3 id="research-activity-title">Research activity</h3><span className={`research-connection connection-${connection}`} aria-live="polite">{connectionNames[connection]}</span></div>{activity.length ? <ol className="research-timeline" aria-label="Recorded research activity" aria-live="polite" aria-relevant="additions">{activity.map((event, index) => { const step = stepKind(event.kind); return <li key={event.sequence} className={`research-step step-${step.tone}`}><span className="research-event-number" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span><p><span className="research-step-label">{step.label}</span>{event.summary}</p></li> })}</ol> : <p className="research-empty">No recorded activity yet.</p>}{run.status === 'running' && <p className="research-thinking"><span className="research-thinking-dots" aria-hidden="true"><span /><span /><span /></span>Thinking about the next step…</p>}</section>
   return (
     <section className={`research-run-view ${terminal ? 'is-finished' : 'is-live'}`} aria-labelledby="research-run-title">
-      <header className="research-run-heading"><div><span className="eyebrow accent">{run.task_kind === 'reassess_finding' ? 'EVIDENCE REASSESSMENT' : modeNames[run.mode].toUpperCase()} / RESEARCH RECORD</span><h2 id="research-run-title">{run.goal || 'An open discovery'}</h2></div><span className={`research-run-state state-${run.status}`} role="status">{state.label}</span></header>
+      <header className="research-run-heading"><div><span className="eyebrow accent">{run.task_kind === 'reassess_finding' ? 'EVIDENCE REASSESSMENT' : modeNames[run.mode].toUpperCase()} / RESEARCH RECORD</span>{rigourLabel(run.rigour) && <span className="run-rigour">Evidence bar: {rigourLabel(run.rigour)}</span>}<h2 id="research-run-title">{run.goal || 'An open discovery'}</h2></div><span className={`research-run-state state-${run.status}`} role="status">{state.label}</span></header>
       <div className="research-run-summary"><p>{state.description}</p>{!terminalStatuses.has(run.status) && notifyControl}{canCancel && <button type="button" className="research-cancel" onClick={onCancel} disabled={cancelling}>{cancelling ? 'Requesting cancellation…' : 'Cancel investigation'}</button>}</div>
       {findingVersion && <FindingVersionNotice {...findingVersion} />}
       {!terminal && observatory}

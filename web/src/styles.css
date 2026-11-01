@@ -519,3 +519,19 @@ body { background: var(--paper); color: var(--ink); font-size: 16px; line-height
 .credits-logo { display: block; width: auto; max-width: 160px; margin: 2px 0 4px; }
 .credits-mark { display: inline-block; vertical-align: -3px; margin-right: 8px; }
 .credits strong:has(.credits-mark)::before { display: none; }
+
+/* The rigour bar: one quiet choice of how vetted the literature must be. */
+.rigour-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 14px 0 4px; }
+.rigour-label { font-size: 13px; font-weight: 600; color: var(--ink); }
+.rigour-options { display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 3px; border-radius: 999px; background: #efede8; }
+.rigour-options button { border: 0; border-radius: 999px; background: transparent; padding: 6px 12px; font: inherit; font-size: 13px; color: var(--muted); cursor: pointer; }
+.rigour-options button[aria-pressed='true'] { background: #ffffff; color: var(--ink); box-shadow: 0 1px 3px rgba(22, 24, 29, .12); }
+.rigour-line { flex-basis: 100%; margin: 0; font-size: 13px; color: var(--muted); }
+.run-rigour { display: inline-block; margin-left: 8px; font-size: 12px; color: var(--muted); }
+/* Five modes and four bars must fit a 390-pixel phone without clipping. */
+@media (max-width: 520px) {
+  .calm .mode-switch { width: 100%; justify-content: space-between; }
+  .calm .mode-switch button { flex: 1 1 auto; padding: 8px 6px; font-size: 13px; }
+  .rigour-options { display: grid; grid-template-columns: 1fr 1fr; width: 100%; border-radius: 16px; }
+  .rigour-options button { border-radius: 12px; }
+}

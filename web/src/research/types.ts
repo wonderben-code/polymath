@@ -16,6 +16,8 @@ export interface ResearchRunSummary {
   discovery_intent?: DiscoveryIntent
   explore_collection_intent?: ExploreCollectionIntent
   ask_overview_intent?: AskOverviewIntent
+  /** The rigour bar recorded with the investigation, when one was chosen. */
+  rigour?: 'frontier' | 'standard' | 'peer_reviewed' | 'established'
 }
 
 export interface ResearchActivityEvent {

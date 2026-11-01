@@ -1,3 +1,5 @@
+import { currentRigour, DEFAULT_RIGOUR, RIGOURS } from './rigour'
+import type { Rigour } from './rigour'
 import { parseOptionalExploreIntent } from '../exploreCollection/parsers'
 import type { ExploreCollectionIntent } from '../exploreCollection/types'
 import { parseOverviewIntent, parseResultOverviewMetadata } from '../scientificContext/overviewBinding'
@@ -112,6 +114,7 @@ export function parseRun(value: unknown): OwnedRun {
     ...(discovery ? { discovery_intent: discovery } : {}),
     ...(collection ? { explore_collection_intent: collection } : {}),
     ...(overview ? { ask_overview_intent: overview } : {}),
+    ...(typeof run.rigour === 'string' && RIGOURS.some((item) => item.id === run.rigour) ? { rigour: run.rigour as Rigour } : {}),
   }
 }
 
@@ -375,7 +378,7 @@ export async function createResearchRun(mode: OwnedRun['mode'], goal: string, cs
   if (overviewIntent && mode !== 'ask') throw new ResearchApiError('invalid_request')
   let collectionIntent: ExploreCollectionIntent | undefined; try { collectionIntent = parseOptionalExploreIntent(collection) } catch { throw new ResearchApiError('invalid_request') }
   if (collectionIntent && (mode !== 'explore' || parentResultIds.length || intent || overviewIntent)) throw new ResearchApiError('invalid_request')
-  const created = parseRun(await request('/api/v1/runs', signal, { csrf, native, body: { mode, goal, ...(parentResultIds.length ? { parent_result_ids: parentResultIds } : {}), ...(native ? { expected_activation_sha256: native.expectedActivationSha256 } : {}), ...(intent ? { discovery_intent: intent } : {}), ...(overviewIntent ? { ask_overview_intent: overviewIntent } : {}), ...(collectionIntent ? { explore_collection_intent: collectionIntent } : {}) } }))
+  const created = parseRun(await request('/api/v1/runs', signal, { csrf, native, body: { mode, goal, ...(parentResultIds.length ? { parent_result_ids: parentResultIds } : {}), ...(native ? { expected_activation_sha256: native.expectedActivationSha256 } : {}), ...(intent ? { discovery_intent: intent } : {}), ...(overviewIntent ? { ask_overview_intent: overviewIntent } : {}), ...(collectionIntent ? { explore_collection_intent: collectionIntent } : {}), ...(currentRigour() !== DEFAULT_RIGOUR ? { rigour: currentRigour() } : {}) } }))
   if (intent ? !created.discovery_intent || created.discovery_intent.max_stages !== intent.max_stages || created.discovery_intent.max_depth !== intent.max_depth : created.discovery_intent !== undefined) return invalid()
   if (!!created.ask_overview_intent !== !!overviewIntent || (collectionIntent ? created.explore_collection_intent?.max_bridges !== collectionIntent.max_bridges : created.explore_collection_intent !== undefined)) return invalid()
   return created

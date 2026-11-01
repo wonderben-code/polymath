@@ -65,7 +65,9 @@ def test_public_policy_and_account_reach_both_fresh_authority_paths(monkeypatch)
 def test_default_source_factory_pins_context_lease_and_real_pacing_bounds(monkeypatch):
     worker, _, engine = compose(monkeypatch)
     captured = {}
-    lease, snapshot = object(), object()
+    lease, snapshot = object(), SimpleNamespace(id="synthetic-run")
+    # The run's recorded rigour bar reaches the search tools.
+    monkeypatch.setattr("polymath.rigour.level_for", lambda session, run_id: "peer_reviewed")
 
     def pacing(received, **keywords):
         assert received is engine
@@ -77,7 +79,11 @@ def test_default_source_factory_pins_context_lease_and_real_pacing_bounds(monkey
     authorized = []
     monkeypatch.setattr(runtime, "_authorize_provider", lambda *args: authorized.append(args))
     tools = worker["tools_context_factory"](SimpleNamespace(lease=lease), snapshot)
-    assert tools == {"openalex_api_key": None, "provider_slot": "provider-slot"}
+    assert tools == {
+        "openalex_api_key": None,
+        "provider_slot": "provider-slot",
+        "rigour": "peer_reviewed",
+    }
     assert captured["max_wait_seconds"] == 10
     session = object()
     captured["authorize"](session)

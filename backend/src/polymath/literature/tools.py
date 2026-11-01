@@ -44,8 +44,16 @@ class OpenLiteratureTools:
         transport: httpx.AsyncBaseTransport | None = None,
         results_per_provider: int = 5,
         provider_slot: ProviderSlot | None = None,
+        rigour: str = "standard",
     ) -> None:
         from polymath.literature.full_text import ArxivHtmlClient
+        from polymath.rigour import LEVELS, OPENALEX_FILTERS, PREPRINTS_ALLOWED
+
+        if rigour not in LEVELS:
+            raise ValueError("Unknown rigour level")
+        self.rigour = rigour
+        self._openalex_filter = OPENALEX_FILTERS[rigour]
+        self._preprints = PREPRINTS_ALLOWED[rigour]
 
         validate_result_limit(results_per_provider)
         self._openalex = OpenAlexClient(
@@ -65,9 +73,15 @@ class OpenLiteratureTools:
             raise LiteratureError("invalid_query") from None
         if purpose not in ("discovery", "counterevidence", "prior_work"):
             raise LiteratureError("invalid_purpose")
-        providers = (self._openalex, self._arxiv)
+        # Above the standard bar, preprint-only arXiv search is left out.
+        providers = (self._openalex, self._arxiv) if self._preprints else (self._openalex,)
         responses = await asyncio.gather(
-            *(provider.search(query, limit=self._limit) for provider in providers),
+            *(
+                provider.search(query, limit=self._limit, filter=self._openalex_filter)
+                if provider is self._openalex
+                else provider.search(query, limit=self._limit)
+                for provider in providers
+            ),
             return_exceptions=True,
         )
         failures = []
