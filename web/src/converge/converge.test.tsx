@@ -25,7 +25,7 @@ function programme(steps: ConvergeStep[] = [step()], extra: Record<string, unkno
   return {
     id: PID, theme: 'A synthetic theme', status: 'active', field_count: 4, connections_held: steps.filter((item) => item.status === 'held').length, created_at: '2026-10-29T00:00:00Z', updated_at: '2026-10-29T00:00:00Z',
     finished_reason: null, fields: ['Ecology', 'Optics', 'Economics', 'Linguistics'].map((name, index) => ({ name, origin: index === 0 ? 'chosen' : 'spread', touched: index < 2 })),
-    ceiling_microdollars: 20_000_000, spent_microdollars: 1_500_000, step_estimate_microdollars: 500_000, max_steps: 400, steps_used: steps.length, deepest_step_ids: [], steps, ...extra,
+    ceiling_microdollars: 20_000_000, spent_microdollars: 1_500_000, held_microdollars: 0, step_estimate_microdollars: 500_000, max_steps: 400, steps_used: steps.length, deepest_step_ids: [], steps, ...extra,
   }
 }
 
@@ -75,7 +75,7 @@ describe('converge workspace', () => {
     }))
     const submit = vi.fn(async () => ({ id: RUN, mode: 'explore', goal: 'g', status: 'queued', created_at: '', updated_at: '', result_id: null, error_code: null, external_outcome_unknown: false } as never))
     render(<ConvergeWorkspace enabled csrfToken={CSRF} canSubmit focusId={PID} submit={submit} onOpenRun={vi.fn()} onSessionExpired={vi.fn()} />)
-    await waitFor(() => expect(submit).toHaveBeenCalledWith('explore', 'A deeper synthetic goal', [R1, R2]))
+    await waitFor(() => expect(submit).toHaveBeenCalledWith('explore', 'A deeper synthetic goal', [R1, R2], { collection: false }))
     await waitFor(() => expect(calls).toContain(`POST /api/v1/converge/${PID}/attach`))
     expect(await screen.findByText(/Looking for what these connections share · level 2/)).toBeInTheDocument()
     expect(screen.getByRole('group', { name: /A circle of 4 fields/ })).toBeInTheDocument()

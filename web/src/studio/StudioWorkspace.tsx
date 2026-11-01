@@ -36,7 +36,7 @@ export interface StudioWorkspaceProps {
   canSubmit: boolean
   /** Live research is switched off or not funded for this browser right now. */
   paused?: boolean
-  submit: (mode: 'ask' | 'explore', goal: string, parentResultIds: readonly string[]) => Promise<OwnedRun | undefined>
+  submit: (mode: 'ask' | 'explore', goal: string, parentResultIds: readonly string[], options?: { collection?: boolean }) => Promise<OwnedRun | undefined>
   onOpenRun: (id: string) => void
   onSolveGap: (gap: string) => void
   onSessionExpired: () => void
@@ -167,7 +167,7 @@ export function StudioWorkspace({ enabled, csrfToken, canSubmit, paused = false,
       if (next.state === 'due') {
         if (!canSubmitRef.current) { setStatus('Waiting until live research is available for this browser.'); return }
         setStatus(`${doing(next.stage)}…`)
-        const run = await submit(next.mode, next.goal, next.parent_result_ids)
+        const run = await submit(next.mode, next.goal, next.parent_result_ids, { collection: false })
         if (!run) { setRunning(false); setStatus('The next stage could not be started. Live research may be unavailable; your brief is saved.'); return }
         setProgramme(await attachStudioRun(programme.id, csrfToken, { step_id: next.step_id, stage: next.stage, run_id: run.id }))
       } else if (next.state === 'waiting') {

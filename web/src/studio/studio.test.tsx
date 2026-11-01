@@ -95,7 +95,7 @@ describe('Innovation Studio', () => {
     await userEvent.click(screen.getByRole('radio', { name: 'Strange corners' }))
     expect(screen.getByRole('radio', { name: 'Strange corners' })).toHaveAttribute('aria-checked', 'true')
     await userEvent.click(screen.getByRole('button', { name: 'Invent it' }))
-    await waitFor(() => expect(props.submit).toHaveBeenCalledWith('ask', 'Design brief: …', []))
+    await waitFor(() => expect(props.submit).toHaveBeenCalledWith('ask', 'Design brief: …', [], { collection: false }))
     const create = calls.find((call) => call.url === '/api/v1/studio' && call.method === 'POST')
     expect(create?.body).toEqual({ brief: BRIEF, specs: ['Dives to 1,000 metres', 'Uses little energy', 'Carries four passengers'], wildness: 'strange' })
     await waitFor(() => expect(calls.some((call) => call.url.endsWith('/attach') && (call.body as { run_id: string }).run_id === RUN)).toBe(true))

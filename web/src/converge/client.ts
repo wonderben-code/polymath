@@ -28,6 +28,7 @@ export interface ConvergeProgramme extends ConvergeSummary {
   fields: ConvergeField[]
   ceiling_microdollars: number
   spent_microdollars: number
+  held_microdollars: number
   step_estimate_microdollars: number
   max_steps: number
   steps_used: number
@@ -80,7 +81,7 @@ export function parseProgramme(value: unknown): ConvergeProgramme {
   if (deepest.some((value) => !ids.has(value))) invalid()
   return {
     ...parseSummary(item), finished_reason: nullableText(item.finished_reason, 32), fields,
-    ceiling_microdollars: integer(item.ceiling_microdollars, MONEY), spent_microdollars: integer(item.spent_microdollars, MONEY), step_estimate_microdollars: integer(item.step_estimate_microdollars, MONEY),
+    ceiling_microdollars: integer(item.ceiling_microdollars, MONEY), spent_microdollars: integer(item.spent_microdollars, MONEY), held_microdollars: integer(item.held_microdollars, MONEY), step_estimate_microdollars: integer(item.step_estimate_microdollars, MONEY),
     max_steps: integer(item.max_steps, 400), steps_used: integer(item.steps_used, 400), deepest_step_ids: deepest, steps,
   }
 }

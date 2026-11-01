@@ -15,7 +15,7 @@ export interface FrontierWorkspaceProps {
   csrfToken: string | null
   canSubmit: boolean
   focusId: string | null
-  submit: (mode: 'ask' | 'explore', goal: string, parentResultIds: readonly string[]) => Promise<OwnedRun | undefined>
+  submit: (mode: 'ask' | 'explore', goal: string, parentResultIds: readonly string[], options?: { collection?: boolean }) => Promise<OwnedRun | undefined>
   onOpenRun: (id: string) => void
   onSessionExpired: () => void
   onFinished?: (programme: FrontierProgramme) => void
@@ -75,7 +75,7 @@ export function FrontierWorkspace({ enabled, csrfToken, canSubmit, focusId, subm
       if (next.state === 'due') {
         if (!canSubmitRef.current) { setStatus('Waiting until live research is available for this browser.'); return }
         setStatus(`${ACTION_LABELS[next.action]}…`)
-        const run = await submit(next.mode, next.goal, next.parent_result_ids)
+        const run = await submit(next.mode, next.goal, next.parent_result_ids, { collection: false })
         if (!run) { setRunning(false); setStatus('The next step could not be queued. Live research may be unavailable; the programme is saved.'); return }
         setProgramme(await attachFrontierRun(programme.id, csrfToken, { node_id: next.node_id, action: next.action, run_id: run.id }))
       } else if (next.state === 'waiting') {

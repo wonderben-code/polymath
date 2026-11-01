@@ -15,7 +15,7 @@ export interface ConvergeWorkspaceProps {
   csrfToken: string | null
   canSubmit: boolean
   focusId: string | null
-  submit: (mode: 'explore', goal: string, parentResultIds: readonly string[]) => Promise<OwnedRun | undefined>
+  submit: (mode: 'explore', goal: string, parentResultIds: readonly string[], options?: { collection?: boolean }) => Promise<OwnedRun | undefined>
   /** The latest recorded activity of the investigation now running, if any. */
   liveActivity?: { runId: string; summary: string } | null
   onOpenRun: (id: string) => void
@@ -96,7 +96,7 @@ export function ConvergeWorkspace({ enabled, csrfToken, canSubmit, focusId, subm
       if (next.state === 'due') {
         if (!canSubmitRef.current) { setStatus('Waiting until live research is available for this browser.'); return }
         setStatus(next.kind === 'thread' ? 'Choosing two fields that may share one structure…' : `Looking for what these connections share · level ${next.level}…`)
-        const run = await submit('explore', next.goal, next.parent_result_ids)
+        const run = await submit('explore', next.goal, next.parent_result_ids, { collection: false })
         if (!run) { setRunning(false); setStatus('The next step could not be queued. Live research may be unavailable; the circle is saved.'); return }
         setProgramme(await attachConvergeRun(programme.id, csrfToken, { kind: next.kind, parent_result_ids: next.parent_result_ids, run_id: run.id }))
       } else if (next.state === 'waiting') {
@@ -194,7 +194,7 @@ export function ConvergeWorkspace({ enabled, csrfToken, canSubmit, focusId, subm
         <p className="converge-narration" role="status">{running && runningStep && <span className="converge-live-dot" aria-hidden="true" />}{narration || (programme.status === 'active' ? 'Ready. Continue to let Polymath work through the circle; keep this tab open.' : programme.status === 'completed' ? FINISHED[programme.finished_reason ?? ''] ?? 'Finished.' : `Circle ${programme.status}.`)}</p>
         {running && notifyControl}
         <Enso programme={programme} selectedId={selected} onSelect={setSelected} seeking={running && !!runningStep && runningStep.kind === 'thread'} />
-        <p className="converge-tally"><span><strong>{touched}</strong> of {programme.fields.length} fields connected</span><span><strong>{tested}</strong> tested</span><span><strong>{held.length}</strong> holding</span><span><strong>{depth}</strong> {depth === 1 ? 'level' : 'levels'} deep</span><span>{dollars(programme.spent_microdollars)} of {dollars(programme.ceiling_microdollars)}</span></p>
+        <p className="converge-tally"><span><strong>{touched}</strong> of {programme.fields.length} fields connected</span><span><strong>{tested}</strong> tested</span><span><strong>{held.length}</strong> holding</span><span><strong>{depth}</strong> {depth === 1 ? 'level' : 'levels'} deep</span><span>{dollars(programme.spent_microdollars)} of {dollars(programme.ceiling_microdollars)}{programme.held_microdollars > 0 && <> · {dollars(programme.held_microdollars)} held while a call is out</>}</span></p>
 
         {focus && <article className="converge-detail" aria-label="Selected connection">
           <span className="converge-kicker">{focus.kind === 'thread' ? 'A connection between two fields' : `Level ${focus.level} · what ${focus.premise_step_ids.length} connections share`}</span>
