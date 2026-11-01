@@ -6,6 +6,8 @@ import { LockAndKey } from './LockAndKey'
 import './solve.css'
 
 const POLL_MS = 6000
+const RETRY_HOLD_MS = 30000
+const MAX_HOLDS = 10
 const STAGE_WORDS = { find: 'Looking for an existing key anywhere in science', fit: 'Searching other fields for close fits', forge: 'Forging a new key from the close fits' }
 const OUTCOME_WORDS = {
   found: { title: 'A key already exists', line: 'This problem has an answer in the literature. Here it is, with the passages behind it.' },
@@ -61,8 +63,13 @@ export function SolveWorkspace({ enabled, csrfToken, canSubmit, focusId, submit,
   const [status, setStatus] = useState('')
   const [error, setError] = useState('')
   const busy = useRef(false)
+  const holds = useRef(0)
+  const holdUntil = useRef(0)
   const canSubmitRef = useRef(canSubmit)
   canSubmitRef.current = canSubmit
+  // The tick awaits the server before submitting, so it must call the latest submit, not the one captured when the tick began (that one may predate the previous run finishing).
+  const submitRef = useRef(submit)
+  submitRef.current = submit
 
   const fail = useCallback((failure: unknown) => {
     const code = failure instanceof SolveApiError ? failure.code : 'unavailable'
@@ -93,9 +100,16 @@ export function SolveWorkspace({ enabled, csrfToken, canSubmit, focusId, submit,
       setProgramme(updated)
       if (next.state === 'due') {
         if (!canSubmitRef.current) { setStatus('Waiting until live research is available for this browser.'); return }
+        if (Date.now() < holdUntil.current) return
         setStatus(`${STAGE_WORDS[next.stage]}…`)
-        const run = await submit(next.mode, next.goal, next.parent_result_ids, { collection: false })
-        if (!run) { setRunning(false); setStatus('The next search could not be started. Live research may be unavailable; your problem is saved.'); return }
+        const run = await submitRef.current(next.mode, next.goal, next.parent_result_ids, { collection: false })
+        if (!run) {
+          // A step that could not be started (a blip, a restart, a rate limit) is tried again shortly; the programme stops only when it keeps failing.
+          holds.current += 1; holdUntil.current = Date.now() + RETRY_HOLD_MS
+          if (holds.current >= MAX_HOLDS) { setRunning(false); setStatus('The next search could not be started. Live research may be unavailable; your problem is saved.'); return }
+          setStatus('The next search could not be started yet. Trying again shortly; your problem is saved.'); return
+        }
+        holds.current = 0
         setProgramme(await attachSolveRun(programme.id, csrfToken, { step_id: next.step_id, stage: next.stage, run_id: run.id }))
       } else if (next.state === 'waiting') {
         const stage = updated.steps.find((item) => item.status === 'running')?.stage
@@ -105,7 +119,7 @@ export function SolveWorkspace({ enabled, csrfToken, canSubmit, focusId, submit,
         if (next.state === 'completed') void refreshList()
       }
     } catch (failure) { setRunning(false); fail(failure) } finally { busy.current = false }
-  }, [programme, csrfToken, submit, fail, refreshList])
+  }, [programme, csrfToken, fail, refreshList])
 
   const tickRef = useRef(tick)
   tickRef.current = tick

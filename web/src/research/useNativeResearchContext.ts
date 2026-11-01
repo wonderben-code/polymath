@@ -33,7 +33,7 @@ export function useNativeResearchContext({ enabled, csrfToken, required, availab
     if (!enabled || !csrfToken || !available) { setPhase('disabled'); return () => controller.abort() }
     setPhase('loading')
     const current = () => active && scope === generation.current && !controller.signal.aborted
-    function failed(caught: unknown) {
+    function failed(caught: unknown, retry?: () => Promise<void>) {
       if (!current()) return
       setActivation(null); setExploreAccess(null); setExplorePhase('disabled'); setScientificCapabilities([]); setScientificPhase('disabled'); setOperatorCsrf(null); setOperatorExpiry(null); setPollPaused(false)
       const code = caught instanceof BudgetError || caught instanceof PublicationError || caught instanceof ResearchAccessError ? caught.code : 'unavailable'
@@ -41,7 +41,14 @@ export function useNativeResearchContext({ enabled, csrfToken, required, availab
       if (caught instanceof ResearchAccessError && caught.code === 'resource_limited' && caught.retryAfterSeconds !== null) setRetryUntil(Date.now() + caught.retryAfterSeconds * 1000)
       if (['browser_expired', 'browser_changed'].includes(code)) { setAccess(null); setPhase('expired'); generation.current++; controller.abort(); browserExpired.current() }
       else if (['operator_expired', 'operator_unavailable', 'readiness_role_unavailable', 'readiness_actor_forbidden', 'meta_research_actor_forbidden'].includes(code)) setPhase('operator_required')
-      else setPhase('error')
+      else {
+        setPhase('error')
+        // A read that failed (a restart, a slow reply, a blip) is tried again on the ordinary poll cadence rather than leaving the page without live research until it reloads.
+        // A read the server rate-limited is not retried automatically: the cooldown is shown and the visitor's refresh is what asks again.
+        if (code === 'resource_limited' || !retry) return
+        if (reads < 60) { reads++; timer = window.setTimeout(() => void retry(), 10000) }
+        else setPollPaused(true)
+      }
     }
     async function readCurrent() {
       try { const currentActivation = await getCurrentResearchActivation(controller.signal); if (!current()) return
@@ -58,7 +65,7 @@ export function useNativeResearchContext({ enabled, csrfToken, required, availab
         setActivation(currentActivation.activation); if (scientificBlockedHash.current !== currentActivation.activation.manifest_sha256) { setScientificCapabilities(currentActivation.activation.scientific_context_profiles ? ['artifact_scientific_context_v1', 'ask_claim_overview_v1', 'ask_reassessment_overview_v1'] : []); setScientificPhase('ready') }; setReason(null); setPhase('ready')
         if (reads < 60) timer = window.setTimeout(() => void readCurrent(), 10000)
         else setPollPaused(true)
-      } catch (caught) { failed(caught) }
+      } catch (caught) { failed(caught, readCurrent) }
     }
     async function readAccess() {
       let protocolRetrySeconds = 0
@@ -106,7 +113,7 @@ export function useNativeResearchContext({ enabled, csrfToken, required, availab
         // Only GETs can refresh funding; an earlier task keeps its original hash.
         if (reads < 60) timer = window.setTimeout(() => void readAccess(), Math.max(10000, protocolRetrySeconds * 1000, (next.retry_after_seconds ?? 0) * 1000))
         else setPollPaused(true)
-      } catch (caught) { failed(caught) }
+      } catch (caught) { failed(caught, readAccess) }
     }
     void readAccess()
     return () => { active = false; controller.abort(); window.clearTimeout(timer) }
