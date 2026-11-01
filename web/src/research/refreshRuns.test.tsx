@@ -36,6 +36,6 @@ describe('re-reading runs the page still counts as active', () => {
     await act(async () => { await result.current.refreshRuns() })
     expect(result.current.ownActiveResearch).toBe(false)
     expect(result.current.runs[0]?.status).toBe('cancelled')
-    expect(fetch.mock.calls.every(([, options]) => !options || (options as RequestInit).method === 'GET' || (options as RequestInit).method === undefined)).toBe(true)
+    expect(fetch.mock.calls.every((call) => { const options = (call as unknown as [RequestInfo | URL, RequestInit | undefined])[1]; return !options?.method || options.method === 'GET' })).toBe(true)
   })
 })
