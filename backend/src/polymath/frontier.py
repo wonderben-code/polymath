@@ -120,6 +120,32 @@ def _programme(session: Session, owner_hash: str, programme_id: uuid.UUID, *, lo
     return row
 
 
+def release_interrupted_run(session: Session, run: ResearchRun) -> None:
+    """Cancel an interrupted step run so the owner's single active slot frees.
+
+    A stage programme retries or fails its step itself; left interrupted, the run
+    kept counting as the visitor's one active investigation and every later
+    step waited "until live research is available" for good. The cancellation
+    is the owner's own free cancellation, made inside the owner's request; an
+    unknown outcome keeps its ambiguity marker exactly as a manual cancel does.
+    """
+    if run.status != "interrupted":
+        return
+    from polymath.jobs import _clear_lease, _event, _now
+
+    run.lease_token += 1
+    run.status = "cancelled"
+    _clear_lease(run)
+    run.finished_at = _now(session)
+    _event(
+        session,
+        run,
+        f"cancel:{run.lease_token}",
+        "cancelled",
+        "Investigation cancelled by its programme so the next stage can start",
+    )
+
+
 def _saved_finding(session: Session, run: ResearchRun):
     """The run's own verified saved result, or None for an empty or invalid outcome."""
     result_id = (run.outcome or {}).get("result_id") if isinstance(run.outcome, dict) else None
@@ -366,6 +392,7 @@ class FrontierStore:
             run = session.get(ResearchRun, attempt.run_id)
             if run is None or run.status not in TERMINAL_RUN_STATUSES:
                 continue
+            release_interrupted_run(session, run)
             node = session.get(FrontierNode, attempt.node_id)
             result_id, finding = (
                 _saved_finding(session, run) if run.status == "succeeded" else (None, None)

@@ -23,7 +23,7 @@ from sqlalchemy.orm import Session
 from polymath.access_models import ResearchRunAccess
 from polymath.evidence import EvidenceError, EvidenceStore
 from polymath.evidence_models import EvidenceResult
-from polymath.frontier import _saved_finding
+from polymath.frontier import _saved_finding, release_interrupted_run
 from polymath.lineage_models import ResearchRunParent
 from polymath.models import ResearchRun
 from polymath.research.models import AnswerFinding, BridgeFinding
@@ -377,6 +377,7 @@ class StudioStore:
             run = session.get(ResearchRun, step.run_id)
             if run is None or run.status not in TERMINAL:
                 continue
+            release_interrupted_run(session, run)
             step.updated_at = func.clock_timestamp()
             if run.status != "succeeded":
                 step.failed_attempts += 1
