@@ -16,6 +16,8 @@ export interface FrontierWorkspaceProps {
   enabled: boolean
   csrfToken: string | null
   canSubmit: boolean
+  /** Present while the allowance poll has paused; a running programme calls it so live research is checked again. */
+  refreshAccess?: () => void
   focusId: string | null
   submit: (mode: 'ask' | 'explore', goal: string, parentResultIds: readonly string[], options?: { collection?: boolean }) => Promise<OwnedRun | undefined>
   onOpenRun: (id: string) => void
@@ -35,7 +37,7 @@ function message(code: string): string {
   return 'Frontier could not be reached. Try again in a moment.'
 }
 
-export function FrontierWorkspace({ enabled, csrfToken, canSubmit, focusId, submit, onOpenRun, onSessionExpired, onFinished, notifyControl, onSolveStep }: FrontierWorkspaceProps) {
+export function FrontierWorkspace({ enabled, csrfToken, canSubmit, refreshAccess, focusId, submit, onOpenRun, onSessionExpired, onFinished, notifyControl, onSolveStep }: FrontierWorkspaceProps) {
   const [programmes, setProgrammes] = useState<FrontierSummary[]>([])
   const [programme, setProgramme] = useState<FrontierProgramme | null>(null)
   const [selectedNode, setSelectedNode] = useState<string | null>(null)
@@ -50,6 +52,9 @@ export function FrontierWorkspace({ enabled, csrfToken, canSubmit, focusId, subm
   // The tick awaits the server before submitting, so it must call the latest submit, not the one captured when the tick began (that one may predate the previous run finishing).
   const submitRef = useRef(submit)
   submitRef.current = submit
+  const refreshAccessRef = useRef(refreshAccess)
+  refreshAccessRef.current = refreshAccess
+  const refreshedAt = useRef(0)
 
   const fail = useCallback((failure: unknown) => {
     const code = failure instanceof FrontierApiError ? failure.code : 'unavailable'
@@ -80,7 +85,12 @@ export function FrontierWorkspace({ enabled, csrfToken, canSubmit, focusId, subm
       const { next, programme: updated } = await nextFrontierAction(programme.id, csrfToken)
       setProgramme(updated)
       if (next.state === 'due') {
-        if (!canSubmitRef.current) { setStatus('Waiting until live research is available for this browser.'); return }
+        if (!canSubmitRef.current) {
+          setStatus('Waiting until live research is available for this browser.')
+          // The allowance poll pauses after ten minutes without a visitor action; a running programme is that action.
+          if (refreshAccessRef.current && Date.now() - refreshedAt.current >= 30000) { refreshedAt.current = Date.now(); refreshAccessRef.current() }
+          return
+        }
         if (Date.now() < holdUntil.current) return
         setStatus(`${ACTION_LABELS[next.action]}…`)
         const run = await submitRef.current(next.mode, next.goal, next.parent_result_ids, { collection: false })

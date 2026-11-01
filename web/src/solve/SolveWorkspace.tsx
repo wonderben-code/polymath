@@ -20,6 +20,8 @@ export interface SolveWorkspaceProps {
   enabled: boolean
   csrfToken: string | null
   canSubmit: boolean
+  /** Present while the allowance poll has paused; a running programme calls it so live research is checked again. */
+  refreshAccess?: () => void
   focusId: string | null
   submit: (mode: 'ask' | 'explore', goal: string, parentResultIds: readonly string[], options?: { collection?: boolean }) => Promise<OwnedRun | undefined>
   onOpenRun: (id: string) => void
@@ -56,7 +58,7 @@ function StepCard({ step, index, onOpenRun }: { step: SolveStep; index: number; 
   )
 }
 
-export function SolveWorkspace({ enabled, csrfToken, canSubmit, focusId, submit, onOpenRun, onSessionExpired }: SolveWorkspaceProps) {
+export function SolveWorkspace({ enabled, csrfToken, canSubmit, refreshAccess, focusId, submit, onOpenRun, onSessionExpired }: SolveWorkspaceProps) {
   const [programmes, setProgrammes] = useState<SolveSummary[]>([])
   const [programme, setProgramme] = useState<SolveProgramme | null>(null)
   const [running, setRunning] = useState(false)
@@ -70,6 +72,9 @@ export function SolveWorkspace({ enabled, csrfToken, canSubmit, focusId, submit,
   // The tick awaits the server before submitting, so it must call the latest submit, not the one captured when the tick began (that one may predate the previous run finishing).
   const submitRef = useRef(submit)
   submitRef.current = submit
+  const refreshAccessRef = useRef(refreshAccess)
+  refreshAccessRef.current = refreshAccess
+  const refreshedAt = useRef(0)
 
   const fail = useCallback((failure: unknown) => {
     const code = failure instanceof SolveApiError ? failure.code : 'unavailable'
@@ -99,7 +104,12 @@ export function SolveWorkspace({ enabled, csrfToken, canSubmit, focusId, submit,
       const { next, programme: updated } = await nextSolveStep(programme.id, csrfToken)
       setProgramme(updated)
       if (next.state === 'due') {
-        if (!canSubmitRef.current) { setStatus('Waiting until live research is available for this browser.'); return }
+        if (!canSubmitRef.current) {
+          setStatus('Waiting until live research is available for this browser.')
+          // The allowance poll pauses after ten minutes without a visitor action; a running programme is that action.
+          if (refreshAccessRef.current && Date.now() - refreshedAt.current >= 30000) { refreshedAt.current = Date.now(); refreshAccessRef.current() }
+          return
+        }
         if (Date.now() < holdUntil.current) return
         setStatus(`${STAGE_WORDS[next.stage]}…`)
         const run = await submitRef.current(next.mode, next.goal, next.parent_result_ids, { collection: false })

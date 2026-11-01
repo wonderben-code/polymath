@@ -115,6 +115,20 @@ describe('Innovation Studio', () => {
     expect(screen.queryByRole('button', { name: 'Continue inventing' })).toBeNull()
   })
 
+  it('asks for the allowance to be checked again while a running programme waits for live research', async () => {
+    server({
+      '/api/v1/studio': programme(),
+      [`/api/v1/studio/${PROGRAMME}/next`]: { next: { state: 'due', step_id: BRIEF_STEP, stage: 'brief', mode: 'ask', goal: 'Design brief: …', parent_result_ids: [] }, programme: programme() },
+    })
+    const refreshAccess = vi.fn()
+    const props = workspace({ canSubmit: false, refreshAccess })
+    await userEvent.type(screen.getByLabelText('What would you like to create?'), BRIEF)
+    await userEvent.click(screen.getByRole('button', { name: 'Invent it' }))
+    expect(await screen.findByText('Waiting until live research is available for this browser.')).toBeVisible()
+    await waitFor(() => expect(refreshAccess).toHaveBeenCalledTimes(1))
+    expect(props.submit).not.toHaveBeenCalled()
+  })
+
   it('presents the invention, its sources, engineering and stress test, and every way to take it further', async () => {
     server({ '/api/v1/studio': { programmes: [designed] }, [`/api/v1/studio/${PROGRAMME}`]: designed })
     const props = workspace()

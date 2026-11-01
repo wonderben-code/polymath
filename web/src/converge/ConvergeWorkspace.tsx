@@ -16,6 +16,8 @@ export interface ConvergeWorkspaceProps {
   enabled: boolean
   csrfToken: string | null
   canSubmit: boolean
+  /** Present while the allowance poll has paused; a running programme calls it so live research is checked again. */
+  refreshAccess?: () => void
   focusId: string | null
   submit: (mode: 'explore', goal: string, parentResultIds: readonly string[], options?: { collection?: boolean }) => Promise<OwnedRun | undefined>
   /** The latest recorded activity of the investigation now running, if any. */
@@ -47,7 +49,7 @@ function fieldNames(step: ConvergeStep, programme: ConvergeProgramme): string[] 
   return step.field_indices.map((index) => programme.fields[index]?.name).filter((name): name is string => !!name)
 }
 
-export function ConvergeWorkspace({ enabled, csrfToken, canSubmit, focusId, submit, liveActivity, onOpenRun, onGoDeeper, onSessionExpired, onFinished, notifyControl }: ConvergeWorkspaceProps) {
+export function ConvergeWorkspace({ enabled, csrfToken, canSubmit, refreshAccess, focusId, submit, liveActivity, onOpenRun, onGoDeeper, onSessionExpired, onFinished, notifyControl }: ConvergeWorkspaceProps) {
   const [circles, setCircles] = useState<ConvergeSummary[]>([])
   const [programme, setProgramme] = useState<ConvergeProgramme | null>(null)
   const [selected, setSelected] = useState<string | null>(null)
@@ -64,6 +66,9 @@ export function ConvergeWorkspace({ enabled, csrfToken, canSubmit, focusId, subm
   // The tick awaits the server before submitting, so it must call the latest submit, not the one captured when the tick began (that one may predate the previous run finishing).
   const submitRef = useRef(submit)
   submitRef.current = submit
+  const refreshAccessRef = useRef(refreshAccess)
+  refreshAccessRef.current = refreshAccess
+  const refreshedAt = useRef(0)
 
   const fail = useCallback((failure: unknown) => {
     const code = failure instanceof ConvergeApiError ? failure.code : 'unavailable'
@@ -101,7 +106,12 @@ export function ConvergeWorkspace({ enabled, csrfToken, canSubmit, focusId, subm
       const { next, programme: updated } = await nextConvergeStep(programme.id, csrfToken)
       setProgramme(updated)
       if (next.state === 'due') {
-        if (!canSubmitRef.current) { setStatus('Waiting until live research is available for this browser.'); return }
+        if (!canSubmitRef.current) {
+          setStatus('Waiting until live research is available for this browser.')
+          // The allowance poll pauses after ten minutes without a visitor action; a running programme is that action.
+          if (refreshAccessRef.current && Date.now() - refreshedAt.current >= 30000) { refreshedAt.current = Date.now(); refreshAccessRef.current() }
+          return
+        }
         if (Date.now() < holdUntil.current) return
         setStatus(next.kind === 'thread' ? 'Choosing two fields that may share one structure…' : `Looking for what these connections share · level ${next.level}…`)
         const run = await submitRef.current('explore', next.goal, next.parent_result_ids, { collection: false })
