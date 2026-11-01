@@ -28,6 +28,7 @@ from polymath import (  # noqa: F401
     readiness_models,
     scientific_context_models,
     sharing_models,
+    solve_models,
     visitor_zenodo_models,
 )
 from polymath.config import Settings

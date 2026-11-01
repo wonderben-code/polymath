@@ -20,6 +20,8 @@ export interface FrontierWorkspaceProps {
   onSessionExpired: () => void
   onFinished?: (programme: FrontierProgramme) => void
   notifyControl?: import('react').ReactNode
+  /** Send one step to Solve, the key finder and key maker. */
+  onSolveStep?: (programmeId: string, nodeId: string) => void
 }
 
 function message(code: string): string {
@@ -30,7 +32,7 @@ function message(code: string): string {
   return 'Frontier could not be reached. Try again in a moment.'
 }
 
-export function FrontierWorkspace({ enabled, csrfToken, canSubmit, focusId, submit, onOpenRun, onSessionExpired, onFinished, notifyControl }: FrontierWorkspaceProps) {
+export function FrontierWorkspace({ enabled, csrfToken, canSubmit, focusId, submit, onOpenRun, onSessionExpired, onFinished, notifyControl, onSolveStep }: FrontierWorkspaceProps) {
   const [programmes, setProgrammes] = useState<FrontierSummary[]>([])
   const [programme, setProgramme] = useState<FrontierProgramme | null>(null)
   const [selectedNode, setSelectedNode] = useState<string | null>(null)
@@ -154,6 +156,7 @@ export function FrontierWorkspace({ enabled, csrfToken, canSubmit, focusId, subm
           {node.pending_action && <p>Next: {ACTION_LABELS[node.pending_action].toLowerCase()}.</p>}
           {node.attempts.length > 0 && <ul className="frontier-attempts">{node.attempts.map((attempt) => <li key={attempt.run_id}><span>{ACTION_LABELS[attempt.action]}{attempt.outcome ? ` · ${attempt.outcome.replaceAll('_', ' ')}` : ' · in progress'}</span><button type="button" onClick={() => onOpenRun(attempt.run_id)}>Open investigation</button></li>)}</ul>}
           {node.kind !== 'question' && node.pending_action && <button type="button" onClick={() => void prune(node.id)}>Skip this branch</button>}
+          {onSolveStep && programme && node.kind !== 'convergence' && <button type="button" onClick={() => onSolveStep(programme.id, node.id)}>Solve this step</button>}
         </article>}
         <p className="frontier-note"><span className="frontier-badge">Experimental</span> Supported means exact quotations from saved sources; derived and conjectured steps are model reasoning, clearly labelled. A solve path is only as strong as its weakest step.</p>
       </div>}
