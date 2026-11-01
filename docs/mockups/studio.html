@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Polymath Studio mockup</title>
+<style>
+  :root { --ink:#16181d; --muted:#5b606b; --line:#e8e5de; --paper:#fbfaf7; --violet:#6a45f5; --blue:#1f6fe0; --teal:#0b8a7a; --green:#3e8a2c; --amber:#b86e00; --rose:#cc3366;
+    --spectrum: linear-gradient(90deg,var(--violet),var(--blue),var(--teal),var(--green),var(--amber),var(--rose)); --serif:'Iowan Old Style','Palatino Linotype',Palatino,Georgia,serif; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--paper); color:var(--ink); font:14px/1.7 Inter,system-ui,-apple-system,sans-serif; }
+  .wrap { max-width:1080px; margin:0 auto; padding:28px 16px 80px; }
+  .note { font-size:12px; color:var(--muted); border:1px dashed #cfcbc2; padding:8px 12px; border-radius:6px; margin-bottom:26px; }
+  header.top { display:flex; align-items:baseline; gap:14px; padding-bottom:16px; position:relative; margin-bottom:34px; }
+  header.top::after { content:''; position:absolute; left:0; right:0; bottom:0; height:2px; background:var(--spectrum); opacity:.5; }
+  .brand { font-weight:700; font-size:22px; }
+  .modes { display:flex; gap:6px; flex-wrap:wrap; margin-left:auto; font-size:12px; }
+  .modes span { padding:6px 10px; border:1px solid var(--line); border-radius:20px; color:var(--muted); }
+  .modes span.on { color:#fff; background:var(--ink); border-color:var(--ink); }
+  h1 { font-family:var(--serif); font-weight:400; font-size:40px; line-height:1.15; margin:0 0 8px; letter-spacing:-.5px; }
+  h2 { font-family:var(--serif); font-weight:400; font-size:25px; margin:0 0 14px; }
+  .lede { color:var(--muted); font-size:15px; max-width:640px; margin:0 0 22px; }
+  .composer { border:1px solid var(--line); background:#fff; border-radius:10px; padding:20px; margin-bottom:46px; }
+  .brief { font-family:var(--serif); font-size:20px; border:0; border-bottom:1px solid var(--line); width:100%; padding:6px 0 12px; background:transparent; color:var(--ink); }
+  .row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:14px; font-size:12px; }
+  .label { color:var(--muted); margin-right:4px; min-width:84px; }
+  .chip { border:1px solid var(--line); padding:5px 10px; border-radius:14px; background:var(--paper); }
+  .dial { display:inline-flex; border:1px solid var(--line); border-radius:16px; overflow:hidden; }
+  .dial span { padding:5px 12px; color:var(--muted); }
+  .dial span.on { background:var(--ink); color:#fff; }
+  .go { margin-left:auto; background:var(--ink); color:#fff; border:0; border-radius:20px; padding:10px 18px; font-size:13px; }
+  .sheet { background:#fff; border:1px solid var(--line); border-radius:12px; padding:30px; position:relative; overflow:hidden;
+    background-image: linear-gradient(#f3f1ec 1px, transparent 1px), linear-gradient(90deg, #f3f1ec 1px, transparent 1px); background-size: 24px 24px; }
+  .eyebrow { font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted); }
+  .status { display:inline-block; font-size:11px; border:1px solid #d9cba9; color:#7a5a17; background:#fbf6ea; border-radius:12px; padding:3px 10px; margin-left:8px; }
+  .grid { display:grid; grid-template-columns: minmax(0,1.1fr) minmax(0,1fr); gap:30px; margin-top:24px; }
+  .card { background:rgba(255,255,255,.92); border:1px solid var(--line); border-radius:10px; padding:18px; }
+  .insp { display:grid; gap:12px; }
+  .insp .card { border-left:4px solid var(--c); }
+  .insp b { display:block; font-size:13px; }
+  .insp .field { font-size:11px; color:var(--c); letter-spacing:.08em; text-transform:uppercase; }
+  .insp p { margin:4px 0 0; font-size:13px; color:#3b3e45; }
+  .quote { font-size:12px; color:var(--muted); border-left:2px solid var(--line); padding-left:10px; margin-top:8px; font-style:italic; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  td, th { text-align:left; padding:9px 8px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { font-size:11px; color:var(--muted); font-weight:500; letter-spacing:.06em; text-transform:uppercase; }
+  .met { color:var(--green); } .plaus { color:var(--amber); } .open { color:var(--rose); }
+  .objection { border-left:3px solid var(--rose); }
+  .gaps li { margin:6px 0; } .gaps button { margin-left:8px; font-size:11px; border:1px solid var(--line); background:var(--paper); border-radius:12px; padding:2px 9px; }
+  .actions { display:flex; gap:10px; flex-wrap:wrap; margin-top:26px; }
+  .actions button { border:1px solid var(--ink); background:#fff; border-radius:20px; padding:9px 15px; font-size:12px; }
+  .actions button.primary { background:var(--ink); color:#fff; }
+  svg text { font-family:Inter,system-ui,sans-serif; }
+  @media (max-width:760px) { .grid { grid-template-columns:1fr; } h1 { font-size:31px; } .sheet { padding:18px; } .go { margin-left:0; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p class="note">Illustrative mockup for discussion. The example design, fields and text are placeholders, not a real Polymath result; real sheets quote saved passages from real papers.</p>
+
+  <header class="top"><span class="brand">polymath</span>
+    <div class="modes"><span>01 Explore</span><span>02 Solve</span><span class="on">03 Studio</span><span>04 Ask</span><span>05 Surprise</span><span>06 Converge</span></div>
+  </header>
+
+  <h1>Innovation Studio</h1>
+  <p class="lede">Describe what you want to make. Polymath searches the strangest corners of science for ideas that already work elsewhere, then designs something new from them, and tests it against your specs.</p>
+
+  <div class="composer" aria-label="Studio brief">
+    <input class="brief" value="A city helicopter quiet enough to land beside a hospital at night" aria-label="What would you like to design?">
+    <div class="row"><span class="label">Must meet</span><span class="chip">Under 65 dB at 150 m</span><span class="chip">4 passengers</span><span class="chip">Safe if power fails</span><span class="chip">+ Add a spec</span></div>
+    <div class="row"><span class="label">Look for ideas</span><span class="dial"><span>Nearby fields</span><span>Far fields</span><span class="on">Strange corners</span></span>
+      <button class="go" type="button">Design it</button></div>
+  </div>
+
+  <section class="sheet" aria-label="Design sheet">
+    <span class="eyebrow">Design concept 1 of 2</span><span class="status">Theoretical concept · not built or tested</span>
+    <h1 style="margin-top:10px">Hush: a rotorcraft that flies like an owl</h1>
+    <p class="lede" style="margin-bottom:0">Three ideas that already work in nature, combined into one rotor. Each piece below links to the exact passage it came from.</p>
+
+    <div class="grid">
+      <div>
+        <svg viewBox="0 0 460 330" width="100%" role="img" aria-label="Where the ideas came from: three fields feeding one design">
+          <defs><linearGradient id="g" x1="0" x2="1"><stop offset="0" stop-color="#6a45f5"/><stop offset=".5" stop-color="#1f6fe0"/><stop offset="1" stop-color="#3e8a2c"/></linearGradient></defs>
+          <path d="M80 70 C 160 90, 190 140, 230 165" stroke="#1f6fe0" stroke-width="2" fill="none"/>
+          <path d="M385 75 C 310 95, 270 140, 230 165" stroke="#6a45f5" stroke-width="2" fill="none"/>
+          <path d="M95 275 C 170 250, 200 200, 230 165" stroke="#3e8a2c" stroke-width="2" fill="none"/>
+          <path d="M380 270 C 310 245, 265 205, 230 165" stroke="#b86e00" stroke-width="1.5" stroke-dasharray="4 4" fill="none"/>
+          <circle cx="80" cy="70" r="9" fill="#1f6fe0"/><text x="80" y="44" text-anchor="middle" font-size="12" fill="#16181d">Ornithology</text><text x="80" y="98" text-anchor="middle" font-size="11" fill="#5b606b">owl feather edges</text>
+          <circle cx="385" cy="75" r="9" fill="#6a45f5"/><text x="385" y="49" text-anchor="middle" font-size="12" fill="#16181d">Entomology</text><text x="385" y="103" text-anchor="middle" font-size="11" fill="#5b606b">dragonfly wing folds</text>
+          <circle cx="95" cy="275" r="9" fill="#3e8a2c"/><text x="95" y="303" text-anchor="middle" font-size="12" fill="#16181d">Botany</text><text x="95" y="252" text-anchor="middle" font-size="11" fill="#5b606b">maple seed spin</text>
+          <circle cx="380" cy="270" r="7" fill="#fff" stroke="#b86e00" stroke-width="2"/><text x="380" y="298" text-anchor="middle" font-size="12" fill="#16181d">Acoustics</text><text x="380" y="247" text-anchor="middle" font-size="11" fill="#5b606b">considered, set aside</text>
+          <circle cx="230" cy="165" r="30" fill="#fff" stroke="url(#g)" stroke-width="4"/><text x="230" y="170" text-anchor="middle" font-size="13" font-weight="600" fill="#16181d">Hush</text>
+        </svg>
+        <p class="eyebrow" style="margin:6px 0 0">Where the ideas came from</p>
+      </div>
+      <div class="insp">
+        <div class="card" style="--c:var(--blue)"><span class="field">Ornithology → blade edge</span><b>Comb-like leading edge</b><p>Owls' serrated feather edges break up the airflow that makes wing noise. Applied to each rotor blade's leading edge.</p><div class="quote">“…[exact saved passage from a real paper]…”</div></div>
+        <div class="card" style="--c:var(--violet)"><span class="field">Entomology → blade shape</span><b>Folded, corrugated blade</b><p>Dragonfly wings are pleated, stiff and light. Proposed for a lighter blade cross-section.</p></div>
+        <div class="card" style="--c:var(--green)"><span class="field">Botany → safety</span><b>Seed-like autorotation</b><p>A maple seed spins to fall slowly. Proposed as a passive, controlled descent if power fails.</p></div>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h2>Against your specs</h2>
+        <table>
+          <tr><th>Spec</th><th>Verdict</th><th>Why</th></tr>
+          <tr><td>Under 65 dB at 150 m</td><td class="plaus">Plausible</td><td>Serrations reduce edge noise in wind-tunnel studies; the reduction at full rotor scale is not yet shown.</td></tr>
+          <tr><td>4 passengers</td><td class="met">Met by design</td><td>Conventional cabin; no idea above limits size.</td></tr>
+          <tr><td>Safe if power fails</td><td class="plaus">Plausible</td><td>Autorotation is standard for helicopters; the seed-inspired blade twist is untested.</td></tr>
+        </table>
+      </div>
+      <div class="card objection">
+        <h2>The strongest objection</h2>
+        <p><b>Scale.</b> A dragonfly wing works at a size and speed where air behaves very differently from a full-size rotor. The fold that helps an insect may only add drag on a helicopter blade.</p>
+        <p><b>Verdict:</b> keep the owl edge and the autorotation; treat the corrugated blade as unproven until a scaled test.</p>
+        <p class="eyebrow" style="margin-top:12px">Prior art check</p>
+        <p style="margin:2px 0 0">Serrated rotor and fan edges have been studied; the three-part combination was not found.</p>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="card gaps">
+        <h2>Still to invent</h2>
+        <ul>
+          <li>A serration pattern that survives rain erosion<button type="button">Solve this</button></li>
+          <li>Proof that the folds help at full scale<button type="button">Solve this</button></li>
+        </ul>
+      </div>
+      <div class="card">
+        <h2>Back-of-envelope checks</h2>
+        <p>Rotor tip speed and noise estimate, hover power for 4 passengers, descent rate in autorotation. Each check shows its formula and inputs, and is labelled an estimate.</p>
+      </div>
+    </div>
+
+    <div class="actions"><button class="primary" type="button">See concept 2: the seed-wing drone</button><button type="button">Write it up as a concept note</button><button type="button">Publish to your Zenodo</button><button type="button">Open as a Frontier programme</button></div>
+  </section>
+</div>
+</body>
+</html>
