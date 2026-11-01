@@ -504,7 +504,7 @@ MoneyString = Annotated[str, Field(pattern=r"^(?:0|[1-9][0-9]{0,8})$")]
 class PublicAccessLimits(_ReadinessModel):
     session_total_cap_microdollars: MoneyString
     session_daily_cap_microdollars: MoneyString
-    max_jobs_per_session_day: Annotated[int, Field(ge=1, le=12)]
+    max_jobs_per_session_day: Annotated[int, Field(ge=1, le=40)]
     max_active_jobs_per_session: Literal[1]
     task_kinds: Annotated[tuple[TaskKind, ...], Field(min_length=5, max_length=5)]
     discovery_intent: DiscoveryIntent | None
