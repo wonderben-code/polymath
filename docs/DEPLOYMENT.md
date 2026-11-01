@@ -150,6 +150,10 @@ for the chosen domain pointing at the server:
    Secure session cookie and an SSE reconnect against the real HTTPS endpoint.
 5. Workers start only by profile once their gates are reviewed, for example
    `--profile literature` or, after [KEY_DAY.md](KEY_DAY.md), `--profile research`.
+   `scripts/server-task.sh` adds `--profile literature` when
+   `LITERATURE_INGESTION_ENABLED=true`, `--profile research` when
+   `PAID_META_RESEARCH_ENABLED=true` and `--profile zenodo` when
+   `VISITOR_ZENODO_ENABLED=true`, so `update` and `restart` start the matching workers.
 
 **Local rehearsal, 29 October.** The production image built from this tree and
 the full stack started healthy under Docker with `POLYMATH_DOMAIN=localhost`
