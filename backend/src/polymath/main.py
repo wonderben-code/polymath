@@ -66,6 +66,7 @@ from polymath.publication_runtime import (
 from polymath.publishing_api import create_publishing_router
 from polymath.run_api import create_run_router
 from polymath.sharing_api import create_sharing_router
+from polymath.solve_api import create_solve_router
 from polymath.visitor_zenodo import VisitorZenodoPolicy
 from polymath.visitor_zenodo_api import create_visitor_zenodo_router
 
@@ -305,6 +306,9 @@ def create_app(
         create_converge_router(
             application.state.engine, availability=lambda: settings.converge_enabled
         )
+    )
+    application.include_router(
+        create_solve_router(application.state.engine, availability=lambda: settings.solve_enabled)
     )
     application.include_router(
         create_accounts_router(application.state.engine, AccountPolicy.from_settings(settings))
