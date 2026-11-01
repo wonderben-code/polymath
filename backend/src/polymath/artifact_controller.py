@@ -34,6 +34,7 @@ from polymath.research.controller import SAFE_MODEL_ERRORS
 from polymath.research.meta import ModelError, ModelReply, ResearchModel
 from polymath.research.models import ResearchEvent, Usage
 from polymath.research.reply import action_json
+from polymath.schema_cache import json_schema
 
 
 class CheckTool(Protocol):
@@ -169,7 +170,7 @@ def artifact_static_system_message(
     """Exact fixed system message; shared by profile and admission builders."""
     if kind not in KIND_INSTRUCTIONS or type(scientific_context) is not bool:
         raise ValueError("Unsupported artifact task or context protocol")
-    schema = json.dumps(ARTIFACT_ACTION_ADAPTER.json_schema(), separators=(",", ":"))
+    schema = json.dumps(json_schema(ARTIFACT_ACTION_ADAPTER), separators=(",", ":"))
     prompt = SCIENTIFIC_CONTEXT_SYSTEM_PROMPT if scientific_context else SYSTEM_PROMPT
     return {
         "role": "system",
@@ -218,8 +219,8 @@ def artifact_scientific_context_protocol_payload(kind: ArtifactKind) -> dict:
         "task_kind": kind,
         "system_prompt": SCIENTIFIC_CONTEXT_SYSTEM_PROMPT,
         "kind_instructions": KIND_INSTRUCTIONS[kind],
-        "action_schema": ARTIFACT_ACTION_ADAPTER.json_schema(),
-        "basis_schema": ArtifactBasis.model_json_schema(),
+        "action_schema": json_schema(ARTIFACT_ACTION_ADAPTER),
+        "basis_schema": json_schema(ArtifactBasis),
     }
 
 

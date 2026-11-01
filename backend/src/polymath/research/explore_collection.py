@@ -29,6 +29,7 @@ from polymath.explore_collection_contracts import (
 )
 from polymath.research.discovery import DiscoveryState
 from polymath.research.models import FieldSelection, MemoryReadReference
+from polymath.schema_cache import json_schema
 
 EXPLORE_COLLECTION_CONTROLLER_PROTOCOL = "polymath-meta-explore-collection-v1"
 EXPLORE_COLLECTION_SYSTEM_PROMPT = """You are Polymath's Meta-powered Explore research partner.
@@ -219,7 +220,7 @@ def explore_collection_initial_messages(
             "role": "system",
             "content": EXPLORE_COLLECTION_SYSTEM_PROMPT
             + "\nAction schema:\n"
-            + json.dumps(EXPLORE_ACTION_ADAPTER.json_schema(), separators=(",", ":")),
+            + json.dumps(json_schema(EXPLORE_ACTION_ADAPTER), separators=(",", ":")),
         },
         {
             "role": "user",
@@ -249,16 +250,16 @@ def explore_collection_protocol_payload() -> dict:
     return {
         "controller_protocol": EXPLORE_COLLECTION_CONTROLLER_PROTOCOL,
         "intent_protocol": EXPLORE_COLLECTION_PROTOCOL,
-        "intent_schema": ExploreCollectionIntent.model_json_schema(),
+        "intent_schema": json_schema(ExploreCollectionIntent),
         "system_prompt": EXPLORE_COLLECTION_SYSTEM_PROMPT,
-        "action_schema": EXPLORE_ACTION_ADAPTER.json_schema(),
-        "stage_context_schema": StageContext.model_json_schema(),
-        "assessment_schema": StageAssessment.model_json_schema(),
-        "commit_schema": ExploreCommitPacket.model_json_schema(),
-        "ranking_schema": ExploreRankingPacket.model_json_schema(),
-        "ranking_receipt_schema": ExploreRankingReceipt.model_json_schema(),
-        "finish_schema": ExploreFinishPacket.model_json_schema(),
-        "outcome_schema": ExploreCollectionOutcome.model_json_schema(),
+        "action_schema": json_schema(EXPLORE_ACTION_ADAPTER),
+        "stage_context_schema": json_schema(StageContext),
+        "assessment_schema": json_schema(StageAssessment),
+        "commit_schema": json_schema(ExploreCommitPacket),
+        "ranking_schema": json_schema(ExploreRankingPacket),
+        "ranking_receipt_schema": json_schema(ExploreRankingReceipt),
+        "finish_schema": json_schema(ExploreFinishPacket),
+        "outcome_schema": json_schema(ExploreCollectionOutcome),
         "ranking_semantics": "model-array-order-exact-acknowledged-ranked-excluded-partition-v1",
         "memory_semantics": (
             "ordinary-bridge-and-ask-leads-cumulative-original-receipts-no-parent-edges-v1"

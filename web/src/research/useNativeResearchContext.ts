@@ -84,6 +84,8 @@ export function useNativeResearchContext({ enabled, csrfToken, required, availab
             if (!current()) return
             if (caught instanceof ResearchAccessError && ['browser_expired', 'browser_changed'].includes(caught.code)) { failed(caught); return }
             setScientificCapabilities([]); setScientificPhase('error')
+            // A read that failed (a restart, a blip) is tried again on the next access poll rather than waiting for a manual refresh.
+            protocolsHash = null
             if (caught instanceof ResearchAccessError && caught.retryAfterSeconds !== null) { protocolRetrySeconds = caught.retryAfterSeconds; setRetryUntil(Date.now() + caught.retryAfterSeconds * 1000) }
           }
         }
@@ -97,6 +99,7 @@ export function useNativeResearchContext({ enabled, csrfToken, required, availab
             if (!current()) return
             if (caught instanceof ExploreCollectionError && caught.code === 'session_expired') { failed(new ResearchAccessError('browser_expired')); return }
             setExploreAccess(null); setExplorePhase('error')
+            exploreHash = null
             if (caught instanceof ExploreCollectionError && caught.retryAfterSeconds !== null) { protocolRetrySeconds = Math.max(protocolRetrySeconds, caught.retryAfterSeconds); setRetryUntil(Date.now() + caught.retryAfterSeconds * 1000) }
           }
         }

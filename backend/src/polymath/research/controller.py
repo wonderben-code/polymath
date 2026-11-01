@@ -53,6 +53,7 @@ from polymath.research.models import (
     VerifiedQuote,
 )
 from polymath.research.reply import action_json
+from polymath.schema_cache import json_schema
 
 if TYPE_CHECKING:
     from polymath.discovery_contracts import DiscoveryIntent, DiscoveryOutcome, DiscoverySink
@@ -626,7 +627,7 @@ class ResearchController:
             raise ValueError("Higher-level research requires two to four distinct Explore parents")
         for result_id in parent_result_ids:
             ReadMemoryAction(kind="read_memory_finding", result_id=result_id)
-        schema = json.dumps(ACTION_ADAPTER.json_schema(), separators=(",", ":"))
+        schema = json.dumps(json_schema(ACTION_ADAPTER), separators=(",", ":"))
         messages = [
             {
                 "role": "system",

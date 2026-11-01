@@ -55,6 +55,7 @@ from polymath.research.models import (
     _validate_public_text,
 )
 from polymath.research.reply import action_json
+from polymath.schema_cache import json_schema
 
 if TYPE_CHECKING:
     from polymath.scientific_context_contracts import AskReassessmentOverviewIntent
@@ -262,7 +263,7 @@ class AssessmentController:
             overview_adapter = ASK_REASSESSMENT_OVERVIEW_ACTION_ADAPTER
         elif basis.prior_overview_binding is not None:
             raise ValueError("ask_reassessment_overview_required")
-        schema = json.dumps(ASSESSMENT_ACTION_ADAPTER.json_schema(), separators=(",", ":"))
+        schema = json.dumps(json_schema(ASSESSMENT_ACTION_ADAPTER), separators=(",", ":"))
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT + "\nAction schema:\n" + schema},
             {
