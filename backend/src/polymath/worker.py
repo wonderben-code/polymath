@@ -1416,6 +1416,12 @@ class ResearchWorker:
             return WorkerOutcome(status, str(lease.run_id), str(saved.id))
         except (ExecutionStopped, asyncio.CancelledError) as error:
             await stop_heartbeat()
+            _LOG.warning(
+                "run %s stopped: %s%s",
+                lease.run_id,
+                str(error) if isinstance(error, ExecutionStopped) else "worker_cancelled",
+                " (ownership lost)" if lost.is_set() else "",
+            )
             stage_store = explore_store if explore_intent is not None else discovery_store
             if discovery_intent is not None or explore_intent is not None:
                 reason = (
@@ -1439,6 +1445,9 @@ class ResearchWorker:
             )
         except Exception:
             await stop_heartbeat()
+            # The run is interrupted and waits for an explicit resume; the cause
+            # must reach the worker log, or a live fault looks like a plain stop.
+            _LOG.exception("run %s interrupted by an unexpected error", lease.run_id)
             stage_store = explore_store if explore_intent is not None else discovery_store
             if discovery_intent is not None or explore_intent is not None:
                 with suppress(Exception):

@@ -18,6 +18,19 @@ profiles() {
   echo "${list[@]:-}"
 }
 sql() { dc exec -T db psql -U polymath -d polymath -v ON_ERROR_STOP=1 "$@"; }
+# Recreating the research worker while a visitor's investigation is running
+# interrupts it, and an interrupted run waits for an explicit resume. Wait for
+# active work to finish first, up to DRAIN_MINUTES (default 12), then proceed.
+drain() {
+  local waited=0 active
+  while :; do
+    active=$(sql -Atc "SELECT count(*) FROM research_runs WHERE status IN ('queued','running','waiting_retry','cancel_requested')" 2>/dev/null || echo 0)
+    [ "${active:-0}" = 0 ] && { echo "drain: no active investigations"; return 0; }
+    [ "$waited" -ge $(( ${DRAIN_MINUTES:-12} * 60 )) ] && { echo "drain: $active still active after ${DRAIN_MINUTES:-12} minutes; proceeding"; return 0; }
+    [ "$waited" = 0 ] && echo "drain: waiting for $active active investigation(s) to finish"
+    sleep 15; waited=$((waited + 15))
+  done
+}
 app() { dc exec -T app /app/backend/.venv/bin/python "$@"; }
 
 cd "$DIR" || { echo "No checkout at $DIR"; exit 1; }
@@ -35,10 +48,12 @@ case "$TASK" in
     ;;
   update)
     git pull --ff-only
+    drain
     dc $(profiles) up -d --build --wait
     git log -1 --format='updated to %h'
     ;;
   restart)
+    drain
     dc $(profiles) up -d --wait
     ;;
   logs)
@@ -47,13 +62,15 @@ case "$TASK" in
   diagnose)
     RUN="${ARG:-$(sql -Atc "SELECT id FROM research_runs WHERE task_kind='research' ORDER BY created_at DESC LIMIT 1")}"
     echo "== run $RUN"
-    sql -c "SELECT id, mode, task_kind, status, created_at, outcome FROM research_runs WHERE id='$RUN'"
+    sql -c "SELECT id, mode, task_kind, status, interruption_reason, external_request_in_flight, lease_token, created_at, outcome FROM research_runs WHERE id='$RUN'"
     echo "== events"
     sql -c "SELECT sequence, kind, left(summary, 160) AS summary FROM research_events WHERE run_id='$RUN' ORDER BY sequence" 2>/dev/null || true
     echo "== model replies"
     sql -c "SELECT request_id, status, coalesce(observation->>'finish_reason', observation->'observation'->>'finish_reason') AS finish, coalesce(observation->>'output_tokens', observation->'observation'->>'output_tokens') AS out_tokens, left(coalesce(observation->>'content', observation->'observation'->>'content'), 3000) AS reply FROM research_external_requests WHERE run_id='$RUN' ORDER BY request_id"
     echo "== last request's conversation (without the system prompt)"
     sql -c "SELECT ord, m->>'role' AS role, left(m->>'content', 2500) AS content FROM meta_research_call_requests r, jsonb_array_elements(r.request->'payload'->'messages') WITH ORDINALITY AS t(m, ord) WHERE r.run_id='$RUN' AND r.request_id=(SELECT max(request_id) FROM meta_research_call_requests WHERE run_id='$RUN') AND m->>'role' <> 'system' ORDER BY ord"
+    echo "== research worker log (last ${SINCE:-3h}, without health checks)"
+    dc logs --since="${SINCE:-3h}" research-worker 2>&1 | grep -v "GET /api/v1/readiness" | tail -"${LINES:-80}"
     ;;
   account)
     sql -c "SELECT id, hard_cap_microdollars, daily_cap_microdollars, max_in_flight, execution_enabled, kill_switch, frozen, frozen_reason, native_scope, native_control_epoch FROM budget_accounts"
