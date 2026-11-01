@@ -4,6 +4,7 @@ import type { OwnedRun } from '../research/client'
 import { attachStudioRun, changeStudio, createStudio, listStudio, listStudioImages, loadStudio, MAX_SPECS, nextStudioStep, renderStudioImage, StudioApiError, studioImageUrl } from './client'
 import type { ArtView, Claim, StudioImage, StudioProgramme, StudioStage, StudioStep, StudioSummary, Wildness } from './client'
 import { Constellation, SPECTRUM } from './Constellation'
+import { OwnKeyCard } from '../OwnKey'
 import { buildDossier, buildDossierPage, buildMetaBriefing, dossierFileName, LABEL_WORDS, readStudio, WILDNESS_WORDS } from './dossier'
 import type { Gallery, StudioReading } from './dossier'
 import './studio.css'
@@ -288,6 +289,7 @@ export function StudioWorkspace({ enabled, csrfToken, canSubmit, paused = false,
           </div>
         </form>
         {paused && <p className="studio-paused" role="status">Live inventing is paused right now. You can still write a brief, try the examples and see how it works; Studio starts inventing as soon as live research is switched on.</p>}
+        <OwnKeyCard compact ended={paused} />
         <div className="studio-starters" aria-label="Try an example">
           {STARTERS.map((item) => <button key={item.label} type="button" onClick={() => { setBrief(item.brief); setSpecs(item.specs); setWildness(item.wildness); setSpec('') }}>{item.label}</button>)}
         </div>

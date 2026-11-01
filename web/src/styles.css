@@ -539,3 +539,14 @@ body { background: var(--paper); color: var(--ink); font-size: 16px; line-height
 .hero-fusion { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: 14px 0 6px; font-size: 13.5px; font-weight: 600; color: var(--ink); }
 .hero-fusion span:nth-child(2) { font-size: 18px; font-weight: 400; background: var(--spectrum); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .about-intro { font-size: 16px; line-height: 1.7; color: var(--muted); margin: 0 0 18px; max-width: 720px; }
+/* The unlimited option: your own copy with your own Meta key. */
+.own-key { max-width: 760px; margin: 34px auto 0; padding: 22px 26px; border: 1px solid var(--hairline); border-radius: 18px; background: #ffffff; position: relative; overflow: hidden; }
+.own-key::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--spectrum); }
+.own-key-kicker { display: inline-block; margin-bottom: 8px; font-size: 11.5px; letter-spacing: .08em; text-transform: uppercase; font-weight: 600; color: var(--muted); }
+.own-key h2 { margin: 0 0 8px; font-family: var(--serif); font-weight: 400; font-size: 24px; line-height: 1.25; color: var(--ink); }
+.own-key p { margin: 0 0 12px; font-size: 15px; line-height: 1.65; color: var(--muted); }
+.own-key-link { display: inline-block; padding: 9px 16px; border-radius: 999px; background: var(--ink); color: #ffffff; text-decoration: none; font-size: 14px; }
+.own-key-link:hover { background: #2a2d35; }
+.own-key-line { margin: 12px 0 0; font-size: 13.5px; color: var(--muted); }
+.own-key-line a { color: var(--ink); }
+@media (max-width: 600px) { .own-key { margin-top: 26px; padding: 18px; } .own-key h2 { font-size: 21px; } }

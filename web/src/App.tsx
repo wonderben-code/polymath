@@ -25,6 +25,7 @@ import { SolveComposer } from './solve/SolveComposer'
 import { SolveWorkspace } from './solve/SolveWorkspace'
 import { createSolve } from './solve/client'
 import { StudioWorkspace } from './studio/StudioWorkspace'
+import { freeUseEnded, OwnKeyCard } from './OwnKey'
 import { Credits } from './Credits'
 import { ConvergeWorkspace } from './converge/ConvergeWorkspace'
 import { HeroBridge } from './HeroBridge'
@@ -367,7 +368,7 @@ export function App() {
               {workspace.nextCursor && <button className="history-more" type="button" disabled={workspace.loadingMore} onClick={() => void workspace.loadMore()}>{workspace.loadingMore ? 'Loading more…' : 'Load earlier investigations'}</button>}
               {workspace.error && <p className="history-error" role="alert">{workspace.error}</p>}
             </section>}
-            {!converging && !workspace.activeRun && !selectedFindingId && !workspace.selectedId && <><Story onFrontier={() => go('frontier')} onStudio={() => go('studio')} /><Credits /></>}
+            {!converging && !workspace.activeRun && !selectedFindingId && !workspace.selectedId && <><OwnKeyCard ended={freeUseEnded(workspace.native.reason, workspace.native.access?.remaining_session_jobs_today, workspace.phase === 'ready' && workspace.native.phase === 'disabled' && !workspace.native.access)} /><Story onFrontier={() => go('frontier')} onStudio={() => go('studio')} /><Credits /></>}
           </>}
 
           {place === 'library' && <>
