@@ -428,6 +428,10 @@ def assess_probe_usage(
     )
 
 
+# Client-side refusals: the request never ran, so no tokens were used or billed.
+REJECTED_REQUEST_STATUSES = frozenset({400, 401, 403, 404, 413, 415, 422, 429})
+
+
 def _assess_reported_meta_usage(
     proposal: MetaReadinessProposal,
     expected_request_sha256: str,
@@ -452,6 +456,31 @@ def _assess_reported_meta_usage(
         "usage_within_bounds": None,
         "freeze_required": False,
     }
+    if (
+        observation.body_complete
+        and observation.http_status in REJECTED_REQUEST_STATUSES
+        and observation.input_tokens is None
+        and observation.observed_model_id is None
+    ):
+        # The provider refused the request before any inference (a 4xx reply that
+        # names no model and reports no usage). Nothing is billed for it, so it is
+        # counted as an exact zero rather than held as an unknown that only a person
+        # can settle while every other funded request waits behind it.
+        return MetaProbeAssessment(
+            status="failed",
+            reason_code="request_rejected_unbilled",
+            **(
+                values
+                | {
+                    "input_tokens": 0,
+                    "output_tokens": 0,
+                    "actual_input_microdollars": 0,
+                    "actual_output_microdollars": 0,
+                    "actual_microdollars": 0,
+                    "usage_within_bounds": True,
+                }
+            ),
+        )
     if observation.observed_model_id != expected_model_id:
         return MetaProbeAssessment(
             status="unknown",
