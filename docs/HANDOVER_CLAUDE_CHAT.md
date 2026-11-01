@@ -77,12 +77,12 @@ until step B3.
    proposal and can never change. Enter them carefully in B2.
 2. **A private operator research window lasts about 20 minutes.** Signing in
    again ends it. Use it only for the quick first check (B5). For real testing,
-   including Studio, use **visitor funding (B7)**, which lasts up to 14 days and
+   including Studio, use **visitor funding (B6)**, which lasts up to 14 days and
    also works in Eks's own browser.
 3. **The verification call has a 5-minute window** from **Preview exact one-call
    manifest**. Have the worker command ready before clicking.
 4. **Private research and visitor funding can't both be live.** Activating one
-   replaces the other. Once B7 is live, never press *Activate research for THIS
+   replaces the other. Once B6 is live, never press *Activate research for THIS
    operator and browser*.
 5. **An "unknown" outcome pauses everything until it's settled.** A call or
    picture whose outcome isn't known (a timeout, for example) stops new paid
@@ -241,7 +241,7 @@ curl -s https://askpolymath.com/api/v1/budget/verification/capabilities; echo
 
 Expect `"verification_available":true`.
 
-**Prepare the attestation JSON now.** You'll reuse it in B4 and B7. Enter the
+**Prepare the attestation JSON now.** You'll reuse it in B5 and B6. Enter the
 figures actually shown on Meta's dashboard. `provider_hard_cap_microdollars` is
 Meta's spend limit (USD 150), which must be at least 120000000.
 
