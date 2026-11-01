@@ -31,7 +31,7 @@ export function SiteFooter({ children }: { children?: ReactNode }) {
   return (
     <footer className="site-footer">
       {children}
-      <span className="footer-links"><a href="/library">Public library</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/operator/budget">Operator desk</a><span>Built for the Meta Global AI Developer Hackathon with Cerebral Valley · Intelligence by Meta’s frontier Muse models · Designed and built by Ekram Alam · © 2026</span></span>
+      <span className="footer-links"><a href="/library">Public library</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/operator/budget">Operator desk</a><span>Built for the Meta Global AI Developer Hackathon with Cerebral Valley · Intelligence by Meta’s frontier Muse models · Created, designed and built by Ekram Alam · © 2026</span></span>
     </footer>
   )
 }
