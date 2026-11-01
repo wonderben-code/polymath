@@ -6,6 +6,7 @@ Administration delegates live role and both-CSRF authorization to the store.
 
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import datetime
 from typing import Annotated
@@ -48,6 +49,9 @@ RESOURCE_ERRORS = {
     "invalid_public_request": 400,
     "research_session_required": 401,
 }
+
+
+_LOG = logging.getLogger(__name__)
 
 
 def _error(status: int, detail: str, retry=None):
@@ -94,6 +98,12 @@ class _PublicResearchRoute(APIRoute):
                 )
                 if code in META_RESEARCH_ERROR_STATUSES:
                     raise _error(META_RESEARCH_ERROR_STATUSES[code], code) from None
+                # An unexpected failure answers the visitor with a plain 503, but it
+                # must still be visible in the server log: the first live visitor
+                # funding hid a contract bound behind this branch for an hour.
+                _LOG.exception(
+                    "public research route %s failed: %s", request.url.path, type(caught).__name__
+                )
                 raise _error(503, "meta_research_storage_unavailable") from None
 
         return handle

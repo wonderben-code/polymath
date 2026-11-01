@@ -500,3 +500,14 @@ def test_a_server_may_allow_one_delegation_to_span_a_judging_period():
     assert Settings(_env_file=None).public_max_delegation_seconds == 86400
     with pytest.raises(ValueError):
         Settings(_env_file=None, public_max_delegation_seconds=15 * 86400)
+
+
+def test_access_projection_allows_the_same_daily_job_ceiling_as_funding_limits():
+    # The first live visitor funding granted 30 investigations a day; the access
+    # projection still stopped at the old ceiling of 12 and every visitor read
+    # failed with a 503. The projection mirrors PublicLimits exactly.
+    value = access_data()["limits"]
+    for jobs in (12, 30, 40):
+        assert PublicAccessLimits.model_validate(value | {"max_jobs_per_session_day": jobs})
+    with pytest.raises(ValidationError):
+        PublicAccessLimits.model_validate(value | {"max_jobs_per_session_day": 41})
