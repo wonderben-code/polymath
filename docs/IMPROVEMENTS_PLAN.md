@@ -154,6 +154,11 @@ Frontier already surveys a problem, names gaps and looks for solutions in other
 fields, so a Solve mode can build on that foundation: problem → candidate keys
 → the fit test → the gap → combined keys → evidence for each piece.
 
+Key finder and key maker (owner, 1 Nov): if a key exists, find it. If none
+fits, find the close fits (one or several), reason precisely about where each
+falls short, and forge a new key from the literature by combining the
+key-adjacent shapes, with each piece tied to its evidence and the fit tested.
+
 Two ways in (owner, 1 Nov):
 - **Solve on its own:** "Polymath as a problem solver for you". State the
   problem and get keys, gaps and combined keys.
