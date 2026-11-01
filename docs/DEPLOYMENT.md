@@ -226,6 +226,21 @@ above: independent evidence of provider billing, unknown calls and remote
 deposits, then fresh approval. A frozen account cannot be unfrozen from the
 application, by design.
 
+## Live DNS and provider records (askpolymath.com)
+
+Keep these at Namecheap (Advanced DNS); removing one quietly breaks something:
+
+- `A` records for `@` and `www` → the droplet's address (the site and its certificate).
+- The email-forwarding records (Mail Settings: Email Forwarding, with its SPF
+  `TXT`), so `hello@askpolymath.com` reaches the owner.
+- A `TXT` record at `@` starting `google-site-verification=`: it proves domain
+  ownership to Google (Search Console), which keeps the Google sign-in branding
+  verified.
+
+Google sign-in: External, In production, branding verified, support email a
+Google Group (the owner's personal address is never shown). Registered apps and
+callbacks are listed in [SIGN_IN_SETUP.md](SIGN_IN_SETUP.md).
+
 ## Remaining before hosted release
 
 Owner inputs: host account and budget approval, domain choice, provider funding
