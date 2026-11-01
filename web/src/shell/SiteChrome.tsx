@@ -2,6 +2,7 @@ import type { MouseEvent, ReactNode } from 'react'
 
 export const PLACES = [
   { id: 'research', label: 'Research', path: '/' },
+  { id: 'studio', label: 'Studio', path: '/studio' },
   { id: 'library', label: 'Your library', path: '/your-research' },
   { id: 'frontier', label: 'Frontier', path: '/frontier' },
   { id: 'about', label: 'About', path: '/about' },
@@ -18,7 +19,7 @@ export function SiteHeader({ current, onNavigate, accessory }: { current?: Place
         <span>polymath</span>
       </a>
       <nav className="place-navigation" aria-label="Polymath">
-        {PLACES.map((item) => <a key={item.id} href={item.path} aria-current={current === item.id ? 'page' : undefined} onClick={follow(item.id)}>{item.label}{item.id === 'frontier' && <span className="nav-badge">Experimental</span>}</a>)}
+        {PLACES.map((item) => <a key={item.id} href={item.path} aria-current={current === item.id ? 'page' : undefined} onClick={follow(item.id)}>{item.label}{(item.id === 'frontier' || item.id === 'studio') && <span className="nav-badge">Experimental</span>}</a>)}
       </nav>
       {accessory}
     </header>

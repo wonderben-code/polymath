@@ -24,6 +24,7 @@ import { RigourBar } from './research/RigourBar'
 import { SolveComposer } from './solve/SolveComposer'
 import { SolveWorkspace } from './solve/SolveWorkspace'
 import { createSolve } from './solve/client'
+import { StudioWorkspace } from './studio/StudioWorkspace'
 import { Credits } from './Credits'
 import { ConvergeWorkspace } from './converge/ConvergeWorkspace'
 import { HeroBridge } from './HeroBridge'
@@ -392,6 +393,9 @@ export function App() {
             </form>
             {notice && <p className="composer-alert" role="alert">{notice}</p>}
           </section>}
+          <div hidden={place !== 'studio'}>
+            <StudioWorkspace enabled={workspace.phase === 'ready'} csrfToken={workspace.csrfToken} canSubmit={workspace.canSubmit && !artifactBusy && !assessmentBusy} submit={(studioMode, goal, parents) => workspace.submit(studioMode, goal, parents)} onOpenRun={openRun} onSolveGap={(gap) => { if (!workspace.csrfToken) return; void createSolve(workspace.csrfToken, { problem: gap.slice(0, 2000) }).then((programme) => { setSolveFocus(programme.id); setSolving(true); setConverging(false); go('research') }).catch(() => setNotice('Solve could not start for that step. Try again in a moment.')) }} onSessionExpired={workspace.invalidateSession} />
+          </div>
           <div hidden={place !== 'frontier'}>
             <FrontierWorkspace enabled={workspace.phase === 'ready'} csrfToken={workspace.csrfToken} canSubmit={workspace.canSubmit && !artifactBusy && !assessmentBusy} focusId={frontierFocus} onFinished={onFrontierFinished} onSolveStep={(programmeId, nodeId) => { if (!workspace.csrfToken) return; void createSolve(workspace.csrfToken, { frontier_programme_id: programmeId, frontier_node_id: nodeId }).then((programme) => { setSolveFocus(programme.id); setSolving(true); setConverging(false); go('research') }).catch(() => undefined) }} notifyControl={<NotifyToggle notifier={notifier} />} submit={(frontierMode, goal, parents) => workspace.submit(frontierMode, goal, parents)} onOpenRun={openRun} onSessionExpired={workspace.invalidateSession} />
           </div>
