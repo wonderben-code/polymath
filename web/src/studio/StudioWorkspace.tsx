@@ -9,7 +9,7 @@ import { buildDossier, buildDossierPage, buildMetaBriefing, dossierFileName, LAB
 import type { Gallery, StudioReading } from './dossier'
 import './studio.css'
 
-const POLL_MS = 4000
+const POLL_MS = 6000
 const BRIEF_LIMIT = 1000
 const PIPELINE: { stage: StudioStage; name: string; doing: string }[] = [
   { stage: 'brief', name: 'Brief', doing: 'Understanding the brief and today’s best designs' },
@@ -68,6 +68,7 @@ function message(code: string): string {
   if (code === 'studio_image_daily_limit') return 'That is all the concept art for today. Try again tomorrow.'
   if (code === 'studio_image_limit') return 'This invention already has its concept art.'
   if (code === 'studio_images_unavailable') return 'Concept art is switched off on this server right now.'
+  if (code === 'rate_limited') return 'Polymath is pacing requests from this browser; it continues in a moment.'
   return 'Studio could not be reached. Try again in a moment.'
 }
 

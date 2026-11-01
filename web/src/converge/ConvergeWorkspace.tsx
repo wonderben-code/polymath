@@ -7,7 +7,7 @@ import { Enso } from './Enso'
 import { convergeReport } from './report'
 import './converge.css'
 
-const POLL_MS = 4000
+const POLL_MS = 6000
 const SHOWN = 6
 
 export interface ConvergeWorkspaceProps {
@@ -30,6 +30,7 @@ function message(code: string): string {
   if (code === 'converge_unavailable') return 'Converge is switched off on this server.'
   if (code === 'converge_finished') return 'This circle has finished.'
   if (code === 'invalid_converge_ceiling') return 'The new ceiling must be at least the current one, and at most $150.'
+  if (code === 'rate_limited') return 'Polymath is pacing requests from this browser; it continues in a moment.'
   return 'Converge could not be reached. Try again in a moment.'
 }
 

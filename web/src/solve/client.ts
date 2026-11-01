@@ -94,7 +94,7 @@ async function request<T>(url: string, parse: (value: unknown) => T, signal?: Ab
   if (!response.ok) {
     let code = 'unavailable'
     try { const detail = record(await response.json()).detail; if (typeof detail === 'string' && /^[a-z_]{1,100}$/.test(detail)) code = detail } catch { /* Never display untrusted server details. */ }
-    throw new SolveApiError(response.status === 401 || response.status === 403 ? 'session_expired' : code)
+    throw new SolveApiError(response.status === 401 || response.status === 403 ? 'session_expired' : response.status === 429 ? 'rate_limited' : code)
   }
   const size = response.headers.get('content-length')
   if (size && (!/^\d+$/.test(size) || Number(size) > MAX_BYTES)) invalid()

@@ -5,7 +5,7 @@ import type { SolveProgramme, SolveStep, SolveSummary } from './client'
 import { LockAndKey } from './LockAndKey'
 import './solve.css'
 
-const POLL_MS = 4000
+const POLL_MS = 6000
 const STAGE_WORDS = { find: 'Looking for an existing key anywhere in science', fit: 'Searching other fields for close fits', forge: 'Forging a new key from the close fits' }
 const OUTCOME_WORDS = {
   found: { title: 'A key already exists', line: 'This problem has an answer in the literature. Here it is, with the passages behind it.' },
@@ -28,6 +28,7 @@ function message(code: string): string {
   if (code === 'session_expired') return 'Your browser session expired. Reload to continue.'
   if (code === 'solve_unavailable') return 'Solve is switched off on this server.'
   if (code === 'solve_finished') return 'This problem has finished.'
+  if (code === 'rate_limited') return 'Polymath is pacing requests from this browser; it continues in a moment.'
   return 'Solve could not be reached. Try again in a moment.'
 }
 
