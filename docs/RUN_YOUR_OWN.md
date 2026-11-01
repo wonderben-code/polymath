@@ -60,6 +60,21 @@ no programming. You will follow the steps and copy a few commands.
 6. **Research.** Open your address and start. Everything is saved on your
    server.
 
+## Choosing your Meta model
+
+Your copy uses whichever Meta model you name in `META_MODEL`:
+- `muse-spark-1.3` is Meta's recommended model, and its price is what makes long research loops affordable;
+- `muse-wonder-1.0` is Meta's most capable model, at about five times the price;
+- any newer Meta model works the same way.
+
+Change the setting, rerun the setup line, and approve the new model on the
+operator desk. The approval is tied to the model, so switching models always
+asks for a fresh review. Concept art in Studio uses `META_IMAGE_MODEL`
+(`muse-image-1.0`), switched on with `PAID_META_IMAGE_ENABLED=true`.
+
+On the shared site, visitors use the operator's model. A model picker for
+visitors, and connecting your own Meta account, are on the roadmap.
+
 ## Good to know
 
 - **Your key is used only by your own copy**, inside your own Meta account and

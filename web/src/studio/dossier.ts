@@ -63,6 +63,7 @@ type Block =
   | { t: 'claims'; items: { label: string; text: string; derivation: string | null; caveats: string[]; quotes: { text: string; cite: number | null }[] }[] }
   | { t: 'quotes'; items: { text: string; cite: number | null }[] }
   | { t: 'refs'; items: Source[] }
+  | { t: 'image'; src: string; caption: string }
 
 function quotes(reading: StudioReading, step: StudioStep, items: Quote[]) {
   return items.map((item) => ({ text: item.quote, cite: reading.cite(step, item.source_id) }))
@@ -71,11 +72,14 @@ function claims(reading: StudioReading, step: StudioStep, items: Claim[]): Block
   return { t: 'claims', items: items.map((claim) => ({ label: claim.label, text: claim.text, derivation: claim.derivation, caveats: claim.caveats, quotes: quotes(reading, step, claim.quotes) })) }
 }
 
-export function dossierBlocks(programme: StudioProgramme, origin: string): Block[] {
+export interface ConceptArt { src: string; caption: string }
+
+export function dossierBlocks(programme: StudioProgramme, origin: string, art?: ConceptArt): Block[] {
   const reading = readStudio(programme)
   const blocks: Block[] = []
   const stepOf = (stage: StudioStep['stage']) => programme.steps.find((step) => step.stage === stage)!
   blocks.push({ t: 'title', text: reading.design?.title ?? programme.brief, note: `A theoretical invention designed with Polymath Innovation Studio (${origin}), powered by Meta’s frontier Muse models. Not built or tested. Every inspiration and claim comes from a saved investigation whose quotations were checked against their sources.` })
+  if (art) blocks.push({ t: 'image', src: art.src, caption: art.caption })
   blocks.push({ t: 'h2', text: 'The brief' }, { t: 'lead', text: programme.brief })
   if (programme.specs.length) blocks.push({ t: 'kv', label: 'Must meet', text: '' }, { t: 'list', items: programme.specs })
   blocks.push({ t: 'kv', label: 'Looked for ideas in', text: WILDNESS_WORDS[programme.wildness] })
@@ -136,6 +140,7 @@ export function renderMarkdown(blocks: Block[]): string {
       }
       out.push('')
     } else if (block.t === 'refs') out.push(...block.items.map((source, index) => `${index + 1}. ${reference(source)} ${source.doi ? `https://doi.org/${source.doi}` : source.url}`), '')
+    else if (block.t === 'image') out.push(`*${block.caption} (shown in the page version of this dossier).*`, '')
   }
   return out.join('\n')
 }
@@ -143,7 +148,7 @@ export function renderMarkdown(blocks: Block[]): string {
 const escape = (value: string) => value.replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]!)
 const sup = (cite: number | null) => cite === null ? '' : `<sup><a href="#ref-${cite}">${cite}</a></sup>`
 
-const PAGE_STYLE = `:root{--ink:#16181d;--muted:#5b606b;--line:#e8e5de;--paper:#fbfaf7}*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.7 -apple-system,'Segoe UI',Inter,system-ui,sans-serif}main{max-width:820px;margin:0 auto;padding:48px 28px 72px;background:#fff;border-top:4px solid;border-image:linear-gradient(90deg,#6a45f5,#1f6fe0,#0b8a7a,#3e8a2c,#b86e00,#cc3366) 1}h1,h2,h3{font-family:'Iowan Old Style',Palatino,Georgia,serif;font-weight:400;line-height:1.2}h1{font-size:38px;margin:0 0 12px;letter-spacing:-.5px}h2{font-size:26px;margin:40px 0 12px;padding-top:18px;border-top:1px solid var(--line)}h3{font-size:20px;margin:26px 0 6px}.note,.meta{color:var(--muted);font-size:13.5px}.lead{font-family:'Iowan Old Style',Palatino,Georgia,serif;font-size:19px;line-height:1.6}blockquote{margin:8px 0;padding:6px 14px;border-left:3px solid var(--line);color:#3b3e45;font-size:14px}.label{display:inline-block;padding:1px 9px;margin-right:8px;border-radius:999px;font-size:11.5px;font-weight:600}.known{background:#eef3ee;color:#3e8a2c}.postulated{background:#eef2fb;color:#1f6fe0}.speculative{background:#fbf2e6;color:#b86e00}.claim{margin:0 0 16px;padding:14px 16px;border:1px solid var(--line);border-radius:12px}.working{margin:8px 0 0;padding:10px 12px;background:#f7f5f0;border-radius:8px;font-size:14px;white-space:pre-wrap}.caveat{margin:6px 0 0;color:#8a5a00;font-size:14px}.map{margin:6px 0;padding:10px 12px;background:#f7f5f0;border-radius:8px}.map small{display:block;color:var(--muted)}ol.refs li{margin:0 0 8px;font-size:14px;overflow-wrap:anywhere}a{color:#1f6fe0}sup a{text-decoration:none;font-size:11px}@media print{body{background:#fff}main{padding:0;border:0;max-width:none}h2{break-after:avoid}.claim,.map,blockquote{break-inside:avoid}a{color:inherit}}`
+const PAGE_STYLE = `:root{--ink:#16181d;--muted:#5b606b;--line:#e8e5de;--paper:#fbfaf7}*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.7 -apple-system,'Segoe UI',Inter,system-ui,sans-serif}main{max-width:820px;margin:0 auto;padding:48px 28px 72px;background:#fff;border-top:4px solid;border-image:linear-gradient(90deg,#6a45f5,#1f6fe0,#0b8a7a,#3e8a2c,#b86e00,#cc3366) 1}h1,h2,h3{font-family:'Iowan Old Style',Palatino,Georgia,serif;font-weight:400;line-height:1.2}h1{font-size:38px;margin:0 0 12px;letter-spacing:-.5px}h2{font-size:26px;margin:40px 0 12px;padding-top:18px;border-top:1px solid var(--line)}h3{font-size:20px;margin:26px 0 6px}.note,.meta{color:var(--muted);font-size:13.5px}.lead{font-family:'Iowan Old Style',Palatino,Georgia,serif;font-size:19px;line-height:1.6}blockquote{margin:8px 0;padding:6px 14px;border-left:3px solid var(--line);color:#3b3e45;font-size:14px}.label{display:inline-block;padding:1px 9px;margin-right:8px;border-radius:999px;font-size:11.5px;font-weight:600}.known{background:#eef3ee;color:#3e8a2c}.postulated{background:#eef2fb;color:#1f6fe0}.speculative{background:#fbf2e6;color:#b86e00}.claim{margin:0 0 16px;padding:14px 16px;border:1px solid var(--line);border-radius:12px}.working{margin:8px 0 0;padding:10px 12px;background:#f7f5f0;border-radius:8px;font-size:14px;white-space:pre-wrap}.caveat{margin:6px 0 0;color:#8a5a00;font-size:14px}.map{margin:6px 0;padding:10px 12px;background:#f7f5f0;border-radius:8px}.map small{display:block;color:var(--muted)}figure.art{margin:22px 0}figure.art img{display:block;width:100%;border-radius:12px}figure.art figcaption{margin-top:6px;color:var(--muted);font-size:13px}ol.refs li{margin:0 0 8px;font-size:14px;overflow-wrap:anywhere}a{color:#1f6fe0}sup a{text-decoration:none;font-size:11px}@media print{body{background:#fff}main{padding:0;border:0;max-width:none}h2{break-after:avoid}.claim,.map,blockquote{break-inside:avoid}a{color:inherit}}`
 
 export function renderHtml(blocks: Block[], title: string): string {
   const out: string[] = []
@@ -158,6 +163,7 @@ export function renderHtml(blocks: Block[], title: string): string {
     else if (block.t === 'mappings') out.push(block.items.map((item) => `<div class="map">${escape(item.left)} → ${escape(item.right)}<small>Assumes: ${escape(item.assumption)}</small></div>`).join(''))
     else if (block.t === 'quotes') out.push(block.items.map((item) => `<blockquote>“${escape(item.text)}”${sup(item.cite)}</blockquote>`).join(''))
     else if (block.t === 'claims') out.push(block.items.map((claim) => `<div class="claim"><span class="label ${escape(claim.label)}">${escape(LABEL_WORDS[claim.label] ?? claim.label)}</span>${escape(claim.text)}${claim.quotes.map((item) => sup(item.cite)).join('')}${claim.derivation ? `<div class="working"><strong>Working:</strong> ${escape(claim.derivation)}</div>` : ''}${claim.caveats.map((caveat) => `<p class="caveat">Caveat: ${escape(caveat)}</p>`).join('')}${claim.quotes.map((item) => `<blockquote>“${escape(item.text)}”${sup(item.cite)}</blockquote>`).join('')}</div>`).join(''))
+    else if (block.t === 'image') out.push(/^data:image\/(webp|png|jpeg);base64,[A-Za-z0-9+/=]+$/.test(block.src) ? `<figure class="art"><img src="${block.src}" alt="${escape(block.caption)}"><figcaption>${escape(block.caption)}</figcaption></figure>` : '')
     else if (block.t === 'refs') out.push(`<ol class="refs">${block.items.map((source, index) => { const link = source.doi ? `https://doi.org/${source.doi}` : source.url; return `<li id="ref-${index + 1}">${escape(reference(source))} <a href="${escape(link)}">${escape(link)}</a></li>` }).join('')}</ol>`)
   }
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escape(title)}</title><style>${PAGE_STYLE}</style></head><body><main>${out.join('\n')}</main></body></html>`
@@ -169,8 +175,8 @@ export function buildDossier(programme: StudioProgramme, origin = 'https://askpo
 }
 
 /** The same dossier as a print-ready page: open it and print, or save as PDF. */
-export function buildDossierPage(programme: StudioProgramme, origin = 'https://askpolymath.com'): string {
-  return renderHtml(dossierBlocks(programme, origin), readStudio(programme).design?.title ?? programme.brief)
+export function buildDossierPage(programme: StudioProgramme, origin = 'https://askpolymath.com', art?: ConceptArt): string {
+  return renderHtml(dossierBlocks(programme, origin, art), readStudio(programme).design?.title ?? programme.brief)
 }
 
 /** A compact briefing to keep refining the design in a Meta AI conversation. */

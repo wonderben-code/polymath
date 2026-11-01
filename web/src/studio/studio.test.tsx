@@ -166,6 +166,37 @@ describe('Innovation Studio', () => {
     expect(buildMetaBriefing(long).length).toBeLessThanOrEqual(6000)
   })
 
+  it('paints concept art on request, shows it, and embeds it in the dossier', async () => {
+    const IMAGE = 'abababab-abab-4bab-8bab-abababababab'
+    let images: unknown[] = []
+    const calls: { url: string; method: string }[] = []
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input); const method = init?.method ?? 'GET'
+      calls.push({ url, method })
+      if (url === '/api/v1/studio') return Response.json({ programmes: [designed] })
+      if (url === `/api/v1/studio/${PROGRAMME}`) return Response.json(designed)
+      if (url === `/api/v1/studio/${PROGRAMME}/images` && method === 'POST') { images = [{ id: IMAGE, status: 'succeeded', error: null, mime: 'image/webp', created_at: DATE }]; return Response.json({ id: IMAGE, status: 'rendering' }, { status: 202 }) }
+      if (url === `/api/v1/studio/${PROGRAMME}/images`) return Response.json({ available: true, images })
+      if (url === `/api/v1/studio/images/${IMAGE}`) return new Response(new Uint8Array([82, 73, 70, 70]), { headers: { 'content-type': 'image/webp' } })
+      throw new Error(`Unexpected ${url}`)
+    }))
+    workspace()
+    await userEvent.click(await screen.findByRole('button', { name: /A city helicopter quiet enough/ }))
+    const art = await screen.findByRole('region', { name: 'Concept art' })
+    // Opening a saved invention never paints by itself; the visitor asks.
+    expect(calls.some((call) => call.method === 'POST')).toBe(false)
+    await userEvent.click(within(art).getByRole('button', { name: 'Paint the concept art' }))
+    const picture = await within(art).findByRole('img', { name: 'Concept art of Hush: a rotor that flies like an owl' })
+    expect(picture).toHaveAttribute('src', `/api/v1/studio/images/${IMAGE}`)
+    expect(within(art).getByText(/painted by Meta Muse Image/)).toBeVisible()
+    expect(within(art).getByRole('button', { name: 'Paint another view' })).toBeVisible()
+    const created: Blob[] = []
+    vi.stubGlobal('URL', Object.assign(URL, { createObjectURL: vi.fn((blob: Blob) => { created.push(blob); return 'blob:dossier' }), revokeObjectURL: vi.fn() }))
+    await userEvent.click(screen.getByRole('button', { name: 'Download the design dossier' }))
+    await waitFor(() => expect(created).toHaveLength(1))
+    expect(await created[0].text()).toContain('<figure class="art"><img src="data:image/webp;base64,UklGRg=="')
+  })
+
   it('says plainly when nothing held up', async () => {
     const none = programme({ status: 'completed', outcome: 'none', steps: [step({ status: 'done', outcome: 'insufficient_evidence', run_id: RUN, finding: { kind: 'insufficient_evidence' } })] })
     server({ '/api/v1/studio': { programmes: [none] }, [`/api/v1/studio/${PROGRAMME}`]: none })

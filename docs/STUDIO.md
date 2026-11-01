@@ -93,6 +93,54 @@ That makes at most eight investigations per invention. Outcomes:
       visitors never paste Meta keys.
 - **Your inventions**: everything designed in this browser or account.
 
+## Concept art (Meta Muse Image, schema 0035)
+
+Each invention can be painted by Meta's image model, `muse-image-1.0`.
+- **When it happens:** automatically once an invention is designed while the
+  page is open, and on request with *Paint the concept art* or *Paint another
+  view*. Each invention gets at most two pictures.
+- **Where it shows:** as the large picture under the invention's title,
+  captioned as an AI impression, and embedded in the downloadable dossier page.
+- **Prompt:** built on the server from the saved design text (title,
+  explanation, the parts it maps into), never from browser input. It always
+  asks for no text, labels or logos.
+
+**How the money is protected:**
+- Every picture is one `render_image` run with its own ledger cap of one call
+  at the flat price (USD 0.01).
+- A single transaction checks:
+  - the owner's switch (`PAID_META_IMAGE_ENABLED`, which requires paid research
+    and `META_IMAGE_MODEL`);
+  - that the account is armed for research;
+  - the saved design;
+  - the per-invention, per-visitor (3 a day) and site (100 a day) limits.
+
+  It then reserves and claims the call with a narrow image permit that covers
+  only render runs. Kill switch, freeze and the hard and daily caps all apply.
+- Exactly one request goes to `POST /v1/images/generations`, with no retries.
+  The outcome is recorded one of three ways:
+  - **A valid image** is settled at the flat price and stored in the same
+    transaction.
+  - **A request Meta rejects** is settled at zero: per Meta's pricing page,
+    failed and safety-blocked images are not billed.
+  - **A timeout, a malformed reply, or a render lost in flight** stays an
+    *unknown* hold for the operator to reconcile, never assumed free.
+- Images are served only to their owner, never cached, and checked to be
+  WebP, PNG or JPEG of at most 8 MB.
+
+Verified with six PostgreSQL tests against a mocked Meta endpoint:
+- success, settled at the flat price and stored once;
+- a refusal settled at zero;
+- a timeout and a malformed reply held as unknown;
+- every limit and the switch;
+- a lost render becoming unknown;
+- the permit refused for other run kinds;
+- the routes, including owner-only serving.
+
+A web test covers painting, display and the dossier embed. A real-browser
+check used a synthetic stand-in image. The real Muse Image call is untested
+until paid testing is approved.
+
 ## Data (schema 0034)
 
 - `studio_programmes`: owner session, brief, requirements (JSON, at most six),
