@@ -61,6 +61,9 @@ export function ConvergeWorkspace({ enabled, csrfToken, canSubmit, focusId, subm
   const holdUntil = useRef(0)
   const canSubmitRef = useRef(canSubmit)
   canSubmitRef.current = canSubmit
+  // The tick awaits the server before submitting, so it must call the latest submit, not the one captured when the tick began (that one may predate the previous run finishing).
+  const submitRef = useRef(submit)
+  submitRef.current = submit
 
   const fail = useCallback((failure: unknown) => {
     const code = failure instanceof ConvergeApiError ? failure.code : 'unavailable'
@@ -101,7 +104,7 @@ export function ConvergeWorkspace({ enabled, csrfToken, canSubmit, focusId, subm
         if (!canSubmitRef.current) { setStatus('Waiting until live research is available for this browser.'); return }
         if (Date.now() < holdUntil.current) return
         setStatus(next.kind === 'thread' ? 'Choosing two fields that may share one structure…' : `Looking for what these connections share · level ${next.level}…`)
-        const run = await submit('explore', next.goal, next.parent_result_ids, { collection: false })
+        const run = await submitRef.current('explore', next.goal, next.parent_result_ids, { collection: false })
         if (!run) {
           // A step that could not be queued (a blip, a restart, a rate limit) is tried again shortly; the programme stops only when it keeps failing.
           holds.current += 1; holdUntil.current = Date.now() + RETRY_HOLD_MS
@@ -121,7 +124,7 @@ export function ConvergeWorkspace({ enabled, csrfToken, canSubmit, focusId, subm
       setRunning(false)
       fail(failure)
     } finally { busy.current = false }
-  }, [programme, csrfToken, submit, fail, onFinished, refreshList])
+  }, [programme, csrfToken, fail, onFinished, refreshList])
 
   // The timer reads the latest step through a ref, so a step's own update
   // does not restart the effect.

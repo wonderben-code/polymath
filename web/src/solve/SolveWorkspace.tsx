@@ -67,6 +67,9 @@ export function SolveWorkspace({ enabled, csrfToken, canSubmit, focusId, submit,
   const holdUntil = useRef(0)
   const canSubmitRef = useRef(canSubmit)
   canSubmitRef.current = canSubmit
+  // The tick awaits the server before submitting, so it must call the latest submit, not the one captured when the tick began (that one may predate the previous run finishing).
+  const submitRef = useRef(submit)
+  submitRef.current = submit
 
   const fail = useCallback((failure: unknown) => {
     const code = failure instanceof SolveApiError ? failure.code : 'unavailable'
@@ -99,7 +102,7 @@ export function SolveWorkspace({ enabled, csrfToken, canSubmit, focusId, submit,
         if (!canSubmitRef.current) { setStatus('Waiting until live research is available for this browser.'); return }
         if (Date.now() < holdUntil.current) return
         setStatus(`${STAGE_WORDS[next.stage]}…`)
-        const run = await submit(next.mode, next.goal, next.parent_result_ids, { collection: false })
+        const run = await submitRef.current(next.mode, next.goal, next.parent_result_ids, { collection: false })
         if (!run) {
           // A step that could not be started (a blip, a restart, a rate limit) is tried again shortly; the programme stops only when it keeps failing.
           holds.current += 1; holdUntil.current = Date.now() + RETRY_HOLD_MS
@@ -116,7 +119,7 @@ export function SolveWorkspace({ enabled, csrfToken, canSubmit, focusId, submit,
         if (next.state === 'completed') void refreshList()
       }
     } catch (failure) { setRunning(false); fail(failure) } finally { busy.current = false }
-  }, [programme, csrfToken, submit, fail, refreshList])
+  }, [programme, csrfToken, fail, refreshList])
 
   const tickRef = useRef(tick)
   tickRef.current = tick

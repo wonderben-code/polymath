@@ -47,6 +47,9 @@ export function FrontierWorkspace({ enabled, csrfToken, canSubmit, focusId, subm
   const holdUntil = useRef(0)
   const canSubmitRef = useRef(canSubmit)
   canSubmitRef.current = canSubmit
+  // The tick awaits the server before submitting, so it must call the latest submit, not the one captured when the tick began (that one may predate the previous run finishing).
+  const submitRef = useRef(submit)
+  submitRef.current = submit
 
   const fail = useCallback((failure: unknown) => {
     const code = failure instanceof FrontierApiError ? failure.code : 'unavailable'
@@ -80,7 +83,7 @@ export function FrontierWorkspace({ enabled, csrfToken, canSubmit, focusId, subm
         if (!canSubmitRef.current) { setStatus('Waiting until live research is available for this browser.'); return }
         if (Date.now() < holdUntil.current) return
         setStatus(`${ACTION_LABELS[next.action]}…`)
-        const run = await submit(next.mode, next.goal, next.parent_result_ids, { collection: false })
+        const run = await submitRef.current(next.mode, next.goal, next.parent_result_ids, { collection: false })
         if (!run) {
           // A step that could not be queued (a blip, a restart, a rate limit) is tried again shortly; the programme stops only when it keeps failing.
           holds.current += 1; holdUntil.current = Date.now() + RETRY_HOLD_MS
@@ -100,7 +103,7 @@ export function FrontierWorkspace({ enabled, csrfToken, canSubmit, focusId, subm
       setRunning(false)
       fail(failure)
     } finally { busy.current = false }
-  }, [programme, csrfToken, submit, fail, onFinished, refreshList])
+  }, [programme, csrfToken, fail, onFinished, refreshList])
 
   // The timer reads the latest step through a ref: each step updates the
   // programme, and restarting the effect on that change would loop.
