@@ -189,3 +189,27 @@ def test_research_manifest_builds_for_a_48_call_proposal_with_explore_and_ladder
     assert manifest.task_profiles[0].profile.max_actions == 48
     assert manifest.explore_collection_profile.profile.max_actions == 16
     assert manifest.discovery_ladder_profile.profile.max_actions == 20
+
+
+def test_output_token_ceiling_covers_reasoning_plus_a_long_visible_answer():
+    # Muse Spark always reasons and its reasoning tokens count against max_tokens;
+    # the first live Formalise spent all 4,096 on reasoning and returned nothing.
+    from polymath.meta_readiness_contracts import ApplicationLimits
+    from polymath.meta_research_contracts import MetaResearchPayload
+
+    assert native_ceilings.MAX_OUTPUT_TOKENS == 32_768
+    limits = ApplicationLimits(
+        max_output_tokens=16_384,
+        max_context_characters=200_000,
+        max_model_calls=48,
+        request_timeout_seconds=60,
+    )
+    assert limits.max_output_tokens == 16_384
+    assert ResearchLimits(max_output_tokens=16_384).max_output_tokens == 16_384
+    assert ArtifactLimits(max_output_tokens=32_768).max_output_tokens == 32_768
+    payload = MetaResearchPayload(
+        model="muse-spark-1.3", messages=({"role": "user", "content": "x"},), max_tokens=16_384
+    )
+    assert payload.max_tokens == 16_384
+    with pytest.raises(ValueError):
+        ResearchLimits(max_output_tokens=32_769)

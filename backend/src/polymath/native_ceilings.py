@@ -10,4 +10,7 @@ calls stay byte-identical to the earlier releases.
 
 MAX_MODEL_CALLS = 80
 MAX_CONTEXT_CHARACTERS = 240_000
+# Muse Spark always reasons, and its reasoning tokens count against max_tokens;
+# Formalise and Write need far more than 4,096 tokens of visible output.
+MAX_OUTPUT_TOKENS = 32_768
 LEGACY_CALL_CEILING = 20
