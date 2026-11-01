@@ -23,7 +23,7 @@ from sqlalchemy import Engine, func, select
 from sqlalchemy.orm import Session
 
 from polymath.access_models import ResearchRunAccess
-from polymath.budget_models import BudgetReservation, BudgetRunLimit
+from polymath.budget_models import BudgetReservation
 from polymath.converge_fields import CATALOGUE, clean, match, normalise, spread
 from polymath.converge_models import ConvergeProgramme, ConvergeStep
 from polymath.frontier import TERMINAL_RUN_STATUSES, _clip, _saved_finding
@@ -341,17 +341,16 @@ class ConvergeStore:
             )
         )
 
-    def _reserve(self, session: Session, run_ids: list[uuid.UUID]) -> int:
-        cap = (
-            session.scalar(
-                select(func.max(BudgetRunLimit.cap_microdollars)).where(
-                    BudgetRunLimit.run_id.in_(run_ids)
-                )
-            )
-            if run_ids
-            else None
-        )
-        return max(STEP_ESTIMATE_MICRODOLLARS, int(cap or 0))
+    @staticmethod
+    def _reserve(session: Session, run_ids: list[uuid.UUID]) -> int:
+        """The planning estimate for the next step.
+
+        The circle plans with the same estimate it shows ("about N investigations
+        fit"); the ledger's own run and visitor caps bound the real cost. Using the
+        run cap here paused every modest circle after its first step.
+        """
+        del session, run_ids
+        return STEP_ESTIMATE_MICRODOLLARS
 
     def _finish(self, programme: ConvergeProgramme, reason: str) -> dict:
         programme.status = "completed"

@@ -104,7 +104,7 @@ export function ConvergeComposer({ csrfToken, ready, onCreated, onSessionExpired
       <div className="converge-setting converge-ceiling">
         <label htmlFor={`${uid}-ceiling`}>Spending ceiling</label>
         <span className="converge-currency">$<input id={`${uid}-ceiling`} type="number" min={0.1} max={150} step="any" value={ceiling} onChange={(event) => setCeiling(event.target.value)} aria-describedby={`${uid}-estimate`} /></span>
-        <p id={`${uid}-estimate`} className="converge-hint">{ceilingValid && capabilities ? `About ${steps} ${steps === 1 ? 'investigation fits' : 'investigations fit'} within ${dollars(dollarsValue * 1_000_000)}, at a planning estimate of ${dollars(capabilities.stepEstimate)} each. The circle never starts a step that could cross it.` : 'Choose a ceiling between $0.10 and $150.'}</p>
+        <p id={`${uid}-estimate`} className="converge-hint">{ceilingValid && capabilities ? `About ${steps} ${steps === 1 ? 'investigation fits' : 'investigations fit'} within ${dollars(dollarsValue * 1_000_000)}, at a planning estimate of ${dollars(capabilities.stepEstimate)} each. The circle stops before a step whose estimate would cross it.` : 'Choose a ceiling between $0.10 and $150.'}</p>
       </div>
 
       <div className="prompt-footer converge-start">
