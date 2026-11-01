@@ -19,6 +19,7 @@ HEADERS = {
 BODY_TIMEOUT_SECONDS = 10.0
 ADMIN_BODY_MAX_BYTES = 262_144
 EVENTS = re.compile(r"^/api/v1/(?:runs/[^/]+/events|publication-jobs/[^/]+/events)$")
+AUTOPILOT_NEXT = re.compile(r"^/api/v1/(?:solve|converge|frontier|studio)/[^/]+/next$")
 
 
 def _operation(method: str, path: str, has_owner: bool) -> tuple[str | None, bool, bool]:
@@ -34,6 +35,11 @@ def _operation(method: str, path: str, has_owner: bool) -> tuple[str | None, boo
         return ("read" if has_owner else "mint"), False, False
     if method == "POST":
         if path.endswith(("/cancel", "/pause", "/revoke", "/disable")):
+            return "control", True, False
+        # The stage-by-stage autopilots (Solve, Converge, Frontier, Studio) ask
+        # "what next?" every few seconds while their page is open; that is a
+        # cheap control read-modify, not a free write to be rationed at 3 a minute.
+        if AUTOPILOT_NEXT.fullmatch(path) is not None:
             return "control", True, False
         if path.startswith("/api/v1/runs") or path in (
             "/api/v1/artifacts/jobs",

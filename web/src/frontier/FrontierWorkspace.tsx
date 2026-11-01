@@ -8,7 +8,7 @@ import './frontier.css'
 
 const ACTION_LABELS = { survey: 'Surveying the literature', transfer: 'Searching other fields for a solution', decompose: 'Breaking the gap into smaller steps', attempt: 'Attempting a step', converge: 'Looking for a connection between the bridges' } as const
 const LEGEND: FrontierNodeStatus[] = ['supported', 'transferred', 'derived', 'conjectured', 'open', 'pending', 'skipped']
-const POLL_MS = 4000
+const POLL_MS = 6000
 
 export interface FrontierWorkspaceProps {
   enabled: boolean
@@ -29,6 +29,7 @@ function message(code: string): string {
   if (code === 'frontier_unavailable') return 'Frontier programmes are switched off on this server.'
   if (code === 'frontier_limit_reached') return 'This browser already has the maximum number of programmes.'
   if (code === 'frontier_finished') return 'This programme has finished.'
+  if (code === 'rate_limited') return 'Polymath is pacing requests from this browser; it continues in a moment.'
   return 'Frontier could not be reached. Try again in a moment.'
 }
 
