@@ -1,7 +1,9 @@
 # Run one named maintenance task on the production server over SSH.
 # Only repository collaborators can start it. It does nothing until the owner
-# adds two repository secrets: SERVER_SSH_KEY and SERVER_HOST_KEY.
-# Remove SERVER_SSH_KEY to revoke. Output is redacted on the server.
+# adds two repository secrets: SERVER_SSH_KEY and SERVER_HOST_KEY. Remove
+# SERVER_SSH_KEY to revoke. The repository is public, so the task's output is
+# encrypted to the engineer's public key (scripts/ops-public.pem) before it is
+# printed; the job log shows only ciphertext and an exit status.
 name: Server task
 
 on:
@@ -40,11 +42,22 @@ jobs:
           mkdir -p ~/.ssh && chmod 700 ~/.ssh
           printf '%s\n' "$SSH_KEY" > ~/.ssh/server && chmod 600 ~/.ssh/server
           if [ -n "$HOST_KEY" ]; then printf '%s\n' "$HOST_KEY" > ~/.ssh/known_hosts; else ssh-keyscan -t ed25519 "$SERVER_HOST" > ~/.ssh/known_hosts 2>/dev/null; fi
-      - name: Run the task
+      - name: Run the task (output encrypted for the engineer; nothing readable is logged)
         env:
           TASK: ${{ inputs.task }}
           ARGUMENT: ${{ inputs.argument }}
         run: |
           echo "== $TASK ${ARGUMENT:+(with an argument)}"
+          set +e
           ssh -i ~/.ssh/server -o BatchMode=yes -o ConnectTimeout=20 "root@$SERVER_HOST" \
-            "bash -s -- $(printf '%q ' "$TASK" "$ARGUMENT")" < scripts/server-task.sh
+            "bash -s -- $(printf '%q ' "$TASK" "$ARGUMENT")" < scripts/server-task.sh > output.txt 2>&1
+          STATUS=$?
+          set -e
+          echo "exit status: $STATUS; output bytes: $(wc -c < output.txt)"
+          KEY=$(openssl rand -hex 32)
+          echo "OPS-KEY: $(printf '%s' "$KEY" | openssl pkeyutl -encrypt -pubin -inkey scripts/ops-public.pem | base64 -w0)"
+          echo "OPS-OUTPUT-BEGIN"
+          openssl enc -aes-256-cbc -pbkdf2 -pass "pass:$KEY" -in output.txt | base64 -w76
+          echo "OPS-OUTPUT-END"
+          rm -f output.txt
+          exit $STATUS
