@@ -75,7 +75,7 @@ export function dossierBlocks(programme: StudioProgramme, origin: string): Block
   const reading = readStudio(programme)
   const blocks: Block[] = []
   const stepOf = (stage: StudioStep['stage']) => programme.steps.find((step) => step.stage === stage)!
-  blocks.push({ t: 'title', text: reading.design?.title ?? programme.brief, note: `A theoretical invention designed with Polymath Innovation Studio (${origin}), powered by Meta’s Muse Spark. Not built or tested. Every inspiration and claim comes from a saved investigation whose quotations were checked against their sources.` })
+  blocks.push({ t: 'title', text: reading.design?.title ?? programme.brief, note: `A theoretical invention designed with Polymath Innovation Studio (${origin}), powered by Meta’s frontier Muse models. Not built or tested. Every inspiration and claim comes from a saved investigation whose quotations were checked against their sources.` })
   blocks.push({ t: 'h2', text: 'The brief' }, { t: 'lead', text: programme.brief })
   if (programme.specs.length) blocks.push({ t: 'kv', label: 'Must meet', text: '' }, { t: 'list', items: programme.specs })
   blocks.push({ t: 'kv', label: 'Looked for ideas in', text: WILDNESS_WORDS[programme.wildness] })
@@ -178,7 +178,7 @@ export function buildMetaBriefing(programme: StudioProgramme): string {
   const reading = readStudio(programme)
   const numbers = reading.engineering?.claims.filter((claim) => claim.derivation).slice(0, 4).map((claim) => `${claim.text} (${claim.derivation})`) ?? []
   const parts = [
-    'I designed this invention with Polymath (askpolymath.com), using Meta’s Muse Spark and the scientific literature. Please help me refine it: question its weakest assumptions, improve the design, and check the numbers.',
+    'I designed this invention with Polymath (askpolymath.com), using Meta’s frontier Muse models and Polymath’s engine across the scientific literature. Please help me refine it: question its weakest assumptions, improve the design, and check the numbers.',
     '',
     `Brief: ${programme.brief}`,
     programme.specs.length ? `Must meet: ${programme.specs.join('; ')}` : '',

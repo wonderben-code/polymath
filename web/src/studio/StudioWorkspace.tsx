@@ -195,7 +195,7 @@ export function StudioWorkspace({ enabled, csrfToken, canSubmit, submit, onOpenR
       <section className="composer studio-composer" aria-labelledby="studio-title">
         <p className="composer-tagline">Innovation Studio · Experimental</p>
         <h1 id="studio-title">Invent something that doesn’t exist yet.</h1>
-        <p className="studio-lede">Describe anything you want to create. Meta’s Muse Spark hunts the strangest corners of science for mechanisms that already work, invents a design from them, engineers it with calculations, and tests it against your brief.</p>
+        <p className="studio-lede">Describe anything you want to create. Meta’s frontier models bring the creativity and reasoning; Polymath brings mechanisms that already work, from the strangest corners of the world’s science. Together they invent a design, engineer it with calculations, and test it against your brief.</p>
         <form onSubmit={(event) => void create(event)}>
           <label htmlFor="studio-brief" className="composer-label">What would you like to create?</label>
           <div className="prompt-box studio-box">

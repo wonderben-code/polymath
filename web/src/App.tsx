@@ -126,7 +126,8 @@ function AboutPlace({ remaining, daily }: { remaining?: number | null; daily?: n
       </dl>
     </section>
     <section className="about-section" aria-labelledby="intelligence-title">
-      <h2 id="intelligence-title">Meta’s Muse Spark decides each step. <em>Polymath keeps it honest.</em></h2>
+      <h2 id="intelligence-title">Meta’s frontier models decide each step. <em>Polymath keeps it honest.</em></h2>
+      <p className="about-intro">Polymath is Meta × the world’s science. Meta’s frontier Muse models bring the judgement and creativity: where to look, what to believe, how ideas combine. Polymath brings hundreds of millions of research works through OpenAlex and arXiv, reads full texts, checks every quotation, remembers every finding and keeps every call within budget. It runs on Muse Spark today and can move to any stronger Meta model as one arrives.</p>
       <dl className="about-points">
         <div><dt>Chooses where to look</dt><dd>The model picks every next action: search for support or counterevidence, read an abstract or a chosen section of a paper, revisit earlier findings, or stop.</dd></div>
         <div><dt>Picks its own fields</dt><dd>In Surprise me, the model selects distant fields itself and explains why. No list of fields is supplied.</dd></div>
@@ -146,7 +147,7 @@ function AboutPlace({ remaining, daily }: { remaining?: number | null; daily?: n
     <WaysToUse remaining={remaining} daily={daily} />
     <section className="about-section about-credits" aria-labelledby="credits-title">
       <h2 id="credits-title">Made for the Meta hackathon</h2>
-      <p>Created for the Meta Global AI Developer Hackathon with Cerebral Valley. The research intelligence is Meta’s Muse Spark. Polymath is open source.</p>
+      <p>Created for the Meta Global AI Developer Hackathon with Cerebral Valley. The intelligence is Meta’s frontier Muse models (Muse Spark today), combined with Polymath’s engine across the world’s literature. Polymath is open source.</p>
     </section>
     <Credits />
   </div>
@@ -287,7 +288,8 @@ export function App() {
           {place === 'research' && <>
             <section className="composer" aria-labelledby="research-title">
               <h1 id="research-title">Discoveries hide between fields of science. Polymath finds them.</h1>
-              <p className="hero-lede">Science is split into thousands of specialties, and far more is published each year than anyone could read. So an answer found in one field often stays unknown in the field that needs it. Polymath is an AI research partner that reads across all of them, spots where different fields have found the same idea in different words, and checks each connection against the original papers before showing it to you.</p>
+              <p className="hero-lede">Science is split into thousands of specialties, and far more is published each year than anyone could read. So an answer found in one field often stays unknown in the field that needs it. Polymath fuses Meta’s frontier Muse models with an engine that reads across the open record of world science. Meta brings the reasoning and the creativity; Polymath brings the literature, the evidence checks and the memory. Together they find where fields have found the same idea, solve problems with answers from other fields, and invent new things from ideas that already work.</p>
+              <p className="hero-fusion"><span>Meta frontier intelligence</span><span aria-hidden="true">×</span><span>Polymath’s engine across the world’s science</span></p>
               <HeroBridge />
               <div className="mode-switch" role="group" aria-label="Research mode">
                 {modes.map((item, index) => <Fragment key={item.id}>
@@ -411,7 +413,7 @@ export function App() {
             <StatusLine label="Meta connection" state="unknown" value={!system ? 'Not checked' : system.metaConfigured ? 'Key present · unverified' : 'Not configured'} />
             <li><button type="button" className="text-button" disabled={connection === 'loading'} onClick={() => setRetry((value) => value + 1)}>Check again</button></li>
           </ul>
-          <span className="footer-links"><a href="/library">Public library</a><a href="/operator/budget">Operator desk</a><span>Built for the Meta Global AI Developer Hackathon with Cerebral Valley · Intelligence by Meta Muse Spark · A project by Ekram Alam</span></span>
+          <span className="footer-links"><a href="/library">Public library</a><a href="/operator/budget">Operator desk</a><span>Built for the Meta Global AI Developer Hackathon with Cerebral Valley · Intelligence by Meta’s frontier Muse models · A project by Ekram Alam</span></span>
         </footer>
       </div>
     </NativeResearchProvider>

@@ -5,7 +5,7 @@ interface Credit { name: string; note: string; logo?: string; mark?: boolean; he
 // logo replaces it. OpenAlex is named in text until its logo file is added.
 const GROUPS: { label: string; names: Credit[] }[] = [
   { label: 'Built with', names: [
-    { name: 'Meta Muse Spark', note: 'the research intelligence', logo: '/logos/meta.svg', height: 18 },
+    { name: 'Meta Muse models', note: 'frontier intelligence, Muse Spark today', logo: '/logos/meta.svg', height: 18 },
     { name: 'Meta Global AI Developer Hackathon', note: 'created for' },
     { name: 'Cerebral Valley', note: 'hackathon host', logo: '/logos/cerebral-valley.svg', mark: true },
   ] },
