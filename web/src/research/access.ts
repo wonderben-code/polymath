@@ -59,7 +59,7 @@ export function parseResearchAccess(value: unknown): ResearchAccess {
 /** Existing browser ownership only. This read never creates or unlocks a session. */
 export async function getResearchAccess(signal?: AbortSignal): Promise<ResearchAccess> {
   const controller = new AbortController(), abort = () => controller.abort(); signal?.addEventListener('abort', abort, { once: true }); if (signal?.aborted) controller.abort()
-  const timer = window.setTimeout(abort, 10000)
+  const timer = window.setTimeout(abort, 20000)
   try {
     const response = await fetch('/api/v1/research/access', { method: 'GET', credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'application/json' }, signal: controller.signal })
     if (controller.signal.aborted) throw new ResearchAccessError('connection_failed')

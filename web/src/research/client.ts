@@ -300,7 +300,7 @@ async function request(path: string, signal?: AbortSignal, write?: { csrf: strin
   const abort = () => controller.abort()
   signal?.addEventListener('abort', abort, { once: true })
   if (signal?.aborted) controller.abort()
-  const timeout = window.setTimeout(abort, 10000)
+  const timeout = window.setTimeout(abort, write ? 30000 : 15000)
   try {
     if (write && !/^[a-f\d]{64}$/.test(write.csrf)) throw new ResearchApiError('session_changed')
     if (write?.native && !validNativeSubmission(write.native)) throw new ResearchApiError('native_authority_changed')

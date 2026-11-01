@@ -389,11 +389,11 @@ export function useResearchWorkspace(enabled: boolean, researchAvailable: boolea
       else if (failureCode === 'explore_variant_unavailable') { rejectedExploreHash.current = native.submission?.expectedActivationSha256 ?? null; native.invalidateExplore?.(native.submission?.expectedActivationSha256); setError(message(failureCode)) }
       else if (failureCode === 'scientific_variant_unavailable') { native.invalidateScientific?.(native.submission?.expectedActivationSha256); setError(message(failureCode)) }
       else if (failureCode === 'native_authority_changed') { native.invalidate(); setError(message(failureCode)) }
-      else { if (['connection_failed', 'invalid_response', 'unavailable'].includes(failureCode)) setUnconfirmedSubmission(true); setError(failureCode === 'connection_failed' ? 'Could not confirm whether the investigation was queued. Reload saved research before trying again.' : message(failureCode, failure instanceof ResearchApiError ? failure.retryAfterSeconds : null)) }
+      else { if (['connection_failed', 'invalid_response', 'unavailable'].includes(failureCode)) { setUnconfirmedSubmission(true); window.setTimeout(() => { if (current === generation.current) refresh() }, 5000) }; setError(failureCode === 'connection_failed' ? 'Could not confirm whether the investigation was queued. Reload saved research before trying again.' : message(failureCode, failure instanceof ResearchApiError ? failure.retryAfterSeconds : null)) }
     } finally {
       if (mutation.current === controller) { mutation.current = null; setSubmitting(false) }
     }
-  }, [enabled, researchAvailable, phase, csrf, unconfirmedSubmission, invalidate, remember, native.canSubmit, native.submission, native.invalidate, native.scientificCapabilities, native.scientificPhase, native.invalidateScientific, native.exploreAccess, native.explorePhase, native.invalidateExplore, discoveryIntent, ownActiveResearch])
+  }, [enabled, researchAvailable, phase, csrf, unconfirmedSubmission, invalidate, refresh, remember, native.canSubmit, native.submission, native.invalidate, native.scientificCapabilities, native.scientificPhase, native.invalidateScientific, native.exploreAccess, native.explorePhase, native.invalidateExplore, discoveryIntent, ownActiveResearch])
 
   const investigateBridges = useCallback(async (parentResultIds: readonly string[]) => { await submit(
     'explore',
