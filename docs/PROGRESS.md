@@ -1,6 +1,6 @@
 # Polymath: Progress tracker
 
-Last updated: 29 October 2026 (Bangkok). This file records verified outcomes; [BUILD_PLAN.md](BUILD_PLAN.md) holds task checkboxes and [ROADMAP.md](ROADMAP.md) holds target dates.
+Last updated: 1 November 2026 (UTC). This file records verified outcomes; [BUILD_PLAN.md](BUILD_PLAN.md) holds task checkboxes and [ROADMAP.md](ROADMAP.md) holds target dates.
 
 ## Current position
 
@@ -17,6 +17,13 @@ Scope: the complete product, including Surprise Me, the knowledge base, map, and
 **Package checkpoint:** local image `e1d4757abe5202dc72c1649b9eb858ec8a91b6765aa532cf872fe96b9a5cbf03` is healthy as UID10001 at schema 0025. All 144 Python modules, nine web files and the SDK match the checkout; eight gates are false, no actual Meta key/model is configured, and all nine scientific-context/Explore tables in that package check are empty. This proves local packaging, not hosting or live execution.
 
 All checks use synthetic evidence and actual adapters with mock HTTP. No real Meta canary, native scientific audit or Zenodo publication has run. Actual Meta access/model/wire/billing facts and provider funding/cap behavior remain unverified. Paid calls stay forbidden until the owner confirms readiness and authorizes them; keys alone grant nothing. No fixture finding is a live discovery.
+
+## Live operations (1 November 2026)
+
+- **Server channel.** `.github/workflows/server.yml` runs one named maintenance task over SSH; it starts from the Actions tab or from a push of `ops/request.json` to the `server-ops` branch. Output is encrypted to `scripts/ops-public.pem`. `scripts/operator-desk.sh` drives the operator desk API from the server itself. See [DEPLOYMENT.md](DEPLOYMENT.md).
+- **Live state.** askpolymath.com runs the latest `main`. The readiness proposal allows 48 model calls and 200,000 context characters per task under the owner's caps (USD 145 total, USD 75 a day, 4 in flight). Research is activated and public visitor funding is live at testing limits (USD 40 public total, USD 30 a day; USD 20 / USD 15 per visitor; 30 investigations a visitor a day, 200 a day in all) until 2026-11-05 12:00 UTC.
+- **First live defect found and fixed.** The visitor access projection (`PublicAccessLimits`, `PublicResearchAccess`) still capped investigations a day at 12 while the funding limits allow 40, so every visitor read failed with a plain 503. Both bounds now mirror the funding limits, regression tests cover 12/30/40, and the public research route logs unexpected failures instead of hiding them. Verified live: visitor access reads `available: true` with 30 remaining investigations.
+- **CI.** Pushes to `server-ops` no longer start the application checks, and a newer push to a branch cancels the checks still running for it.
 
 ## Milestone status
 
