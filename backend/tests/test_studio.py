@@ -63,9 +63,16 @@ def test_functions_become_inspirations_then_one_invention_then_a_stress_test(dat
         meta_run(database, token, premises, "Ornithology", "Aerospace", title="Hush rotor"),
     )
 
+    engineer = step(store, token, programme)
+    assert engineer["stage"] == "engineer" and engineer["mode"] == "ask"
+    assert engineer["goal"].startswith("Engineer this proposed invention in detail: Hush rotor")
+    assert "formula" in engineer["goal"] and engineer["parent_result_ids"] == []
+    attach(store, token, programme, engineer, answer_run(database, token, gaps=[]))
+
     test = step(store, token, programme)
     assert test["stage"] == "test" and test["mode"] == "ask" and test["parent_result_ids"] == []
     assert "Hush rotor" in test["goal"] and "Four passengers" in test["goal"]
+    assert "Engineering:" in test["goal"]
     attach(store, token, programme, test, answer_run(database, token, gaps=["Rain erosion?"]))
 
     done = store.get(token, uuid.UUID(programme["id"]))
@@ -75,11 +82,13 @@ def test_functions_become_inspirations_then_one_invention_then_a_stress_test(dat
         "inspire",
         "inspire",
         "design",
+        "engineer",
         "test",
     ]
     assert done["steps"][3]["finding"]["title"] == "Hush rotor"
     assert done["steps"][3]["finding"]["mappings"]
-    tested = done["steps"][4]["finding"]
+    assert done["steps"][4]["finding"]["kind"] == "answer"
+    tested = done["steps"][5]["finding"]
     assert tested["kind"] == "answer" and tested["claims"]
     assert tested["open_questions"] == ["Rain erosion?"]
     assert store.next_action(token, uuid.UUID(programme["id"])) == {
@@ -117,7 +126,21 @@ def test_without_named_functions_three_places_are_searched_and_one_idea_still_de
     with pytest.raises(StudioError, match="studio_run_invalid"):
         attach(store, token, programme, design, finished_run(database, token, mode="ask"))
     attach(store, token, programme, design, bridge_run(database, token, "Mycology", "Rotors")[0])
-    assert step(store, token, programme)["stage"] == "test"
+    engineer = step(store, token, programme)
+    assert engineer["stage"] == "engineer"
+    # Engineering that cannot finish still leads to the stress test, without its numbers.
+    for _ in range(2):
+        engineer = step(store, token, programme)
+        assert engineer["stage"] == "engineer"
+        attach(
+            store,
+            token,
+            programme,
+            engineer,
+            finished_run(database, token, mode="ask", status="failed"),
+        )
+    test = step(store, token, programme)
+    assert test["stage"] == "test" and "Engineering:" not in test["goal"]
 
 
 def test_when_no_mechanism_is_found_the_outcome_says_so(database):
@@ -204,7 +227,7 @@ def test_requests_are_validated_owned_and_pausable(database):
 
 def test_goals_are_built_from_stored_text_and_bounded():
     long = "z" * 9000
-    for stage in ("brief", "inspire", "design", "test"):
+    for stage in ("brief", "inspire", "design", "engineer", "test"):
         assert len(goal_for(stage, long, long, [long[:200]] * 6, "far")) <= 4000
     assert "these mechanisms from different fields" in goal_for("design", "b", "b", [], "far")
     assert "this mechanism from another field: idea" in goal_for("design", "idea", "b", [], "far")
@@ -229,7 +252,7 @@ def test_api_requires_a_session_and_csrf_and_never_echoes_input(database):
         assert client.get("/api/v1/studio").status_code == 401
         capabilities = client.get("/api/v1/studio/capabilities").json()
         assert capabilities["spends_directly"] is False
-        assert capabilities["max_investigations"] == 7 and capabilities["max_specs"] == 6
+        assert capabilities["max_investigations"] == 8 and capabilities["max_specs"] == 6
         headers = bootstrap(client)
         body = {"brief": BRIEF, "specs": SPECS, "wildness": "strange"}
         assert client.post("/api/v1/studio", json=body).status_code == 403

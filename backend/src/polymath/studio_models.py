@@ -59,7 +59,7 @@ class StudioStep(Base):
         UniqueConstraint("run_id", name="uq_studio_step_run"),
         UniqueConstraint("programme_id", "ordinal", name="uq_studio_step_ordinal"),
         CheckConstraint(
-            "stage IN ('brief','inspire','design','test')", name="ck_studio_step_stage"
+            "stage IN ('brief','inspire','design','engineer','test')", name="ck_studio_step_stage"
         ),
         CheckConstraint("char_length(target) BETWEEN 1 AND 4000", name="ck_studio_step_target"),
         CheckConstraint(

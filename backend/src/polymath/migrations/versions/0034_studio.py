@@ -51,7 +51,7 @@ CREATE TABLE studio_steps (
  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
  CONSTRAINT uq_studio_step_run UNIQUE(run_id),
  CONSTRAINT uq_studio_step_ordinal UNIQUE(programme_id,ordinal),
- CONSTRAINT ck_studio_step_stage CHECK(stage IN ('brief','inspire','design','test')),
+ CONSTRAINT ck_studio_step_stage CHECK(stage IN ('brief','inspire','design','engineer','test')),
  CONSTRAINT ck_studio_step_target CHECK(char_length(target) BETWEEN 1 AND 4000),
  CONSTRAINT ck_studio_step_status CHECK(status IN ('pending','running','done','failed')),
  CONSTRAINT ck_studio_step_premises CHECK

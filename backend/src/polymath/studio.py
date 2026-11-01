@@ -2,8 +2,9 @@
 
 brief → (brief: Ask) the state of the art and the hardest functions to achieve
 → (inspire: Explore, up to four) a mechanism from a distant field per function
-→ (design: Explore built on 2–4 inspirations) one integrated design concept
-→ (test: Ask) the design judged against its specs, prior art and estimates.
+→ (design: Explore built on 2–4 inspirations) one integrated invention
+→ (engineer: Ask) components, dimensions, materials and worked calculations
+→ (test: Ask) the design judged against its specs, prior art and its numbers.
 
 Every stage is an ordinary owned research run created by the visitor's browser
 through the existing admission, approval and budget path, so Meta chooses what
@@ -27,18 +28,25 @@ from polymath.research.models import AnswerFinding, BridgeFinding
 from polymath.studio_models import StudioProgramme, StudioStep
 
 TERMINAL = ("succeeded", "failed", "cancelled", "interrupted")
-STAGES = ("brief", "inspire", "design", "test")
-STAGE_MODES = {"brief": "ask", "inspire": "explore", "design": "explore", "test": "ask"}
+STAGES = ("brief", "inspire", "design", "engineer", "test")
+STAGE_MODES = {
+    "brief": "ask",
+    "inspire": "explore",
+    "design": "explore",
+    "engineer": "ask",
+    "test": "ask",
+}
 WILDNESS = ("near", "far", "strange")
 MAX_INSPIRATIONS = 4
 MAX_SPECS = 6
 MAX_FAILED = 2
 MAX_PROGRAMMES_PER_OWNER = 20
-MAX_INVESTIGATIONS = 1 + MAX_INSPIRATIONS + 2
+MAX_INVESTIGATIONS = 1 + MAX_INSPIRATIONS + 3
 GOAL_LIMIT = 4000
 # Ordinals keep the stages in reading order whatever the plan becomes.
 DESIGN_ORDINAL = 1 + MAX_INSPIRATIONS
-TEST_ORDINAL = DESIGN_ORDINAL + 1
+ENGINEER_ORDINAL = DESIGN_ORDINAL + 1
+TEST_ORDINAL = ENGINEER_ORDINAL + 1
 
 WHERE = {
     "near": "Look in neighbouring branches of engineering and the physical sciences.",
@@ -119,13 +127,21 @@ def goal_for(stage: str, target: str, brief: str, specs: list[str], wildness: st
             "its strongest objection, including whether each mechanism still works at the "
             "design's scale."
         )
+    elif stage == "engineer":
+        goal = (
+            f"Engineer this proposed invention in detail: {_clip(target, 1500)} Requirements: "
+            f"{required}. Specify each main component with its materials, dimensions and "
+            "operating parameters. Work out the key calculations step by step, each with its "
+            "formula, its inputs and where they come from, the result and its units. State "
+            "which values come from the literature and which are design choices or estimates."
+        )
     elif stage == "test":
         goal = (
-            f"Stress-test this proposed design: {_clip(target, 1500)} Requirements: "
+            f"Stress-test this proposed design: {_clip(target, 2000)} Requirements: "
             f"{required}. For each requirement, say whether the literature supports that the "
             "design could meet it, and why. Check whether this design or a close one already "
-            "exists. Give rough estimates of the key quantities where the literature allows, "
-            f"and name what would still need to be invented. Design brief: {context}"
+            "exists. Check its key numbers against the literature, and name what would still "
+            f"need to be invented. Design brief: {context}"
         )
     else:
         raise StudioError("invalid_studio_stage")
@@ -172,6 +188,14 @@ def _bridge(session: Session, step: StudioStep) -> BridgeFinding | None:
     run = session.get(ResearchRun, step.run_id)
     finding = _saved_finding(session, run)[1] if run is not None else None
     return finding if isinstance(finding, BridgeFinding) else None
+
+
+def _answer(session: Session, step: StudioStep) -> AnswerFinding | None:
+    if step.run_id is None or step.outcome != "answer":
+        return None
+    run = session.get(ResearchRun, step.run_id)
+    finding = _saved_finding(session, run)[1] if run is not None else None
+    return finding if isinstance(finding, AnswerFinding) else None
 
 
 def _describe(finding: BridgeFinding) -> str:
@@ -380,13 +404,23 @@ class StudioStore:
             _add(session, programme, "design", DESIGN_ORDINAL, _describe(finding))
 
     def _maybe_test(self, session: Session, programme: StudioProgramme) -> None:
+        """A held design is engineered, then stress-tested with its numbers."""
         steps = _steps(session, programme)
         design = next((item for item in steps if item.stage == "design"), None)
-        if design is None or any(item.stage == "test" for item in steps):
+        finding = _bridge(session, design) if design is not None else None
+        if finding is None:
             return
-        finding = _bridge(session, design)
-        if finding is not None:
-            _add(session, programme, "test", TEST_ORDINAL, _describe(finding))
+        engineer = next((item for item in steps if item.stage == "engineer"), None)
+        if engineer is None:
+            _add(session, programme, "engineer", ENGINEER_ORDINAL, _describe(finding))
+            return
+        if engineer.status not in ("done", "failed") or any(item.stage == "test" for item in steps):
+            return
+        target = _describe(finding)
+        worked = _answer(session, engineer)
+        if worked is not None:
+            target = f"{target} Engineering: {_clip(worked.summary, 1200)}"
+        _add(session, programme, "test", TEST_ORDINAL, target)
 
     def _finish(self, session: Session, programme: StudioProgramme, steps) -> None:
         if any(item.stage == "design" and item.outcome == "bridge" for item in steps):

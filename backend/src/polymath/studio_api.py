@@ -48,7 +48,7 @@ class CreateProgramme(Strict):
 
 class AttachRun(Strict):
     step_id: str = Field(min_length=36, max_length=36)
-    stage: Literal["brief", "inspire", "design", "test"]
+    stage: Literal["brief", "inspire", "design", "engineer", "test"]
     run_id: str = Field(min_length=36, max_length=36)
 
 
