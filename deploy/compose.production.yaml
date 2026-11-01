@@ -24,6 +24,12 @@ x-app: &app
   tmpfs: [/tmp]
   security_opt: ["no-new-privileges:true"]
   cap_drop: [ALL]
+  # Logs rotate by size and are overwritten (docs: /privacy, "Server logs").
+  logging: &rotated-logs
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
 
 services:
   db:
@@ -82,6 +88,7 @@ services:
 
   proxy:
     image: caddy:2.11.7-alpine@sha256:eb4d35b7452d1ab6171fbdbe8d9275b2301dad6dad92115d91e19fb9b24d510f
+    logging: *rotated-logs
     environment:
       POLYMATH_DOMAIN: ${POLYMATH_DOMAIN:?set POLYMATH_DOMAIN in deploy/production.env}
     ports:
