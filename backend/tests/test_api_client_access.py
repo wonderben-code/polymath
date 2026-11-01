@@ -301,7 +301,7 @@ def test_valid_access_wire_and_private_operator_projection_preserve_exact_facts(
         lambda data: data["limits"].update(session_total_cap_microdollars="150000001"),
         lambda data: data["limits"].update(session_daily_cap_microdollars="50001"),
         lambda data: data["limits"].update(max_active_jobs_per_session=2),
-        lambda data: data["limits"].update(max_jobs_per_session_day=13),
+        lambda data: data["limits"].update(max_jobs_per_session_day=41),
         lambda data: data["limits"].update(max_active_jobs_per_session=True),
         lambda data: data["limits"].update(task_kinds=["research"]),
         lambda data: data["limits"].update(

@@ -252,3 +252,20 @@ def test_paid_images_are_off_by_default_and_never_on_without_paid_research() -> 
         Settings(**base, paid_meta_image_enabled=True, meta_image_model="muse-image-1.0")
     with pytest.raises(ValidationError):
         Settings(**base, meta_image_model="not a model id!")
+
+
+def test_free_use_job_counts_default_to_the_reviewed_values_and_stay_bounded() -> None:
+    from polymath.public_research_contracts import PublicResearchPolicy
+
+    base = {"database_url": "postgresql+psycopg://u:p@localhost/db", "_env_file": None}
+    settings = Settings(**base)
+    assert (settings.public_max_jobs_per_session_day, settings.public_max_jobs_per_day) == (12, 50)
+    assert (
+        Settings(**base, public_max_jobs_per_session_day=30).public_max_jobs_per_session_day == 30
+    )
+    for changes in ({"public_max_jobs_per_session_day": 41}, {"public_max_jobs_per_day": 301}):
+        with pytest.raises(ValidationError):
+            Settings(**base, **changes)
+    assert PublicResearchPolicy(max_jobs_per_session_day=40, max_jobs_per_day=300)
+    with pytest.raises(ValueError):
+        PublicResearchPolicy(max_jobs_per_session_day=41)

@@ -104,8 +104,10 @@ class PublicLimits(_ReadinessModel):
     public_daily_cap_microdollars: MoneyCap
     session_total_cap_microdollars: MoneyCap
     session_daily_cap_microdollars: MoneyCap
-    max_jobs_per_session_day: Annotated[int, Field(ge=1, le=12)] = 12
-    max_jobs_per_day: Annotated[int, Field(ge=1, le=50)] = 50
+    # A Studio invention is up to eight investigations and a Solve up to five, so a
+    # visitor needs room for several in a day; the money caps remain the real limit.
+    max_jobs_per_session_day: Annotated[int, Field(ge=1, le=40)] = 12
+    max_jobs_per_day: Annotated[int, Field(ge=1, le=300)] = 50
     max_active_jobs_per_session: Literal[1] = 1
     max_active_jobs: Annotated[int, Field(ge=1, le=5)] = 5
     max_queued_jobs: Annotated[int, Field(ge=1, le=4)] = 4
@@ -150,8 +152,8 @@ class PublicResearchPolicy:
             raise ValueError("invalid_public_research_policy")
         for name, ceiling in (
             ("max_delegation_seconds", MAX_PUBLIC_DELEGATION_CEILING_SECONDS),
-            ("max_jobs_per_session_day", 12),
-            ("max_jobs_per_day", 50),
+            ("max_jobs_per_session_day", 40),
+            ("max_jobs_per_day", 300),
             ("max_active_jobs", 5),
             ("max_queued_jobs", 4),
             ("max_active_jobs_per_network", 2),

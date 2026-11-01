@@ -295,7 +295,7 @@ def _research_access(value):
             remaining is not None and int(remaining) > int(total)
         ):
             raise ValueError
-        _integer(limits["max_jobs_per_session_day"], 1, 12)
+        _integer(limits["max_jobs_per_session_day"], 1, 40)
         _integer(limits["max_active_jobs_per_session"], 1, 1)
         if value["remaining_session_jobs_today"] is not None:
             _integer(

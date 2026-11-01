@@ -36,7 +36,7 @@ function limits(value: unknown): ResearchAccessLimits {
   const item = object(value, ['session_total_cap_microdollars', 'session_daily_cap_microdollars', 'max_jobs_per_session_day', 'max_active_jobs_per_session', 'task_kinds', 'discovery_intent']), tasks = ['research', 'formalise', 'write_summary', 'write_paper', 'reassess_finding'] as const
   if (item.max_active_jobs_per_session !== 1 || !Array.isArray(item.task_kinds) || item.task_kinds.length !== tasks.length || new Set(item.task_kinds).size !== tasks.length || item.task_kinds.some((task) => !tasks.includes(task))) return invalid()
   const total = decimal(item.session_total_cap_microdollars), daily = decimal(item.session_daily_cap_microdollars), jobs = integer(item.max_jobs_per_session_day)
-  if (BigInt(total) <= 0n || BigInt(daily) <= 0n || BigInt(daily) > BigInt(total) || jobs < 1 || jobs > 12 || BigInt(total) > 150000000n) return invalid()
+  if (BigInt(total) <= 0n || BigInt(daily) <= 0n || BigInt(daily) > BigInt(total) || jobs < 1 || jobs > 40 || BigInt(total) > 150000000n) return invalid()
   let discovery: DiscoveryIntent | null = null
   try { discovery = item.discovery_intent === null ? null : parseDiscoveryIntent(item.discovery_intent, invalid) ?? invalid() } catch { return invalid() }
   return { session_total_cap_microdollars: total, session_daily_cap_microdollars: daily, max_jobs_per_session_day: jobs, max_active_jobs_per_session: 1, task_kinds: item.task_kinds as NativeScientificTaskKind[], discovery_intent: discovery }
