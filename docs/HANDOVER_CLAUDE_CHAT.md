@@ -54,8 +54,9 @@ Steps:
    - The header has **Studio** with an *Experimental* badge. Its page reads
      *Invent something that doesn't exist yet.* and shows four example
      buttons, starting with *A neural interface for the outdoors*.
-   - The footer reads *Intelligence by Meta's frontier Muse models*, with
-     *Privacy* and *Terms* links.
+   - The footer reads *Intelligence by Meta's frontier Muse models* and
+     *Created, designed and built by Ekram Alam · © 2026*, with *Privacy* and
+     *Terms* links.
    - Sign in still lists ORCID, GitHub and Google (no need to sign in again).
    - Research shows a calm *paused* notice. That's expected until Part B.
 
