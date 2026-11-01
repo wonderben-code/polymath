@@ -88,7 +88,7 @@ describe('investigating connections between saved bridges', () => {
     expect(within(detail).getByText('Earlier bridge investigated')).toBeVisible()
     await userEvent.click(within(detail).getByRole('button', { name: 'Synthetic bridge 1' }))
     expect(within(screen.getByRole('region', { name: 'Selected knowledge record' })).getByText('Follow-up investigation')).toBeVisible()
-    expect(screen.getByText(/they do not provide independent support/)).toBeVisible()
+    expect(screen.getByText(/not proof that a connection is true/)).toBeVisible()
   })
 
   it('clears selections after capability loss, query changes, and expired sessions', async () => {

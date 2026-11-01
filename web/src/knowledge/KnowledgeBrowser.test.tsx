@@ -119,7 +119,7 @@ describe('session-owned knowledge browser', () => {
     data.graph.truncated = true
     const fetch = mockRecords(data)
     render(<KnowledgeBrowser enabled onOpenRun={vi.fn()} />)
-    await screen.findByText(/bounded view of your library/)
+    await screen.findByText(/Showing the most recent part of your library/)
     await userEvent.type(screen.getByRole('searchbox'), 'A&B %_')
     await userEvent.click(screen.getByRole('button', { name: 'Search library' }))
     await waitFor(() => expect(fetch).toHaveBeenCalledTimes(4))

@@ -345,3 +345,31 @@ def test_api_requires_session_and_csrf_and_never_echoes_input(converge_api):
     assert paused.json()["status"] == "paused"
     enabled["value"] = False
     assert client.get("/api/v1/converge").status_code == 503
+
+
+@pytest.mark.integration
+def test_recent_investigations_can_leave_out_programme_steps(converge_api):
+    from test_run_api import bootstrap
+
+    _, client, _ = converge_api
+    headers = bootstrap(client)
+    body = {"field_count": 12, "fields": [], "ceiling_microdollars": CEILING}
+    programme = client.post("/api/v1/converge", headers=headers, json=body).json()
+    step = client.post(f"/api/v1/converge/{programme['id']}/next", headers=headers).json()["next"]
+    own = client.post(
+        "/api/v1/runs", headers=headers, json={"mode": "explore", "goal": "My own question"}
+    ).json()
+    cancelled = client.post(f"/api/v1/runs/{own['id']}/cancel", headers=headers)
+    assert cancelled.status_code == 200, cancelled.text
+    part = client.post(
+        "/api/v1/runs", headers=headers, json={"mode": "explore", "goal": step["goal"]}
+    ).json()
+    attached = client.post(
+        f"/api/v1/converge/{programme['id']}/attach",
+        headers=headers,
+        json={"kind": step["kind"], "parent_result_ids": [], "run_id": part["id"]},
+    )
+    assert attached.status_code == 200, attached.text
+    everything = {run["id"] for run in client.get("/api/v1/runs").json()["runs"]}
+    mine = {run["id"] for run in client.get("/api/v1/runs?own=true").json()["runs"]}
+    assert everything == {own["id"], part["id"]} and mine == {own["id"]}

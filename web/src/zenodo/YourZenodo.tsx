@@ -25,9 +25,9 @@ export function recordLine(record: VisitorPublication): string {
   return `${where} · ${STATUS_WORDS[record.status]}`
 }
 
-interface Props { csrfToken: string | null; enabled: boolean; native?: NativeSubmissionContext }
+interface Props { csrfToken: string | null; enabled: boolean; native?: NativeSubmissionContext; standalone?: boolean }
 
-export function YourZenodo({ csrfToken, enabled, native }: Props) {
+export function YourZenodo({ csrfToken, enabled, native, standalone = false }: Props) {
   const uid = useId()
   const heading = useRef<HTMLHeadingElement>(null)
   const pending = useRef<{ code: string; state: string } | null>(null)
@@ -84,7 +84,10 @@ export function YourZenodo({ csrfToken, enabled, native }: Props) {
     try { await work() } catch (failure) { setMessage(errorWords(failure instanceof ZenodoError ? failure.code : '')) } finally { setBusy(false) }
   }
 
-  if (!status?.available) return message ? <p className="zenodo-message" role="status">{message}</p> : null
+  if (!status?.available) {
+    if (message) return <p className="zenodo-message" role="status">{message}</p>
+    return status && standalone ? <p className="zenodo-unavailable">Publishing your findings to Zenodo, under your own name, opens here once this site is connected to Zenodo.</p> : null
+  }
   const published = records.filter((record) => record.status !== 'preview')
   return (
     <section className="zenodo" aria-labelledby={`${uid}-title`}>

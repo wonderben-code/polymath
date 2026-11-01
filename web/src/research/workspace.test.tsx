@@ -43,8 +43,8 @@ function server() {
       state.runs.unshift(created)
       return Response.json(created, { status: 201 })
     }
-    if (path === '/api/v1/runs') return Response.json(state.historyStatus === 200 ? { runs: state.runs, next_cursor: state.cursor } : { detail: 'research_session_required' }, { status: state.historyStatus })
-    if (path.startsWith('/api/v1/runs?before=')) return Response.json({ runs: state.earlier, next_cursor: null })
+    if (path === '/api/v1/runs?own=true') return Response.json(state.historyStatus === 200 ? { runs: state.runs, next_cursor: state.cursor } : { detail: 'research_session_required' }, { status: state.historyStatus })
+    if (path.startsWith('/api/v1/runs?own=true&before=')) return Response.json({ runs: state.earlier, next_cursor: null })
     const matched = /^\/api\/v1\/runs\/([^/]+)(\/cancel|\/result)?$/.exec(path)
     if (matched) {
       const selected = state.runs.find((item) => item.id === matched[1]) ?? state.earlier.find((item) => item.id === matched[1])
@@ -177,7 +177,7 @@ describe('session-owned research workspace', () => {
     await user.click(await screen.findByRole('button', { name: 'Load earlier investigations' }))
     expect(await screen.findByRole('button', { name: /Older synthetic investigation/ })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Load earlier investigations' })).not.toBeInTheDocument()
-    expect(requests.mock.calls.some(([input]) => input.toString() === `/api/v1/runs?before=${RUN}`)).toBe(true)
+    expect(requests.mock.calls.some(([input]) => input.toString() === `/api/v1/runs?own=true&before=${RUN}`)).toBe(true)
     expect(requests.mock.calls.some(([input]) => input.toString().includes('a'.repeat(64)))).toBe(false)
   })
 

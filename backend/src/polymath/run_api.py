@@ -30,11 +30,13 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from polymath.access_models import BrowserSession, ResearchRunAccess
+from polymath.converge_models import ConvergeStep
 from polymath.discovery_contracts import DiscoveryIntent
 from polymath.explore_collection_contracts import (
     ExploreCollectionIntent,
     validate_explore_admission,
 )
+from polymath.frontier_models import FrontierAttempt
 from polymath.jobs import JobNotFound, JobRepository, _event
 from polymath.lineage import LineageError, bind_parents, validate_parent_ids
 from polymath.meta_research_errors import (
@@ -459,6 +461,7 @@ def create_run_router(
         request: Request,
         limit: Annotated[int, Query(ge=1, le=50)] = 20,
         before: uuid.UUID | None = None,
+        own: bool = False,
     ) -> dict:
         try:
             with Session(engine) as session:
@@ -469,6 +472,13 @@ def create_run_router(
                     .where(ResearchRunAccess.session_hash == owner.token_hash)
                     .where(ResearchRun.task_kind == "research")
                 )
+                if own:
+                    # Only investigations the visitor started: Converge and
+                    # Frontier steps are shown inside their own programmes.
+                    query = query.where(
+                        ResearchRun.id.not_in(select(ConvergeStep.run_id)),
+                        ResearchRun.id.not_in(select(FrontierAttempt.run_id)),
+                    )
                 if before is not None:
                     anchor = _owned(session, owner, before)
                     query = query.where(

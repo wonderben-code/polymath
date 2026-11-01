@@ -31,7 +31,7 @@ describe('actual public App collection read composition', () => {
       if (path === '/api/v1/readiness') return Response.json({ checks: { database: 'ok', migrations: 'ok' } })
       if (path === '/api/v1/capabilities') return Response.json({ research_available: true, native_research_required: true, meta_configured: true })
       if (path === '/api/v1/session') return Response.json({ csrf_token: BROWSER_CSRF, expires_at: new Date(started + 3600000).toISOString() })
-      if (path === '/api/v1/runs') return Response.json({ runs: [run()], next_cursor: null })
+      if (path === '/api/v1/runs?own=true') return Response.json({ runs: [run()], next_cursor: null })
       if (path === `/api/v1/runs/${RUN}`) return Response.json(run())
       if (path === '/api/v1/research/access') return Response.json(publicAccess({ expires_at: new Date(started + 3600000).toISOString(), available: !fundingClosed, reason: fundingClosed ? 'public_research_stopped' : null }))
       if (path === '/api/v1/research/protocols') return Response.json({ protocol: 'polymath-research-protocols-v1', activation_sha256: SHA, capabilities: [] })
@@ -59,6 +59,7 @@ describe('actual public App collection read composition', () => {
     // The watch lives in Your library and the investigation in Research; select
     // the watch first, then return to follow the live collection.
     fireEvent.click(screen.getByRole('link', { name: 'Your library' })); await flush(); await flush()
+    fireEvent.click(screen.getByRole('button', { name: 'Watching' })); await flush(); await flush()
     fireEvent.click(screen.getByRole('button', { name: /Synthetic watch/ })); await flush(); await flush()
     fireEvent.click(screen.getByRole('link', { name: 'Research' })); await flush(); await flush()
     fireEvent.click(screen.getByRole('button', { name: /Synthetic bounded multi-bridge question/ })); await flush(); await flush()
