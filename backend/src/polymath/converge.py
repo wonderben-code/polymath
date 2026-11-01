@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import Engine, case, func, select
+from sqlalchemy import Engine, func, select
 from sqlalchemy.orm import Session
 
 from polymath.access_models import ResearchRunAccess
@@ -312,24 +312,32 @@ class ConvergeStore:
     # Internal steps -----------------------------------------------------------
 
     def _spent(self, session: Session, run_ids: list[uuid.UUID]) -> int:
+        """Settled actual cost of the circle's steps so far."""
+        return self._money(session, run_ids, settled=True)
+
+    def _held(self, session: Session, run_ids: list[uuid.UUID]) -> int:
+        """Holds still open on the circle's steps (estimated until each settles)."""
+        return self._money(session, run_ids, settled=False)
+
+    @staticmethod
+    def _money(session: Session, run_ids: list[uuid.UUID], *, settled: bool) -> int:
         if not run_ids:
             return 0
+        column = (
+            BudgetReservation.actual_microdollars
+            if settled
+            else BudgetReservation.estimated_microdollars
+        )
+        condition = (
+            BudgetReservation.status == "settled"
+            if settled
+            else BudgetReservation.status != "settled"
+        )
         return int(
             session.scalar(
-                select(
-                    func.coalesce(
-                        func.sum(
-                            case(
-                                (
-                                    BudgetReservation.status == "settled",
-                                    BudgetReservation.actual_microdollars,
-                                ),
-                                else_=BudgetReservation.estimated_microdollars,
-                            )
-                        ),
-                        0,
-                    )
-                ).where(BudgetReservation.run_id.in_(run_ids))
+                select(func.coalesce(func.sum(column), 0)).where(
+                    BudgetReservation.run_id.in_(run_ids), condition
+                )
             )
         )
 
@@ -361,9 +369,9 @@ class ConvergeStore:
         if len(steps) >= programme.max_steps:
             return self._finish(programme, "step_limit")
         run_ids = [step.run_id for step in steps]
-        if self._spent(session, run_ids) + self._reserve(session, run_ids) > (
-            programme.ceiling_microdollars
-        ):
+        if self._spent(session, run_ids) + self._held(session, run_ids) + self._reserve(
+            session, run_ids
+        ) > (programme.ceiling_microdollars):
             return self._finish(programme, "ceiling")
         plan = self._plan(programme, steps)
         if plan is None:
@@ -544,6 +552,7 @@ class ConvergeStore:
                 ],
                 "ceiling_microdollars": programme.ceiling_microdollars,
                 "spent_microdollars": self._spent(session, run_ids),
+                "held_microdollars": self._held(session, run_ids),
                 "step_estimate_microdollars": STEP_ESTIMATE_MICRODOLLARS,
                 "max_steps": programme.max_steps,
                 "steps_used": len(steps),

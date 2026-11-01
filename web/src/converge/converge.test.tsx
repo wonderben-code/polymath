@@ -25,7 +25,7 @@ function programme(steps: ConvergeStep[] = [step()], extra: Record<string, unkno
   return {
     id: PID, theme: 'A synthetic theme', status: 'active', field_count: 4, connections_held: steps.filter((item) => item.status === 'held').length, created_at: '2026-10-29T00:00:00Z', updated_at: '2026-10-29T00:00:00Z',
     finished_reason: null, fields: ['Ecology', 'Optics', 'Economics', 'Linguistics'].map((name, index) => ({ name, origin: index === 0 ? 'chosen' : 'spread', touched: index < 2 })),
-    ceiling_microdollars: 20_000_000, spent_microdollars: 1_500_000, step_estimate_microdollars: 500_000, max_steps: 400, steps_used: steps.length, deepest_step_ids: [], steps, ...extra,
+    ceiling_microdollars: 20_000_000, spent_microdollars: 1_500_000, held_microdollars: 0, step_estimate_microdollars: 500_000, max_steps: 400, steps_used: steps.length, deepest_step_ids: [], steps, ...extra,
   }
 }
 
