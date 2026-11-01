@@ -511,3 +511,14 @@ def test_access_projection_allows_the_same_daily_job_ceiling_as_funding_limits()
         assert PublicAccessLimits.model_validate(value | {"max_jobs_per_session_day": jobs})
     with pytest.raises(ValidationError):
         PublicAccessLimits.model_validate(value | {"max_jobs_per_session_day": 41})
+
+
+def test_access_projection_reports_up_to_40_remaining_investigations():
+    data = access_data()
+    data["limits"]["max_jobs_per_session_day"] = 40
+    for remaining in (0, 12, 30, 40):
+        assert PublicResearchAccess.model_validate(
+            data | {"remaining_session_jobs_today": remaining}
+        )
+    with pytest.raises(ValidationError):
+        PublicResearchAccess.model_validate(data | {"remaining_session_jobs_today": 41})

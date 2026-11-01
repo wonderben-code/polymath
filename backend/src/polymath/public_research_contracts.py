@@ -541,7 +541,7 @@ class PublicResearchAccess(_ReadinessModel):
     expires_at: datetime | None
     limits: PublicAccessLimits | None
     remaining_session_allowance_microdollars: MoneyString | None
-    remaining_session_jobs_today: Annotated[int, Field(ge=0, le=12)] | None
+    remaining_session_jobs_today: Annotated[int, Field(ge=0, le=40)] | None
     retry_after_seconds: Annotated[int, Field(ge=0, le=86400)] | None
 
     @field_validator("expires_at", mode="before")
