@@ -19,7 +19,7 @@ export interface SolveWorkspaceProps {
   csrfToken: string | null
   canSubmit: boolean
   focusId: string | null
-  submit: (mode: 'ask' | 'explore', goal: string, parentResultIds: readonly string[]) => Promise<OwnedRun | undefined>
+  submit: (mode: 'ask' | 'explore', goal: string, parentResultIds: readonly string[], options?: { collection?: boolean }) => Promise<OwnedRun | undefined>
   onOpenRun: (id: string) => void
   onSessionExpired: () => void
 }
@@ -94,7 +94,7 @@ export function SolveWorkspace({ enabled, csrfToken, canSubmit, focusId, submit,
       if (next.state === 'due') {
         if (!canSubmitRef.current) { setStatus('Waiting until live research is available for this browser.'); return }
         setStatus(`${STAGE_WORDS[next.stage]}…`)
-        const run = await submit(next.mode, next.goal, next.parent_result_ids)
+        const run = await submit(next.mode, next.goal, next.parent_result_ids, { collection: false })
         if (!run) { setRunning(false); setStatus('The next search could not be started. Live research may be unavailable; your problem is saved.'); return }
         setProgramme(await attachSolveRun(programme.id, csrfToken, { step_id: next.step_id, stage: next.stage, run_id: run.id }))
       } else if (next.state === 'waiting') {

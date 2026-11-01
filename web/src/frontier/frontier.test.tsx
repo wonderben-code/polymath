@@ -60,7 +60,7 @@ describe('frontier workspace', () => {
     }))
     const submit = vi.fn(async () => ({ id: RUN, mode: 'explore', goal: 'g', status: 'queued', created_at: '', updated_at: '', result_id: null, error_code: null, external_outcome_unknown: false } as never))
     render(<FrontierWorkspace enabled csrfToken={CSRF} canSubmit focusId={PID} submit={submit} onOpenRun={vi.fn()} onSessionExpired={vi.fn()} />)
-    await waitFor(() => expect(submit).toHaveBeenCalledWith('explore', 'A named synthetic gap (an open gap within the problem)', []))
+    await waitFor(() => expect(submit).toHaveBeenCalledWith('explore', 'A named synthetic gap (an open gap within the problem)', [], { collection: false }))
     await waitFor(() => expect(calls).toContain(`POST /api/v1/frontier/${PID}/attach`))
     expect(screen.getByText('Experimental')).toBeInTheDocument()
   })

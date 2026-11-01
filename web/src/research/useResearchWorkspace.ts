@@ -361,8 +361,11 @@ export function useResearchWorkspace(enabled: boolean, researchAvailable: boolea
     }
   }, [phase, csrf, activeRun, invalidate, remember])
 
-  const submit = useCallback(async (mode: OwnedRun['mode'], goal: string, parentResultIds: readonly string[] = []): Promise<OwnedRun | undefined> => {
-    if (mode === 'ask' && !scientificSelectionReady(native) || mode === 'explore' && !parentResultIds.length && (!exploreSelectionReady(native) || !!native.submission && rejectedExploreHash.current === native.submission.expectedActivationSha256)) return
+  // The stage-by-stage autopilots pass { collection: false }: their engines read one
+  // plain bridge per Explore step, not a ranked collection.
+  const submit = useCallback(async (mode: OwnedRun['mode'], goal: string, parentResultIds: readonly string[] = [], options: { collection?: boolean } = {}): Promise<OwnedRun | undefined> => {
+    const collectionWanted = mode === 'explore' && !parentResultIds.length && options.collection !== false
+    if (mode === 'ask' && !scientificSelectionReady(native) || collectionWanted && (!exploreSelectionReady(native) || !!native.submission && rejectedExploreHash.current === native.submission.expectedActivationSha256)) return
     if (!enabled || !researchAvailable || !native.canSubmit || ownActiveResearch || unconfirmedSubmission || phase !== 'ready' || !csrf || mutation.current) return
     const controller = new AbortController()
     const current = generation.current
@@ -370,7 +373,7 @@ export function useResearchWorkspace(enabled: boolean, researchAvailable: boolea
     setSubmitting(true)
     setError('')
     try {
-      const collection = native.required && native.submission && native.exploreAccess ? chooseExploreIntent({ mode, initialParentIds: parentResultIds, expectedActivationSha256: native.submission.expectedActivationSha256, access: native.exploreAccess }) : undefined
+      const collection = collectionWanted && native.required && native.submission && native.exploreAccess ? chooseExploreIntent({ mode, initialParentIds: parentResultIds, expectedActivationSha256: native.submission.expectedActivationSha256, access: native.exploreAccess }) : undefined
       const response = await createResearchRun(mode, goal, csrf, controller.signal, parentResultIds, native.submission ?? undefined, mode === 'surprise' ? discoveryIntent ?? undefined : undefined, mode === 'ask' && hasScientificCapability(native, 'ask_claim_overview_v1') ? { protocol: 'polymath-ask-claim-overview-v1' } : undefined, collection)
       if (controller.signal.aborted || current !== generation.current) return
       const run = remember(response)

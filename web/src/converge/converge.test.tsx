@@ -75,7 +75,7 @@ describe('converge workspace', () => {
     }))
     const submit = vi.fn(async () => ({ id: RUN, mode: 'explore', goal: 'g', status: 'queued', created_at: '', updated_at: '', result_id: null, error_code: null, external_outcome_unknown: false } as never))
     render(<ConvergeWorkspace enabled csrfToken={CSRF} canSubmit focusId={PID} submit={submit} onOpenRun={vi.fn()} onSessionExpired={vi.fn()} />)
-    await waitFor(() => expect(submit).toHaveBeenCalledWith('explore', 'A deeper synthetic goal', [R1, R2]))
+    await waitFor(() => expect(submit).toHaveBeenCalledWith('explore', 'A deeper synthetic goal', [R1, R2], { collection: false }))
     await waitFor(() => expect(calls).toContain(`POST /api/v1/converge/${PID}/attach`))
     expect(await screen.findByText(/Looking for what these connections share · level 2/)).toBeInTheDocument()
     expect(screen.getByRole('group', { name: /A circle of 4 fields/ })).toBeInTheDocument()

@@ -15,7 +15,7 @@ export interface ConvergeWorkspaceProps {
   csrfToken: string | null
   canSubmit: boolean
   focusId: string | null
-  submit: (mode: 'explore', goal: string, parentResultIds: readonly string[]) => Promise<OwnedRun | undefined>
+  submit: (mode: 'explore', goal: string, parentResultIds: readonly string[], options?: { collection?: boolean }) => Promise<OwnedRun | undefined>
   /** The latest recorded activity of the investigation now running, if any. */
   liveActivity?: { runId: string; summary: string } | null
   onOpenRun: (id: string) => void
@@ -96,7 +96,7 @@ export function ConvergeWorkspace({ enabled, csrfToken, canSubmit, focusId, subm
       if (next.state === 'due') {
         if (!canSubmitRef.current) { setStatus('Waiting until live research is available for this browser.'); return }
         setStatus(next.kind === 'thread' ? 'Choosing two fields that may share one structure…' : `Looking for what these connections share · level ${next.level}…`)
-        const run = await submit('explore', next.goal, next.parent_result_ids)
+        const run = await submit('explore', next.goal, next.parent_result_ids, { collection: false })
         if (!run) { setRunning(false); setStatus('The next step could not be queued. Live research may be unavailable; the circle is saved.'); return }
         setProgramme(await attachConvergeRun(programme.id, csrfToken, { kind: next.kind, parent_result_ids: next.parent_result_ids, run_id: run.id }))
       } else if (next.state === 'waiting') {

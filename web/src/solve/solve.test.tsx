@@ -69,7 +69,7 @@ describe('Solve', () => {
       throw new Error(`Unexpected ${url}`)
     }))
     render(<SolveWorkspace enabled csrfToken={CSRF} canSubmit focusId={PROGRAMME} submit={submit} onOpenRun={vi.fn()} onSessionExpired={vi.fn()} />)
-    await waitFor(() => expect(submit).toHaveBeenCalledWith('ask', 'Has this problem already been solved, in any field of science?', []))
+    await waitFor(() => expect(submit).toHaveBeenCalledWith('ask', 'Has this problem already been solved, in any field of science?', [], { collection: false }))
     await waitFor(() => expect(calls.find((call) => call.url.endsWith('/attach'))?.body).toEqual({ step_id: FIND, stage: 'find', run_id: RUN }))
     expect(await screen.findByText(/Looking for an existing key anywhere in science/)).toBeInTheDocument()
   })
