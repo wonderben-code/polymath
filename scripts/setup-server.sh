@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# One-time Polymath setup on a fresh Ubuntu server with Docker
-# (for example DigitalOcean's "Docker on Ubuntu" droplet). Run as root:
+# One-time Polymath setup on a fresh Ubuntu 24.04 LTS server; it installs
+# Docker if needed. Point the domain (and www) at the server first. Run as root:
 #
 #   curl -fsSL https://raw.githubusercontent.com/wonderben-code/polymath/main/scripts/setup-server.sh | bash -s -- your.domain
 #
@@ -11,12 +11,15 @@ set -euo pipefail
 
 DOMAIN="${1:-}"
 if [[ ! "$DOMAIN" =~ ^[A-Za-z0-9]([A-Za-z0-9.-]{0,251}[A-Za-z0-9])?$ ]] || [[ "$DOMAIN" != *.* ]]; then
-  echo "Usage: setup-server.sh your.domain   (for example 152.42.180.7.sslip.io)" >&2
+  echo "Usage: setup-server.sh your.domain   (for example askpolymath.com)" >&2
   exit 1
 fi
 [[ $EUID -eq 0 ]] || { echo "Please run as root." >&2; exit 1; }
-command -v docker >/dev/null || { echo "Docker is not installed; use a Docker droplet image." >&2; exit 1; }
-docker compose version >/dev/null 2>&1 || { echo "Docker Compose v2 is required." >&2; exit 1; }
+if ! command -v docker >/dev/null || ! docker compose version >/dev/null 2>&1; then
+  echo "→ Installing Docker (official installer)"
+  curl -fsSL https://get.docker.com | sh
+fi
+docker compose version >/dev/null 2>&1 || { echo "Docker Compose v2 could not be installed." >&2; exit 1; }
 
 DIR=/opt/polymath
 echo "→ Room to build: a 2 GB swap file"

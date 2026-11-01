@@ -24,3 +24,9 @@
 		format console
 	}
 }
+
+# www.<domain> sends visitors to the bare domain with a permanent redirect.
+# Its own DNS A record must point here too, so its certificate can be issued.
+www.{$POLYMATH_DOMAIN} {
+	redir https://{$POLYMATH_DOMAIN}{uri} permanent
+}
