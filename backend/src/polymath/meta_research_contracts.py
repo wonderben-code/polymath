@@ -258,8 +258,11 @@ class NativeExploreCollectionProfile(_ReadinessModel):
     controller_sha256: Digest
     request_protocol: Literal["polymath-meta-research-request-v1"] = REQUEST_PROTOCOL
     max_model_calls: Annotated[int, Field(ge=1, le=MAX_MODEL_CALLS)]
-    # Stage receipts carry the action ordinal (at most 16 in the archived protocol).
-    max_actions: Literal[16] = 16
+    # Stage receipts carry the action ordinal (at most 16 in the archived protocol),
+    # so a fresh derivation always pins 16. The range stays readable so a saved
+    # manifest from an earlier release still parses and is retired as changed
+    # authority rather than as a storage failure.
+    max_actions: Annotated[int, Field(ge=16, le=MAX_MODEL_CALLS)] = 16
     max_repairs: Literal[2] = 2
     max_output_tokens: Annotated[int, Field(ge=16, le=4096)]
     max_context_characters: Annotated[int, Field(ge=1000, le=MAX_CONTEXT_CHARACTERS)]
@@ -720,8 +723,9 @@ class NativeDiscoveryProfile(_ReadinessModel):
     controller_sha256: Digest
     request_protocol: Literal["polymath-meta-research-request-v1"] = REQUEST_PROTOCOL
     max_model_calls: Annotated[int, Field(ge=1, le=MAX_MODEL_CALLS)]
-    # Stage receipts carry the action ordinal (at most 20 in the archived protocol).
-    max_actions: Literal[20] = 20
+    # Stage receipts carry the action ordinal (at most 20 in the archived protocol),
+    # so a fresh derivation always pins 20; the range keeps saved manifests readable.
+    max_actions: Annotated[int, Field(ge=20, le=MAX_MODEL_CALLS)] = 20
     max_repairs: Literal[2] = 2
     max_output_tokens: Annotated[int, Field(ge=16, le=4096)]
     max_context_characters: Annotated[int, Field(ge=1000, le=MAX_CONTEXT_CHARACTERS)]

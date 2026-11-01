@@ -211,7 +211,7 @@ def test_explicit_collection_requires_the_saved_extension(public):
 @pytest.mark.parametrize(
     "changes",
     [
-        {"max_actions": 20},
+        {"max_actions": 15},
         {"max_actions": True},
         {"max_model_calls": 81},
         {"tool_timeout_seconds": 5.0},

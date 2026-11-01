@@ -67,3 +67,38 @@ def test_discovery_limits_take_the_wider_call_budget_but_keep_twenty_actions():
     assert (limits.max_model_calls, limits.max_actions) == (48, 20)
     with pytest.raises(ValueError, match="max_actions"):
         DiscoveryLimits(max_model_calls=48, max_actions=21)
+
+
+def test_saved_profiles_with_wider_action_budgets_still_parse_but_are_no_longer_current():
+    # A manifest activated by an earlier release may carry 48 actions. It must
+    # still parse (so the account can be read and the authority retired cleanly)
+    # while a fresh derivation pins the archived budget and rejects it as changed.
+    import json
+
+    from test_meta_readiness_contracts import proposal_data
+
+    from polymath.meta_readiness_contracts import MetaReadinessProposal
+    from polymath.meta_research_contracts import (
+        ExploreCollectionIntent,
+        NativeExploreCollectionProfileBinding,
+        derive_explore_collection_profile,
+        task_profile_sha256,
+        validate_current_explore_collection_profile,
+    )
+
+    data = proposal_data()
+    data["application_limits"]["max_model_calls"] = 48
+    data["application_limits"]["max_context_characters"] = 200_000
+    proposal = MetaReadinessProposal.model_validate(data)
+    current = derive_explore_collection_profile(proposal, ExploreCollectionIntent(max_bridges=3))
+    assert current.profile.max_actions == 16
+    saved = json.loads(current.profile.model_dump_json()) | {"max_actions": 48}
+    binding = NativeExploreCollectionProfileBinding.model_validate(
+        {
+            "profile": saved,
+            "profile_sha256": task_profile_sha256(type(current.profile).model_validate(saved)),
+        }
+    )
+    assert binding.profile.max_actions == 48
+    with pytest.raises(ValueError, match="explore_collection_profile_changed"):
+        validate_current_explore_collection_profile(binding, proposal)
