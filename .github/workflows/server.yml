@@ -7,6 +7,11 @@
 name: Server task
 
 on:
+  # Started from the Actions tab, or by a push of ops/request.json to the
+  # server-ops branch (the engineer cannot use the Actions tab from its session).
+  push:
+    branches: [server-ops]
+    paths: [ops/request.json]
   workflow_dispatch:
     inputs:
       task:
@@ -47,6 +52,14 @@ jobs:
           TASK: ${{ inputs.task }}
           ARGUMENT: ${{ inputs.argument }}
         run: |
+          if [ "$GITHUB_EVENT_NAME" = push ]; then
+            TASK=$(jq -r '.task // "status"' ops/request.json)
+            ARGUMENT=$(jq -r '.argument // ""' ops/request.json)
+            case "$TASK" in
+              status|update|restart|logs|diagnose|account|holds|settle-hold|sql|rotate-operator-code|shell) ;;
+              *) echo "unknown task"; exit 1 ;;
+            esac
+          fi
           echo "== $TASK ${ARGUMENT:+(with an argument)}"
           set +e
           ssh -i ~/.ssh/server -o BatchMode=yes -o ConnectTimeout=20 "root@$SERVER_HOST" \
