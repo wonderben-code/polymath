@@ -9,6 +9,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    LargeBinary,
     String,
     Text,
     UniqueConstraint,
@@ -86,3 +87,43 @@ class StudioStep(Base):
     failed_attempts: Mapped[int] = mapped_column(Integer, server_default="0")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class StudioImage(Base):
+    __tablename__ = "studio_images"
+    __table_args__ = (
+        UniqueConstraint("run_id", name="uq_studio_image_run"),
+        CheckConstraint("char_length(prompt) BETWEEN 1 AND 4000", name="ck_studio_image_prompt"),
+        CheckConstraint(
+            "status IN ('rendering','succeeded','refused','unknown')", name="ck_studio_image_status"
+        ),
+        CheckConstraint(
+            "mime IS NULL OR mime IN ('image/webp','image/png','image/jpeg')",
+            name="ck_studio_image_mime",
+        ),
+        CheckConstraint(
+            "(status = 'succeeded') = "
+            "(content IS NOT NULL AND mime IS NOT NULL AND content_sha256 IS NOT NULL)",
+            name="ck_studio_image_content",
+        ),
+        CheckConstraint(
+            "content IS NULL OR octet_length(content) <= 8000000", name="ck_studio_image_size"
+        ),
+        Index("ix_studio_images_programme", "programme_id", "created_at"),
+        Index("ix_studio_images_owner", "owner_session_hash", "created_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    programme_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("studio_programmes.id"))
+    owner_session_hash: Mapped[str] = mapped_column(
+        String(64), ForeignKey("browser_sessions.token_hash")
+    )
+    run_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("research_runs.id"))
+    prompt: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(16), server_default="rendering")
+    error: Mapped[str | None] = mapped_column(String(64))
+    mime: Mapped[str | None] = mapped_column(String(16))
+    content: Mapped[bytes | None] = mapped_column(LargeBinary)
+    content_sha256: Mapped[str | None] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

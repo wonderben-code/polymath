@@ -23,13 +23,18 @@ support (for example, if live research has not been switched on).
 11. **Feedback on Meta products:** ⟨owner's own words after live testing⟩
 12. **Feedback on partner technologies:** ⟨Fireworks, Modal, Baseten: say "not used" if so⟩
 
+Bonus prizes to enter, if the form asks: **Best Agentic Use-Case** (Meta's model
+directs every research step) and **Best Creative Build with Muse Image/Wonder**
+(Studio paints every invention with Muse Image).
+
 ## Short description (about 60 words)
 
-> Discoveries hide between fields of science. Polymath is an AI research and
-> invention partner, powered by Meta's Muse Spark, that reads across every
-> discipline. Ask it to invent something and it designs it from mechanisms that
-> already work in nature and other fields, with calculations. Ask it to solve a
-> problem and it finds or forges an answer. Every claim cites its passage.
+> Polymath × Meta: Meta's frontier Muse models bring the reasoning and
+> creativity; Polymath brings an engine across the world's science that reads,
+> checks every quote and remembers. Together they invent new things from
+> mechanisms that already work in nature and other fields, with calculations;
+> solve problems with answers from distant fields; and find discoveries hiding
+> between disciplines. Every claim cites its passage.
 
 ## Long description
 
@@ -90,7 +95,8 @@ and budgets; the model decides what to do.
 2. **Invention.** In Studio, the model abstracts a brief into functions, picks
    distant fields to search, then reasons beyond the sources to a new design,
    marking what is evidenced and what is its own invention, and works out the
-   engineering numbers.
+   engineering numbers. **Meta Muse Image** then paints each invention as
+   concept art from the saved design, on the same hard budget ledger.
 3. **Key finding and key forging.** In Solve, the model judges whether an
    existing answer fits, finds close fits in other fields and their exact
    shortfalls, then reasons over two to four of them to forge a combined
@@ -111,18 +117,23 @@ Verified behaviour: `⟨probe receipt and first live investigations⟩`.
 
 ## Why Meta's models matter
 
-Polymath's value depends on judgement at every step: which field to look in,
-which passage to read next, whether an objection defeats a connection, and how
-partial answers from different fields can combine. That needs a capable
+Polymath is Meta × the world's science. Neither half works alone: a model on its
+own cannot read, quote and remember hundreds of millions of papers, and a search
+engine on its own cannot judge, combine or invent. Polymath's value depends on
+judgement at every step: which field to look in, which passage to read next,
+whether an objection defeats a connection, how partial answers from different
+fields combine, and what new design they make possible. That needs a frontier
 reasoning model running long, tool-using loops cheaply enough to offer free to
-visitors. Muse Spark makes the agent, not a fixed script, the researcher.
+visitors. Meta's Muse Spark does that today, and because the model is a server
+setting, Polymath can move to Muse Wonder or any stronger Meta model as it
+arrives.
 
 ## Demo video script (3:00 maximum)
 
 | Time | Show | Say |
 |---|---|---|
-| 0:00–0:12 | Home: "Discoveries hide between fields of science." | "Science is split into thousands of specialties. Polymath, powered by Meta's Muse Spark, reads across all of them, to solve and to invent." |
-| 0:12–0:55 | **Studio**: tap *A submarine inspired by whales*; the idea map lights up field by field; the invention, its engineering and calculations, the stress test | "Ask it to invent anything. Muse Spark turns the brief into the functions it needs, hunts the strangest corners of science for mechanisms that already work, then invents a new design from them, engineered with calculations and tested against the brief." |
+| 0:00–0:12 | Home: "Discoveries hide between fields of science." | "Science is split into thousands of specialties. Polymath fuses Meta's frontier intelligence with an engine that reads across all of them, to solve and to invent." |
+| 0:12–0:55 | **Studio**: tap *A submarine inspired by whales*; the idea map lights up field by field; the Muse Image concept art appears; the invention, its engineering and calculations, the stress test | "Ask it to invent anything. Meta's frontier model turns the brief into the functions it needs; Polymath hunts the strangest corners of the world's science for mechanisms that already work; together they invent a new design, engineered with calculations and tested against the brief." |
 | 0:55–1:10 | *Download the design dossier*; *Continue in Meta AI* | "Take the design with you as a full dossier, or keep refining it with Meta AI." |
 | 1:10–1:40 | **Solve**: a real problem; close fits from two fields; the forged key in their colours | "Or describe a problem. Polymath looks for an answer anywhere in science, and if none fits, forges one from the closest answers in other fields." |
 | 1:40–2:00 | Open one investigation: the live timeline, a quoted passage, the strongest objection | "Every search is Muse Spark's choice, every claim links to its exact passage, and it argues against itself before showing you anything." |

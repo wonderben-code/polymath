@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { FormEvent, KeyboardEvent } from 'react'
 import type { OwnedRun } from '../research/client'
-import { attachStudioRun, changeStudio, createStudio, listStudio, loadStudio, MAX_SPECS, nextStudioStep, StudioApiError } from './client'
-import type { Claim, StudioProgramme, StudioStage, StudioStep, StudioSummary, Wildness } from './client'
+import { attachStudioRun, changeStudio, createStudio, listStudio, listStudioImages, loadStudio, MAX_SPECS, nextStudioStep, renderStudioImage, StudioApiError, studioImageUrl } from './client'
+import type { Claim, StudioImage, StudioProgramme, StudioStage, StudioStep, StudioSummary, Wildness } from './client'
 import { Constellation, SPECTRUM } from './Constellation'
 import { buildDossier, buildDossierPage, buildMetaBriefing, dossierFileName, LABEL_WORDS, readStudio, WILDNESS_WORDS } from './dossier'
 import type { StudioReading } from './dossier'
@@ -39,11 +39,28 @@ export interface StudioWorkspaceProps {
   onSessionExpired: () => void
 }
 
+const IMAGE_LIMIT = 2
+
+async function dataUrl(url: string): Promise<string | undefined> {
+  try {
+    const response = await fetch(url, { credentials: 'same-origin', cache: 'no-store' })
+    const mime = (response.headers.get('content-type') ?? '').split(';')[0].trim()
+    if (!response.ok || !/^image\/(webp|png|jpeg)$/.test(mime)) return undefined
+    const bytes = new Uint8Array(await response.arrayBuffer())
+    let binary = ''
+    for (let index = 0; index < bytes.length; index += 0x8000) binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000))
+    return `data:${mime};base64,${btoa(binary)}`
+  } catch { return undefined }
+}
+
 function message(code: string): string {
   if (code === 'session_expired') return 'Your browser session expired. Reload to continue.'
   if (code === 'studio_unavailable') return 'Studio is switched off on this server.'
   if (code === 'studio_limit_reached') return 'You have reached the number of saved inventions for this browser.'
   if (code === 'studio_finished') return 'This invention has finished.'
+  if (code === 'studio_image_daily_limit') return 'That is all the concept art for today. Try again tomorrow.'
+  if (code === 'studio_image_limit') return 'This invention already has its concept art.'
+  if (code === 'studio_images_unavailable') return 'Concept art is switched off on this server right now.'
   return 'Studio could not be reached. Try again in a moment.'
 }
 
@@ -83,6 +100,12 @@ export function StudioWorkspace({ enabled, csrfToken, canSubmit, submit, onOpenR
   const [status, setStatus] = useState('')
   const [error, setError] = useState('')
   const [shared, setShared] = useState('')
+  const [images, setImages] = useState<StudioImage[]>([])
+  const [imagesFor, setImagesFor] = useState<string | null>(null)
+  const [imagesAvailable, setImagesAvailable] = useState(false)
+  const [painting, setPainting] = useState(false)
+  const live = useRef(new Set<string>())
+  const autoPainted = useRef(new Set<string>())
   const busy = useRef(false)
   const briefRef = useRef<HTMLTextAreaElement>(null)
   const canSubmitRef = useRef(canSubmit)
@@ -119,7 +142,7 @@ export function StudioWorkspace({ enabled, csrfToken, canSubmit, submit, onOpenR
     const pending = spec.trim() && specs.length < MAX_SPECS && !specs.includes(spec.trim()) ? [...specs, spec.trim()] : specs
     try {
       const created = await createStudio(csrfToken, { brief: brief.trim().slice(0, BRIEF_LIMIT), specs: pending, wildness })
-      setProgramme(created); setRunning(true); setBrief(''); setSpecs([]); setSpec('')
+      setProgramme(created); setRunning(true); setBrief(''); setSpecs([]); setSpec(''); live.current.add(created.id)
       void refreshList()
     } catch (failure) { fail(failure) } finally { setCreating(false) }
   }
@@ -159,14 +182,41 @@ export function StudioWorkspace({ enabled, csrfToken, canSubmit, submit, onOpenR
     return () => window.clearInterval(timer)
   }, [running, activeId])
 
+  const designed = !!programme && programme.steps.some((step) => step.stage === 'design' && step.finding?.kind === 'bridge')
+  const programmeId = programme?.id ?? null
+  const loadImages = useCallback(async (id: string) => {
+    try { const result = await listStudioImages(id); setImages(result.images); setImagesAvailable(result.available); setImagesFor(id) } catch { /* Concept art is optional; the design stands without it. */ }
+  }, [])
+  useEffect(() => { setImages([]); setImagesFor(null); if (programmeId && designed) void loadImages(programmeId) }, [programmeId, designed, loadImages])
+  const rendering = images.some((image) => image.status === 'rendering')
+  useEffect(() => {
+    if (!rendering || !programmeId) return
+    const timer = window.setInterval(() => void loadImages(programmeId), POLL_MS)
+    return () => window.clearInterval(timer)
+  }, [rendering, programmeId, loadImages])
+
+  const paint = useCallback(async () => {
+    if (!programmeId || !csrfToken || painting) return
+    setPainting(true); setError('')
+    try { await renderStudioImage(programmeId, csrfToken); await loadImages(programmeId) } catch (failure) { fail(failure) } finally { setPainting(false) }
+  }, [programmeId, csrfToken, painting, loadImages, fail])
+  // An invention designed while this page is open is painted once, automatically.
+  useEffect(() => {
+    if (programmeId && designed && imagesAvailable && imagesFor === programmeId && images.length === 0 && live.current.has(programmeId) && !autoPainted.current.has(programmeId)) {
+      autoPainted.current.add(programmeId); void paint()
+    }
+  }, [programmeId, designed, imagesAvailable, imagesFor, images.length, paint])
+
   async function change(kind: 'pause' | 'resume' | 'stop') {
     if (!programme || !csrfToken) return
-    try { setProgramme(await changeStudio(programme.id, csrfToken, kind)); setRunning(kind === 'resume'); void refreshList() } catch (failure) { fail(failure) }
+    try { setProgramme(await changeStudio(programme.id, csrfToken, kind)); setRunning(kind === 'resume'); if (kind === 'resume') live.current.add(programme.id); void refreshList() } catch (failure) { fail(failure) }
   }
 
-  function download(kind: 'html' | 'md') {
+  async function download(kind: 'html' | 'md') {
     if (!programme) return
-    const content = kind === 'html' ? buildDossierPage(programme, window.location.origin) : buildDossier(programme, window.location.origin)
+    const art = kind === 'html' && painted ? await dataUrl(studioImageUrl(painted.id)) : undefined
+    const caption = `Concept art painted by Meta Muse Image from the design: an AI impression, not a photograph of a built device.`
+    const content = kind === 'html' ? buildDossierPage(programme, window.location.origin, art ? { src: art, caption } : undefined) : buildDossier(programme, window.location.origin)
     const url = URL.createObjectURL(new Blob([content], { type: kind === 'html' ? 'text/html;charset=utf-8' : 'text/markdown;charset=utf-8' }))
     const link = document.createElement('a')
     link.href = url; link.download = dossierFileName(programme, kind); link.rel = 'noopener'
@@ -189,13 +239,16 @@ export function StudioWorkspace({ enabled, csrfToken, canSubmit, submit, onOpenR
   }
 
   const reading = programme ? readStudio(programme) : null
+  const painted = [...images].reverse().find((image) => image.status === 'succeeded')
+  const latest = images[images.length - 1]
+  const canPaint = imagesAvailable && !rendering && !painting && images.filter((image) => image.status !== 'refused').length < IMAGE_LIMIT
   const ready = enabled && !!csrfToken
   return (
     <div className="studio">
       <section className="composer studio-composer" aria-labelledby="studio-title">
         <p className="composer-tagline">Innovation Studio · Experimental</p>
         <h1 id="studio-title">Invent something that doesn’t exist yet.</h1>
-        <p className="studio-lede">Describe anything you want to create. Meta’s Muse Spark hunts the strangest corners of science for mechanisms that already work, invents a design from them, engineers it with calculations, and tests it against your brief.</p>
+        <p className="studio-lede">Describe anything you want to create. Meta’s frontier models bring the creativity and reasoning; Polymath brings mechanisms that already work, from the strangest corners of the world’s science. Together they invent a design, engineer it with calculations, and test it against your brief.</p>
         <form onSubmit={(event) => void create(event)}>
           <label htmlFor="studio-brief" className="composer-label">What would you like to create?</label>
           <div className="prompt-box studio-box">
@@ -226,9 +279,17 @@ export function StudioWorkspace({ enabled, csrfToken, canSubmit, submit, onOpenR
         <p className="studio-eyebrow">{programme.outcome === 'designed' ? 'Theoretical invention · not built or tested' : programme.outcome ? 'Studio result' : 'Designing'}</p>
         <h2 id="studio-sheet-title">{reading.design?.title ?? programme.brief}</h2>
         {reading.design && <p className="studio-brief-line">Brief: {programme.brief}</p>}
+        {reading.design && (imagesAvailable || images.length > 0) && <section className="studio-art" aria-label="Concept art">
+          {painted ? <figure><img src={studioImageUrl(painted.id)} alt={`Concept art of ${reading.design.title}`} /><figcaption>Concept art painted by Meta Muse Image from the design. An AI impression, not a photograph of a built device.</figcaption></figure>
+            : rendering || painting ? <div className="studio-art-placeholder" role="status"><span aria-hidden="true" />Painting the concept with Meta Muse Image…</div>
+            : latest?.status === 'refused' ? <p className="studio-muted">Meta declined to paint this one; nothing was charged.</p>
+            : latest?.status === 'unknown' ? <p className="studio-muted">The painting did not finish. It is held for review and will not be charged twice.</p>
+            : null}
+          {canPaint && <button type="button" className="text-button" onClick={() => void paint()}>{painted ? 'Paint another view' : 'Paint the concept art'}</button>}
+        </section>}
         {programme.outcome && programme.outcome !== 'designed' && <p className="studio-outcome">{OUTCOME_WORDS[programme.outcome]}. {programme.outcome === 'inspired' ? 'The ideas below still stand on their own, and you can try again with different requirements or a wilder search.' : 'Try wider fields, or fewer requirements.'}</p>}
         {!programme.outcome && <p className="studio-status" role="status">{status || (programme.status === 'active' ? 'Ready to continue.' : `Studio ${programme.status}.`)}</p>}
-        {programme.status === 'active' && !running && !programme.outcome && <button type="button" className="primary-button" disabled={!canSubmit} onClick={() => setRunning(true)}>Continue inventing</button>}
+        {programme.status === 'active' && !running && !programme.outcome && <button type="button" className="primary-button" disabled={!canSubmit} onClick={() => { live.current.add(programme.id); setRunning(true) }}>Continue inventing</button>}
         {programme.status === 'active' && running && <button type="button" className="text-button" onClick={() => void change('pause')}>Pause</button>}
         {programme.status === 'paused' && <button type="button" className="text-button" onClick={() => void change('resume')}>Resume</button>}
 
@@ -265,11 +326,11 @@ export function StudioWorkspace({ enabled, csrfToken, canSubmit, submit, onOpenR
 
         {reading.design && <section className="studio-section studio-actions" aria-labelledby="studio-next"><h3 id="studio-next">Take it further</h3>
           <div className="studio-action-row">
-            <button type="button" className="primary-button" onClick={() => download('html')}>Download the design dossier</button>
+            <button type="button" className="primary-button" onClick={() => void download('html')}>Download the design dossier</button>
             <button type="button" className="secondary-button" onClick={() => void continueInMeta()}>Continue in Meta AI</button>
             <button type="button" className="secondary-button" onClick={refine}>Refine this design</button>
           </div>
-          <p className="studio-muted">The dossier opens in any browser and prints or saves as a PDF. <button type="button" className="text-button" onClick={() => download('md')}>Download as Markdown</button></p>
+          <p className="studio-muted">The dossier opens in any browser and prints or saves as a PDF. <button type="button" className="text-button" onClick={() => void download('md')}>Download as Markdown</button></p>
           {shared && <p className="studio-muted" role="status">{shared}</p>}
           <p className="studio-muted studio-vision">Coming next: connect your Meta account and keep iterating with Meta without leaving Polymath.</p>
         </section>}

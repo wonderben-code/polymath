@@ -10,7 +10,7 @@ import uuid
 from collections.abc import Callable
 from typing import Literal
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import Engine
 from sqlalchemy.exc import SQLAlchemyError
@@ -24,6 +24,7 @@ from polymath.run_api import (
     _PrivateRoute,
 )
 from polymath.studio import MAX_INVESTIGATIONS, MAX_SPECS, StudioError, StudioStore
+from polymath.studio_images import StudioImages
 
 ERROR_STATUS = {
     "studio_not_found": 404,
@@ -33,6 +34,13 @@ ERROR_STATUS = {
     "studio_limit_reached": 429,
     "invalid_studio_request": 422,
     "invalid_studio_stage": 422,
+    "studio_images_unavailable": 503,
+    "studio_image_needs_design": 409,
+    "studio_image_rendering": 409,
+    "studio_image_limit": 429,
+    "studio_image_daily_limit": 429,
+    "studio_image_budget": 409,
+    "studio_image_not_found": 404,
 }
 
 
@@ -62,7 +70,9 @@ def _uuid(value: str | None, code: str = "studio_not_found") -> uuid.UUID | None
 
 
 def create_studio_router(
-    engine: Engine, availability: Callable[[], bool] | None = None
+    engine: Engine,
+    availability: Callable[[], bool] | None = None,
+    images: StudioImages | None = None,
 ) -> APIRouter:
     store = StudioStore(engine)
     policy = availability or (lambda: True)
@@ -103,6 +113,7 @@ def create_studio_router(
             "spends_directly": False,
             "max_investigations": MAX_INVESTIGATIONS,
             "max_specs": MAX_SPECS,
+            "images_available": bool(active and images is not None and images.available),
             "reason": None if active else "studio_unavailable",
         }
 
@@ -140,6 +151,38 @@ def create_studio_router(
                 _uuid(body.run_id),
             )
         )
+
+    @router.get("/images/{image_id}")
+    def image_content(image_id: str, request: Request) -> Response:
+        owner_hash = owner(request)
+        if images is None:
+            raise _PrivateHTTPException(404, "studio_image_not_found")
+        content, mime = call(lambda: images.content(owner_hash, _uuid(image_id)))
+        return Response(
+            content=content,
+            media_type=mime,
+            headers={"Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff"},
+        )
+
+    @router.get("/{programme_id}/images")
+    def list_images(programme_id: str, request: Request) -> dict:
+        owner_hash = owner(request)
+        if images is None:
+            return {"available": False, "images": []}
+        return {
+            "available": images.available,
+            "images": call(lambda: images.list(owner_hash, _uuid(programme_id))),
+        }
+
+    @router.post("/{programme_id}/images", status_code=202)
+    def render_image(programme_id: str, request: Request, background: BackgroundTasks) -> dict:
+        owner_hash = owner(request, write=True)
+        if images is None:
+            raise _PrivateHTTPException(503, "studio_images_unavailable")
+        image_id, reservation_id = call(lambda: images.request(owner_hash, _uuid(programme_id)))
+        # One request, after the reservation is committed; the browser polls the list.
+        background.add_task(images.execute, image_id, reservation_id)
+        return {"id": str(image_id), "status": "rendering"}
 
     for status, path in (("paused", "pause"), ("active", "resume"), ("stopped", "stop")):
 

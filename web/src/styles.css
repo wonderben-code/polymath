@@ -535,3 +535,7 @@ body { background: var(--paper); color: var(--ink); font-size: 16px; line-height
   .rigour-options { display: grid; grid-template-columns: 1fr 1fr; width: 100%; border-radius: 16px; }
   .rigour-options button { border-radius: 12px; }
 }
+/* Polymath × Meta: the two halves of the intelligence, named once under the hero. */
+.hero-fusion { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: 14px 0 6px; font-size: 13.5px; font-weight: 600; color: var(--ink); }
+.hero-fusion span:nth-child(2) { font-size: 18px; font-weight: 400; background: var(--spectrum); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.about-intro { font-size: 16px; line-height: 1.7; color: var(--muted); margin: 0 0 18px; max-width: 720px; }

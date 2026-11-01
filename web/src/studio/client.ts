@@ -132,3 +132,14 @@ export const createStudio = (csrf: string, body: { brief: string; specs: string[
 export const nextStudioStep = (programmeId: string, csrf: string, signal?: AbortSignal) => request(`${path(programmeId)}/next`, (value) => { const item = record(value); return { next: parseNext(item.next), programme: parseProgramme(item.programme) } }, signal, { csrf })
 export const attachStudioRun = (programmeId: string, csrf: string, body: { step_id: string; stage: StudioStage; run_id: string }, signal?: AbortSignal) => request(`${path(programmeId)}/attach`, parseProgramme, signal, { csrf, body })
 export const changeStudio = (programmeId: string, csrf: string, change: 'pause' | 'resume' | 'stop', signal?: AbortSignal) => request(`${path(programmeId)}/${change}`, parseProgramme, signal, { csrf })
+
+// Concept art (Meta's image model). The server builds the prompt from the saved
+// design and reserves each image on the budget ledger before it is sent.
+export interface StudioImage { id: string; status: 'rendering' | 'succeeded' | 'refused' | 'unknown'; error: string | null; mime: string | null; created_at: string }
+function parseImage(value: unknown): StudioImage {
+  const item = record(value)
+  return { id: id(item.id), status: oneOf(item.status, ['rendering', 'succeeded', 'refused', 'unknown'] as const), error: nullableText(item.error, 64), mime: nullableText(item.mime, 16), created_at: text(item.created_at, 64) }
+}
+export const studioImageUrl = (imageId: string) => { if (!UUID.test(imageId)) throw new StudioApiError('invalid_request'); return `${BASE}/images/${imageId}` }
+export const listStudioImages = (programmeId: string, signal?: AbortSignal) => request(`${path(programmeId)}/images`, (value) => { const item = record(value); return { available: item.available === true, images: list(item.images, 10, parseImage) } }, signal)
+export const renderStudioImage = (programmeId: string, csrf: string, signal?: AbortSignal) => request(`${path(programmeId)}/images`, (value) => { const item = record(value); return { id: id(item.id), status: oneOf(item.status, ['rendering'] as const) } }, signal, { csrf })

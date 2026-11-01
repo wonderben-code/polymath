@@ -74,6 +74,19 @@ class NativeResearchPermit:
 
 
 @dataclass(frozen=True)
+class NativeImagePermit:
+    """Internal permission for one flat-priced Studio image on an armed research account.
+
+    Minted only by the image service after the owner's image switch, the account's
+    armed research scope and the per-visitor and daily image limits are checked.
+    """
+
+    account_id: str
+    run_id: uuid.UUID
+    request_hash: str
+
+
+@dataclass(frozen=True)
 class BudgetUsage:
     committed_microdollars: int
     daily_committed_microdollars: int
@@ -147,7 +160,7 @@ class BudgetService:
     def _authorized(
         account: BudgetAccount,
         *,
-        native_permit: NativeProbePermit | NativeResearchPermit | None = None,
+        native_permit: NativeProbePermit | NativeResearchPermit | NativeImagePermit | None = None,
     ) -> None:
         if account.kill_switch:
             raise BudgetError("operator_kill_switch")
@@ -163,7 +176,7 @@ class BudgetService:
         session: Session,
         account: BudgetAccount,
         run_id: uuid.UUID,
-        native_permit: NativeProbePermit | NativeResearchPermit | None = None,
+        native_permit: NativeProbePermit | NativeResearchPermit | NativeImagePermit | None = None,
     ) -> None:
         task_kind = session.scalar(select(ResearchRun.task_kind).where(ResearchRun.id == run_id))
         research_binding = session.get(NativeResearchRunBinding, run_id)
@@ -174,6 +187,17 @@ class BudgetService:
                 or research_binding is not None
             ):
                 raise BudgetError("native_dispatch_scope_required")
+            return
+        if type(native_permit) is NativeImagePermit:
+            if (
+                native_permit.account_id != account.id
+                or native_permit.run_id != run_id
+                or account.native_scope != "research"
+                or task_kind != "render_image"
+                or research_binding is not None
+                or re.fullmatch(r"[0-9a-f]{64}", native_permit.request_hash) is None
+            ):
+                raise BudgetError("native_dispatch_scope_mismatch")
             return
         if type(native_permit) is NativeResearchPermit:
             if (
@@ -388,7 +412,7 @@ class BudgetService:
         *,
         call_key: str,
         estimated_microdollars: int,
-        native_permit: NativeProbePermit | NativeResearchPermit | None = None,
+        native_permit: NativeProbePermit | NativeResearchPermit | NativeImagePermit | None = None,
     ) -> Reservation:
         """Reserve inside an existing transaction; caller owns commit/rollback."""
         account_id = _key(account_id, "account_id")
@@ -463,7 +487,7 @@ class BudgetService:
         session: Session,
         reservation_id: uuid.UUID,
         *,
-        native_permit: NativeProbePermit | NativeResearchPermit | None = None,
+        native_permit: NativeProbePermit | NativeResearchPermit | NativeImagePermit | None = None,
     ) -> bool:
         """Claim inside an existing transaction; caller owns commit/rollback."""
         row = self._locate(session, reservation_id)
