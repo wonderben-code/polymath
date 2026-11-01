@@ -102,3 +102,90 @@ def test_saved_profiles_with_wider_action_budgets_still_parse_but_are_no_longer_
     assert binding.profile.max_actions == 48
     with pytest.raises(ValueError, match="explore_collection_profile_changed"):
         validate_current_explore_collection_profile(binding, proposal)
+
+
+def test_research_manifest_builds_for_a_48_call_proposal_with_explore_and_ladder():
+    # The first live re-activation after pinning the action budgets failed here:
+    # the historical Explore check demanded every quantity, including the action
+    # budget, to equal the research profile's (48 against the pinned 16).
+    from datetime import UTC, datetime, timedelta
+
+    from pydantic import SecretStr
+    from test_meta_readiness_contracts import proposal_data
+
+    from polymath.discovery_contracts import DiscoveryIntent
+    from polymath.meta_probe_contracts import ProviderAccountAttestation
+    from polymath.meta_readiness_contracts import MetaReadinessProposal
+    from polymath.meta_research_contracts import (
+        ExploreCollectionIntent,
+        NativeResearchPolicy,
+        NativeResearchReview,
+        PassedCanaryBinding,
+        ScientificContextIntent,
+        build_research_manifest,
+        validate_research_manifest,
+    )
+
+    now = datetime.now(UTC).replace(microsecond=0)
+    stamp = lambda value: value.isoformat().replace("+00:00", "Z")  # noqa: E731
+    digest = "a" * 64
+    data = proposal_data()
+    data["application_limits"]["max_model_calls"] = 48
+    data["application_limits"]["max_context_characters"] = 200_000
+    data["observed_at"] = stamp(now - timedelta(minutes=2))
+    data["valid_until"] = stamp(now + timedelta(days=10))
+    proposal = MetaReadinessProposal.model_validate(data)
+    policy = NativeResearchPolicy(
+        paid_research_enabled=True,
+        native_account_id=proposal.account.account_id,
+        model_id=proposal.model_id,
+        api_key=SecretStr("k" * 40),
+    )
+    canary = PassedCanaryBinding(
+        receipt_id="2705b93b-a961-4df5-b11e-0726ecf3f4e6",
+        receipt_sha256=digest,
+        credential_binding_sha256=policy.credential_binding_sha256,
+        account_id=proposal.account.account_id,
+        model_id=proposal.model_id,
+    )
+    review = NativeResearchReview.model_validate(
+        {
+            "observed_at": stamp(now - timedelta(minutes=2)),
+            "valid_until": stamp(now + timedelta(days=10)),
+            "evidence": [{"url": "https://dev.meta.ai/docs", "content_sha256": digest}],
+            "model_wire_usage_confirmed": True,
+            "pricing_bounds_confirmed": True,
+            "funding_cap_confirmed": True,
+        }
+    )
+    attestation = ProviderAccountAttestation.model_validate(
+        {
+            "provider_billing_account_id": "team-test",
+            "model_id": proposal.model_id,
+            "currency": "USD",
+            "usage_contract": "prompt_completion_inclusive_v1",
+            "observed_at": stamp(now - timedelta(minutes=2)),
+            "valid_until": stamp(now + timedelta(days=10)),
+            "available_credit_microdollars": 150_000_000,
+            "remaining_provider_allowance_microdollars": 150_000_000,
+            "provider_hard_cap_microdollars": 150_000_000,
+            "evidence": [{"url": "https://example.org/billing", "content_sha256": digest}],
+        }
+    )
+    manifest = build_research_manifest(
+        "22c19e72-8fd3-436a-8cd7-39940fc5d651",
+        proposal,
+        policy=policy,
+        native_control_epoch=5,
+        canary=canary,
+        review=review,
+        provider_account_attestation=attestation,
+        valid_until=now + timedelta(minutes=15),
+        discovery=DiscoveryIntent(max_stages=3, max_depth=2),
+        scientific_context=ScientificContextIntent(),
+        explore_collection=ExploreCollectionIntent(max_bridges=3),
+    )
+    validate_research_manifest(manifest, proposal)
+    assert manifest.task_profiles[0].profile.max_actions == 48
+    assert manifest.explore_collection_profile.profile.max_actions == 16
+    assert manifest.discovery_ladder_profile.profile.max_actions == 20

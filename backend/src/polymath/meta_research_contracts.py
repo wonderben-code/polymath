@@ -432,13 +432,18 @@ def validate_historical_explore_collection_profile(
     value = NativeExploreCollectionProfileBinding.model_validate_json(extension.model_dump_json())
     proposal = MetaReadinessProposal.model_validate_json(proposal.model_dump_json())
     original = NativeTaskProfile.model_validate_json(original_research_profile.model_dump_json())
+    # The collection's action budget is its own (stage receipts carry the ordinal,
+    # so it stays at 16 whatever the research budget); every other quantity must
+    # match the original research profile exactly.
     quantitative = tuple(
         name
         for name in NativeTaskProfile.model_fields
-        if name not in {"controller_protocol", "controller_sha256"}
+        if name not in {"controller_protocol", "controller_sha256", "max_actions"}
     )
-    if original.task_kind != "research" or any(
-        getattr(value.profile, name) != getattr(original, name) for name in quantitative
+    if (
+        original.task_kind != "research"
+        or any(getattr(value.profile, name) != getattr(original, name) for name in quantitative)
+        or value.profile.max_actions > original.max_actions
     ):
         raise ValueError("explore_collection_quantitative_profile_changed")
     limits = proposal.application_limits
