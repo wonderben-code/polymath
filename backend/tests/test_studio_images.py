@@ -185,13 +185,13 @@ def test_requests_respect_the_switch_the_armed_account_the_design_and_every_limi
     with pytest.raises(StudioError, match="studio_not_found"):
         StudioImages(database, policy()).request(owner(database, "stranger-session"), programme)
     transport, _ = meta(image_reply())
-    images = StudioImages(database, policy(session_daily_limit=3), transport=transport)
-    for _ in range(2):
+    images = StudioImages(database, policy(session_daily_limit=40), transport=transport)
+    for _ in range(10):
         images.execute(*images.request(token, programme))
     with pytest.raises(StudioError, match="studio_image_limit"):
         images.request(token, programme)
     second = designed(database, token, title="Second invention")
-    tight = StudioImages(database, policy(session_daily_limit=2), transport=transport)
+    tight = StudioImages(database, policy(session_daily_limit=10), transport=transport)
     with pytest.raises(StudioError, match="studio_image_daily_limit"):
         tight.request(token, second)
 
@@ -271,3 +271,50 @@ def test_routes_paint_in_the_background_and_serve_only_the_owner(database):
     with TestClient(app) as stranger:
         bootstrap(stranger)
         assert stranger.get(f"/api/v1/studio/images/{started.json()['id']}").status_code == 404
+
+
+def test_a_gallery_is_chosen_for_each_invention_and_painted_in_reading_order(database):
+    from polymath.studio_images import CORE_VIEWS, plan_views
+
+    # Five core views always; how-it-works for processes, scale for the huge or tiny.
+    assert plan_views("A better kettle", "Kettle", "It boils water.", 1) == list(
+        ("concept", "in_use", "schematic", "detail", "origins")
+    )
+    assert plan_views("A Dyson swarm", "Halo", "Mirrors deploy in phases around the Sun.", 2) == [
+        "concept",
+        "in_use",
+        "schematic",
+        "detail",
+        "sequence",
+        "scale",
+        "origins",
+    ]
+    assert "sequence" in plan_views("Glue", "Grip", "A gecko-like pad.", 3)
+    assert "scale" in plan_views("A neural implant", "Lace", "Soft electrodes.", 1)
+    assert len(CORE_VIEWS) == 5
+
+    account(database)
+    token = owner(database)
+    programme = designed(database, token)
+    transport, seen = meta(image_reply())
+    images = StudioImages(database, policy(), transport=transport)
+    plan = images.plan(token, programme)
+    assert 5 <= len(plan) <= 7 and plan[0] == "concept" and plan[-1] == "origins"
+    assert "scale" in plan  # A city helicopter is placed among buildings and people.
+    with pytest.raises(StudioError, match="invalid_studio_request"):
+        images.request(token, programme, "selfie")
+    for _ in plan:
+        images.execute(*images.request(token, programme))
+    assert [item["view"] for item in images.list(token, programme)] == plan
+    prompts = dict(
+        zip(plan, (json.loads(request.content)["prompt"] for request in seen), strict=True)
+    )
+    assert prompts["concept"].startswith("Concept art of a new invention: Hush: a rotor")
+    assert "A quiet city helicopter" in prompts["in_use"]
+    assert "blueprint" in prompts["schematic"] and "macro close-up" in prompts["detail"]
+    assert "sense-of-scale" in prompts["scale"]
+    assert "(from Ornithology)" in prompts["origins"] and "(from Botany)" in prompts["origins"]
+    assert all("No text" in prompt for prompt in prompts.values())
+    # With the gallery complete, a named view can be painted again.
+    images.execute(*images.request(token, programme, "schematic"))
+    assert images.list(token, programme)[-1]["view"] == "schematic"

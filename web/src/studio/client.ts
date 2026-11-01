@@ -135,11 +135,13 @@ export const changeStudio = (programmeId: string, csrf: string, change: 'pause' 
 
 // Concept art (Meta's image model). The server builds the prompt from the saved
 // design and reserves each image on the budget ledger before it is sent.
-export interface StudioImage { id: string; status: 'rendering' | 'succeeded' | 'refused' | 'unknown'; error: string | null; mime: string | null; created_at: string }
+export const VIEWS = ['concept', 'in_use', 'schematic', 'detail', 'sequence', 'scale', 'origins'] as const
+export type ArtView = (typeof VIEWS)[number]
+export interface StudioImage { id: string; view: ArtView; status: 'rendering' | 'succeeded' | 'refused' | 'unknown'; error: string | null; mime: string | null; created_at: string }
 function parseImage(value: unknown): StudioImage {
   const item = record(value)
-  return { id: id(item.id), status: oneOf(item.status, ['rendering', 'succeeded', 'refused', 'unknown'] as const), error: nullableText(item.error, 64), mime: nullableText(item.mime, 16), created_at: text(item.created_at, 64) }
+  return { id: id(item.id), view: oneOf(item.view, VIEWS), status: oneOf(item.status, ['rendering', 'succeeded', 'refused', 'unknown'] as const), error: nullableText(item.error, 64), mime: nullableText(item.mime, 16), created_at: text(item.created_at, 64) }
 }
 export const studioImageUrl = (imageId: string) => { if (!UUID.test(imageId)) throw new StudioApiError('invalid_request'); return `${BASE}/images/${imageId}` }
-export const listStudioImages = (programmeId: string, signal?: AbortSignal) => request(`${path(programmeId)}/images`, (value) => { const item = record(value); return { available: item.available === true, images: list(item.images, 10, parseImage) } }, signal)
-export const renderStudioImage = (programmeId: string, csrf: string, signal?: AbortSignal) => request(`${path(programmeId)}/images`, (value) => { const item = record(value); return { id: id(item.id), status: oneOf(item.status, ['rendering'] as const) } }, signal, { csrf })
+export const listStudioImages = (programmeId: string, signal?: AbortSignal) => request(`${path(programmeId)}/images`, (value) => { const item = record(value); return { available: item.available === true, images: list(item.images, 40, parseImage), plan: list(item.plan, 7, (entry) => oneOf(entry, VIEWS)) } }, signal)
+export const renderStudioImage = (programmeId: string, csrf: string, view?: ArtView, signal?: AbortSignal) => request(`${path(programmeId)}/images`, (value) => { const item = record(value); return { id: id(item.id), status: oneOf(item.status, ['rendering'] as const) } }, signal, { csrf, body: view ? { view } : undefined })

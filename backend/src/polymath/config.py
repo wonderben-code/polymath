@@ -54,8 +54,8 @@ class Settings(BaseSettings):
     paid_meta_image_enabled: bool = False
     meta_image_model: str | None = None
     meta_image_price_microdollars: int = Field(default=10_000, ge=1, le=1_000_000)
-    image_global_daily_limit: int = Field(default=100, ge=1, le=2000)
-    image_session_daily_limit: int = Field(default=3, ge=1, le=50)
+    image_global_daily_limit: int = Field(default=400, ge=1, le=3000)
+    image_session_daily_limit: int = Field(default=28, ge=1, le=100)
     # The longest single free-use delegation an operator may approve (1 h to 14 days).
     public_max_delegation_seconds: int = Field(default=86400, ge=3600, le=14 * 86400)
     public_resource_limits_enabled: bool = False

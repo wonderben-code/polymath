@@ -109,6 +109,10 @@ class StudioImage(Base):
         CheckConstraint(
             "content IS NULL OR octet_length(content) <= 8000000", name="ck_studio_image_size"
         ),
+        CheckConstraint(
+            "view IN ('concept','in_use','schematic','detail','sequence','scale','origins')",
+            name="ck_studio_image_view",
+        ),
         Index("ix_studio_images_programme", "programme_id", "created_at"),
         Index("ix_studio_images_owner", "owner_session_hash", "created_at"),
     )
@@ -120,6 +124,7 @@ class StudioImage(Base):
     )
     run_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("research_runs.id"))
     prompt: Mapped[str] = mapped_column(Text)
+    view: Mapped[str] = mapped_column(String(16), server_default="concept")
     status: Mapped[str] = mapped_column(String(16), server_default="rendering")
     error: Mapped[str | None] = mapped_column(String(64))
     mime: Mapped[str | None] = mapped_column(String(16))

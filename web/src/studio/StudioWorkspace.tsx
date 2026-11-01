@@ -2,10 +2,10 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { FormEvent, KeyboardEvent } from 'react'
 import type { OwnedRun } from '../research/client'
 import { attachStudioRun, changeStudio, createStudio, listStudio, listStudioImages, loadStudio, MAX_SPECS, nextStudioStep, renderStudioImage, StudioApiError, studioImageUrl } from './client'
-import type { Claim, StudioImage, StudioProgramme, StudioStage, StudioStep, StudioSummary, Wildness } from './client'
+import type { ArtView, Claim, StudioImage, StudioProgramme, StudioStage, StudioStep, StudioSummary, Wildness } from './client'
 import { Constellation, SPECTRUM } from './Constellation'
 import { buildDossier, buildDossierPage, buildMetaBriefing, dossierFileName, LABEL_WORDS, readStudio, WILDNESS_WORDS } from './dossier'
-import type { StudioReading } from './dossier'
+import type { Gallery, StudioReading } from './dossier'
 import './studio.css'
 
 const POLL_MS = 4000
@@ -39,7 +39,11 @@ export interface StudioWorkspaceProps {
   onSessionExpired: () => void
 }
 
-const IMAGE_LIMIT = 2
+const VIEW_WORDS: Record<ArtView, string> = {
+  concept: 'Concept art', in_use: 'In its world', schematic: 'Engineering cutaway', detail: 'The key mechanism, up close',
+  sequence: 'How it works', scale: 'A sense of scale', origins: 'Where the ideas came from',
+}
+const ART_NOTE = 'Painted by Meta Muse Image from the design. An AI impression, not a photograph of a built device.'
 
 async function dataUrl(url: string): Promise<string | undefined> {
   try {
@@ -103,9 +107,9 @@ export function StudioWorkspace({ enabled, csrfToken, canSubmit, submit, onOpenR
   const [images, setImages] = useState<StudioImage[]>([])
   const [imagesFor, setImagesFor] = useState<string | null>(null)
   const [imagesAvailable, setImagesAvailable] = useState(false)
+  const [plan, setPlan] = useState<ArtView[]>([])
   const [painting, setPainting] = useState(false)
   const live = useRef(new Set<string>())
-  const autoPainted = useRef(new Set<string>())
   const busy = useRef(false)
   const briefRef = useRef<HTMLTextAreaElement>(null)
   const canSubmitRef = useRef(canSubmit)
@@ -185,9 +189,9 @@ export function StudioWorkspace({ enabled, csrfToken, canSubmit, submit, onOpenR
   const designed = !!programme && programme.steps.some((step) => step.stage === 'design' && step.finding?.kind === 'bridge')
   const programmeId = programme?.id ?? null
   const loadImages = useCallback(async (id: string) => {
-    try { const result = await listStudioImages(id); setImages(result.images); setImagesAvailable(result.available); setImagesFor(id) } catch { /* Concept art is optional; the design stands without it. */ }
+    try { const result = await listStudioImages(id); setImages(result.images); setImagesAvailable(result.available); setPlan(result.plan); setImagesFor(id) } catch { /* The art is optional; the design stands without it. */ }
   }, [])
-  useEffect(() => { setImages([]); setImagesFor(null); if (programmeId && designed) void loadImages(programmeId) }, [programmeId, designed, loadImages])
+  useEffect(() => { setImages([]); setPlan([]); setImagesFor(null); if (programmeId && designed) void loadImages(programmeId) }, [programmeId, designed, loadImages])
   const rendering = images.some((image) => image.status === 'rendering')
   useEffect(() => {
     if (!rendering || !programmeId) return
@@ -195,17 +199,19 @@ export function StudioWorkspace({ enabled, csrfToken, canSubmit, submit, onOpenR
     return () => window.clearInterval(timer)
   }, [rendering, programmeId, loadImages])
 
-  const paint = useCallback(async () => {
+  // The gallery paints one view at a time, in reading order. A view that has been
+  // tried (painted, refused or held) is never retried automatically.
+  const missing = plan.filter((view) => !images.some((image) => image.view === view))
+  const paint = useCallback(async (view: ArtView) => {
     if (!programmeId || !csrfToken || painting) return
     setPainting(true); setError('')
-    try { await renderStudioImage(programmeId, csrfToken); await loadImages(programmeId) } catch (failure) { fail(failure) } finally { setPainting(false) }
+    try { await renderStudioImage(programmeId, csrfToken, view); await loadImages(programmeId) } catch (failure) { fail(failure); live.current.delete(programmeId) } finally { setPainting(false) }
   }, [programmeId, csrfToken, painting, loadImages, fail])
-  // An invention designed while this page is open is painted once, automatically.
+  // An invention designed while this page is open fills its gallery automatically.
+  const nextView = missing[0]
   useEffect(() => {
-    if (programmeId && designed && imagesAvailable && imagesFor === programmeId && images.length === 0 && live.current.has(programmeId) && !autoPainted.current.has(programmeId)) {
-      autoPainted.current.add(programmeId); void paint()
-    }
-  }, [programmeId, designed, imagesAvailable, imagesFor, images.length, paint])
+    if (programmeId && designed && imagesAvailable && imagesFor === programmeId && nextView && !rendering && !painting && live.current.has(programmeId)) void paint(nextView)
+  }, [programmeId, designed, imagesAvailable, imagesFor, nextView, rendering, painting, paint])
 
   async function change(kind: 'pause' | 'resume' | 'stop') {
     if (!programme || !csrfToken) return
@@ -214,9 +220,14 @@ export function StudioWorkspace({ enabled, csrfToken, canSubmit, submit, onOpenR
 
   async function download(kind: 'html' | 'md') {
     if (!programme) return
-    const art = kind === 'html' && painted ? await dataUrl(studioImageUrl(painted.id)) : undefined
-    const caption = `Concept art painted by Meta Muse Image from the design: an AI impression, not a photograph of a built device.`
-    const content = kind === 'html' ? buildDossierPage(programme, window.location.origin, art ? { src: art, caption } : undefined) : buildDossier(programme, window.location.origin)
+    const gallery: Gallery = {}
+    if (kind === 'html') {
+      for (const [view, image] of Object.entries(art) as [ArtView, StudioImage][]) {
+        const src = await dataUrl(studioImageUrl(image.id))
+        if (src) gallery[view] = { src, caption: `${VIEW_WORDS[view]}. ${ART_NOTE}` }
+      }
+    }
+    const content = kind === 'html' ? buildDossierPage(programme, window.location.origin, gallery) : buildDossier(programme, window.location.origin)
     const url = URL.createObjectURL(new Blob([content], { type: kind === 'html' ? 'text/html;charset=utf-8' : 'text/markdown;charset=utf-8' }))
     const link = document.createElement('a')
     link.href = url; link.download = dossierFileName(programme, kind); link.rel = 'noopener'
@@ -239,9 +250,18 @@ export function StudioWorkspace({ enabled, csrfToken, canSubmit, submit, onOpenR
   }
 
   const reading = programme ? readStudio(programme) : null
-  const painted = [...images].reverse().find((image) => image.status === 'succeeded')
-  const latest = images[images.length - 1]
-  const canPaint = imagesAvailable && !rendering && !painting && images.filter((image) => image.status !== 'refused').length < IMAGE_LIMIT
+  // The newest picture of each view, and the one being painted now.
+  const art: Partial<Record<ArtView, StudioImage>> = {}
+  for (const image of images) if (image.status === 'succeeded') art[image.view] = image
+  const current = images.find((image) => image.status === 'rendering')?.view
+  const done = plan.filter((view) => art[view]).length
+  const autoFilling = !!programmeId && live.current.has(programmeId) && missing.length > 0
+  const figure = (view: ArtView, wide = false) => {
+    const image = art[view]
+    if (image && reading?.design) return <figure className={`studio-figure${wide ? ' is-wide' : ''} view-${view}`}><a href={studioImageUrl(image.id)} target="_blank" rel="noreferrer"><img src={studioImageUrl(image.id)} alt={`${VIEW_WORDS[view]}: ${reading.design.title}`} loading="lazy" /></a><figcaption><strong>{VIEW_WORDS[view]}.</strong> {ART_NOTE}</figcaption></figure>
+    if (current === view) return <div className={`studio-art-placeholder${wide ? ' is-wide' : ''}`} role="status"><span aria-hidden="true" />Painting {VIEW_WORDS[view].toLowerCase()} with Meta Muse Image…</div>
+    return null
+  }
   const ready = enabled && !!csrfToken
   return (
     <div className="studio">
@@ -279,13 +299,11 @@ export function StudioWorkspace({ enabled, csrfToken, canSubmit, submit, onOpenR
         <p className="studio-eyebrow">{programme.outcome === 'designed' ? 'Theoretical invention · not built or tested' : programme.outcome ? 'Studio result' : 'Designing'}</p>
         <h2 id="studio-sheet-title">{reading.design?.title ?? programme.brief}</h2>
         {reading.design && <p className="studio-brief-line">Brief: {programme.brief}</p>}
-        {reading.design && (imagesAvailable || images.length > 0) && <section className="studio-art" aria-label="Concept art">
-          {painted ? <figure><img src={studioImageUrl(painted.id)} alt={`Concept art of ${reading.design.title}`} /><figcaption>Concept art painted by Meta Muse Image from the design. An AI impression, not a photograph of a built device.</figcaption></figure>
-            : rendering || painting ? <div className="studio-art-placeholder" role="status"><span aria-hidden="true" />Painting the concept with Meta Muse Image…</div>
-            : latest?.status === 'refused' ? <p className="studio-muted">Meta declined to paint this one; nothing was charged.</p>
-            : latest?.status === 'unknown' ? <p className="studio-muted">The painting did not finish. It is held for review and will not be charged twice.</p>
-            : null}
-          {canPaint && <button type="button" className="text-button" onClick={() => void paint()}>{painted ? 'Paint another view' : 'Paint the concept art'}</button>}
+        {reading.design && (imagesAvailable || images.length > 0) && <section className="studio-art" aria-label="Gallery">
+          {figure("concept", true)}
+          {plan.length > 0 && done < plan.length && <p className="studio-gallery-line" role="status">{current || painting ? `Painting the gallery with Meta Muse Image: ${done} of ${plan.length}` : `Gallery: ${done} of ${plan.length} pictures`}{!autoFilling && !current && !painting && imagesAvailable && nextView && <button type="button" className="text-button" onClick={() => { if (programmeId) live.current.add(programmeId); void paint(nextView) }}>{done ? 'Paint the rest of the gallery' : 'Paint the gallery'}</button>}</p>}
+          {images.some((image) => image.status === 'refused') && <p className="studio-muted">Meta declined to paint {images.filter((image) => image.status === 'refused').length === 1 ? 'one picture' : 'some pictures'}; nothing was charged for {images.filter((image) => image.status === 'refused').length === 1 ? 'it' : 'them'}.</p>}
+          {images.some((image) => image.status === 'unknown') && <p className="studio-muted">A picture did not finish. It is held for review and will never be charged twice.</p>}
         </section>}
         {programme.outcome && programme.outcome !== 'designed' && <p className="studio-outcome">{OUTCOME_WORDS[programme.outcome]}. {programme.outcome === 'inspired' ? 'The ideas below still stand on their own, and you can try again with different requirements or a wilder search.' : 'Try wider fields, or fewer requirements.'}</p>}
         {!programme.outcome && <p className="studio-status" role="status">{status || (programme.status === 'active' ? 'Ready to continue.' : `Studio ${programme.status}.`)}</p>}
@@ -298,7 +316,10 @@ export function StudioWorkspace({ enabled, csrfToken, canSubmit, submit, onOpenR
           {programme.specs.length > 0 && <section className="studio-card" aria-labelledby="studio-specs-title"><h3 id="studio-specs-title">Your brief must meet</h3><ul className="studio-spec-list">{programme.specs.map((item) => <li key={item}>{item}</li>)}</ul><p className="studio-muted">Ideas from: {WILDNESS_WORDS[programme.wildness]}</p></section>}
         </div>
 
+        {figure("in_use", true)}
+
         {reading.inspirations.length > 0 && <section className="studio-section" aria-labelledby="studio-ideas"><h3 id="studio-ideas">Where the ideas came from</h3>
+          {figure("origins", true)}
           <ul className="studio-ideas">{reading.inspirations.map(({ step, finding, used }) => { const index = programme.steps.filter((item) => item.stage === 'inspire').indexOf(step); return (
             <li key={step.id} className={`studio-idea${used || !reading.design ? '' : ' is-unused'}`} style={{ ['--node' as string]: SPECTRUM[index % SPECTRUM.length] }}>
               <span className="studio-idea-field">{finding.field_left} → {finding.field_right}{used || !reading.design ? '' : ' · considered, not used'}</span>
@@ -312,14 +333,15 @@ export function StudioWorkspace({ enabled, csrfToken, canSubmit, submit, onOpenR
 
         {reading.design && <section className="studio-section studio-invention" aria-labelledby="studio-invention"><h3 id="studio-invention">The invention</h3>
           <p className="studio-big">{reading.design.explanation}</p>
+          {(art.schematic || art.detail || current === 'schematic' || current === 'detail') && <div className="studio-pair">{figure("schematic")}{figure("detail")}</div>}
           {reading.design.mappings.length > 0 && <><h4>How the sources become the design</h4><ul className="studio-mappings">{reading.design.mappings.map((pair, index) => <li key={index}><span>{pair.left}</span><span aria-hidden="true">→</span><span>{pair.right}</span><small>Assumes: {pair.assumption}</small></li>)}</ul></>}
           <div className="studio-objection"><h4>The strongest objection</h4><p>{reading.design.objection}</p><p><strong>Verdict:</strong> {reading.design.verdict}</p><p><strong>Limits of novelty:</strong> {reading.design.limitations}</p></div>
           {reading.designStep && reading.design.quotes.length > 0 && <details className="studio-evidence"><summary>Evidence behind the invention ({reading.design.quotes.length})</summary>{reading.design.quotes.map((item, at) => <blockquote key={at}>“{item.quote}”<Cite number={reading.cite(reading.designStep!, item.source_id)} /></blockquote>)}</details>}
           {reading.designStep?.run_id && <button type="button" className="text-button" onClick={() => onOpenRun(reading.designStep!.run_id!)}>See how it was invented</button>}
         </section>}
 
-        {reading.engineering && <section className="studio-section" aria-labelledby="studio-engineering"><h3 id="studio-engineering">Engineering and calculations</h3><p>{reading.engineering.summary}</p><Claims claims={reading.engineering.claims} step={programme.steps.find((item) => item.stage === 'engineer')!} reading={reading} /></section>}
-        {reading.test && <section className="studio-section" aria-labelledby="studio-test"><h3 id="studio-test">Stress test against your brief</h3><p>{reading.test.summary}</p><Claims claims={reading.test.claims} step={programme.steps.find((item) => item.stage === 'test')!} reading={reading} /></section>}
+        {reading.engineering && <section className="studio-section" aria-labelledby="studio-engineering"><h3 id="studio-engineering">Engineering and calculations</h3>{figure("sequence", true)}<p>{reading.engineering.summary}</p><Claims claims={reading.engineering.claims} step={programme.steps.find((item) => item.stage === 'engineer')!} reading={reading} /></section>}
+        {reading.test && <section className="studio-section" aria-labelledby="studio-test"><h3 id="studio-test">Stress test against your brief</h3>{figure("scale", true)}<p>{reading.test.summary}</p><Claims claims={reading.test.claims} step={programme.steps.find((item) => item.stage === 'test')!} reading={reading} /></section>}
         {reading.stillToInvent.length > 0 && <section className="studio-section" aria-labelledby="studio-gaps"><h3 id="studio-gaps">Still to invent</h3><ul className="studio-gaps">{reading.stillToInvent.map((gap) => <li key={gap}><span>{gap}</span><button type="button" className="text-button" onClick={() => onSolveGap(gap)}>Solve this</button></li>)}</ul></section>}
 
         {reading.references.length > 0 && <section className="studio-section" aria-labelledby="studio-refs"><h3 id="studio-refs">Sources</h3><ol className="studio-refs">{reading.references.map((source, index) => { const link = source.doi ? `https://doi.org/${source.doi}` : source.url; return <li key={link} id={`studio-ref-${index + 1}`}>{source.authors.length > 0 && <>{source.authors.join(', ')}{source.more_authors ? ' et al.' : ''}. </>}<a href={link} target="_blank" rel="noreferrer">{source.title}</a>{source.venue ? `. ${source.venue}` : ''}{source.year ? `, ${source.year}` : ''}.</li> })}</ol></section>}

@@ -73,19 +73,23 @@ function claims(reading: StudioReading, step: StudioStep, items: Claim[]): Block
 }
 
 export interface ConceptArt { src: string; caption: string }
+export type Gallery = Partial<Record<'concept' | 'in_use' | 'schematic' | 'detail' | 'sequence' | 'scale' | 'origins', ConceptArt>>
 
-export function dossierBlocks(programme: StudioProgramme, origin: string, art?: ConceptArt): Block[] {
+export function dossierBlocks(programme: StudioProgramme, origin: string, gallery: Gallery = {}): Block[] {
   const reading = readStudio(programme)
   const blocks: Block[] = []
   const stepOf = (stage: StudioStep['stage']) => programme.steps.find((step) => step.stage === stage)!
   blocks.push({ t: 'title', text: reading.design?.title ?? programme.brief, note: `A theoretical invention designed with Polymath Innovation Studio (${origin}), powered by Meta’s frontier Muse models. Not built or tested. Every inspiration and claim comes from a saved investigation whose quotations were checked against their sources.` })
-  if (art) blocks.push({ t: 'image', src: art.src, caption: art.caption })
+  const picture = (view: keyof Gallery) => { const art = gallery[view]; if (art) blocks.push({ t: 'image', src: art.src, caption: art.caption }) }
+  picture('concept')
   blocks.push({ t: 'h2', text: 'The brief' }, { t: 'lead', text: programme.brief })
   if (programme.specs.length) blocks.push({ t: 'kv', label: 'Must meet', text: '' }, { t: 'list', items: programme.specs })
   blocks.push({ t: 'kv', label: 'Looked for ideas in', text: WILDNESS_WORDS[programme.wildness] })
+  picture('in_use')
   if (reading.brief) blocks.push({ t: 'h2', text: 'Where today’s designs stand' }, { t: 'p', text: reading.brief.summary }, claims(reading, stepOf('brief'), reading.brief.claims))
   if (reading.inspirations.length) {
     blocks.push({ t: 'h2', text: 'Where the ideas came from' })
+    picture('origins')
     for (const { step, finding, used } of reading.inspirations) {
       blocks.push({ t: 'h3', text: finding.title }, { t: 'meta', text: `${finding.field_left} → ${finding.field_right}${used ? '' : ' · considered, not used'}` }, { t: 'p', text: finding.explanation })
       if (finding.mappings.length) blocks.push({ t: 'mappings', items: finding.mappings })
@@ -94,16 +98,21 @@ export function dossierBlocks(programme: StudioProgramme, origin: string, art?: 
   }
   if (reading.design && reading.designStep) {
     blocks.push({ t: 'h2', text: 'The invention' }, { t: 'lead', text: reading.design.explanation })
+    picture('schematic'); picture('detail')
     if (reading.design.mappings.length) blocks.push({ t: 'h3', text: 'How the sources become the design' }, { t: 'mappings', items: reading.design.mappings })
     blocks.push({ t: 'kv', label: 'Strongest objection', text: reading.design.objection }, { t: 'kv', label: 'Verdict', text: reading.design.verdict }, { t: 'kv', label: 'Limits of novelty', text: reading.design.limitations })
     blocks.push({ t: 'h3', text: 'Evidence' }, { t: 'quotes', items: quotes(reading, reading.designStep, reading.design.quotes) })
   }
   if (reading.engineering) {
-    blocks.push({ t: 'h2', text: 'Engineering and calculations' }, { t: 'p', text: reading.engineering.summary }, claims(reading, stepOf('engineer'), reading.engineering.claims))
+    blocks.push({ t: 'h2', text: 'Engineering and calculations' })
+    picture('sequence')
+    blocks.push({ t: 'p', text: reading.engineering.summary }, claims(reading, stepOf('engineer'), reading.engineering.claims))
     if (reading.engineering.limitations.length) blocks.push({ t: 'kv', label: 'Limitations', text: '' }, { t: 'list', items: reading.engineering.limitations })
   }
   if (reading.test) {
-    blocks.push({ t: 'h2', text: 'Stress test against the brief' }, { t: 'p', text: reading.test.summary }, claims(reading, stepOf('test'), reading.test.claims))
+    blocks.push({ t: 'h2', text: 'Stress test against the brief' })
+    picture('scale')
+    blocks.push({ t: 'p', text: reading.test.summary }, claims(reading, stepOf('test'), reading.test.claims))
     if (reading.test.limitations.length) blocks.push({ t: 'kv', label: 'Limitations', text: '' }, { t: 'list', items: reading.test.limitations })
   }
   if (reading.stillToInvent.length) blocks.push({ t: 'h2', text: 'Still to invent' }, { t: 'list', items: reading.stillToInvent })
@@ -175,8 +184,8 @@ export function buildDossier(programme: StudioProgramme, origin = 'https://askpo
 }
 
 /** The same dossier as a print-ready page: open it and print, or save as PDF. */
-export function buildDossierPage(programme: StudioProgramme, origin = 'https://askpolymath.com', art?: ConceptArt): string {
-  return renderHtml(dossierBlocks(programme, origin, art), readStudio(programme).design?.title ?? programme.brief)
+export function buildDossierPage(programme: StudioProgramme, origin = 'https://askpolymath.com', gallery: Gallery = {}): string {
+  return renderHtml(dossierBlocks(programme, origin, gallery), readStudio(programme).design?.title ?? programme.brief)
 }
 
 /** A compact briefing to keep refining the design in a Meta AI conversation. */
