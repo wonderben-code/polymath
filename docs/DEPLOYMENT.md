@@ -241,6 +241,29 @@ Google sign-in: External, In production, branding verified, support email a
 Google Group (the owner's personal address is never shown). Registered apps and
 callbacks are listed in [SIGN_IN_SETUP.md](SIGN_IN_SETUP.md).
 
+## Operating the server without a relay
+
+Two tools let the engineer run maintenance on the production server from the
+repository, so an operator does not have to relay commands:
+
+- **Server task** (`.github/workflows/server.yml`, `scripts/server-task.sh`):
+  a GitHub Actions workflow that runs one named task over SSH (status, update,
+  restart, logs, diagnose, account, holds, settle-hold, sql,
+  rotate-operator-code, shell). It needs the `SERVER_SSH_KEY` and
+  `SERVER_HOST_KEY` repository secrets; removing the key revokes it. The
+  repository is public, so the job log carries only ciphertext: the output is
+  encrypted to the engineer's key in `scripts/ops-public.pem`. Lines of the form
+  `NAME=value` for keys, tokens, secrets and passwords are redacted first.
+- **Operator desk driver** (`scripts/operator-desk.sh`): runs on the server and
+  drives the same HTTP API the budget desk in the browser uses, with the same
+  two cookies and CSRF tokens, so a readiness proposal, the one-call
+  verification, research activation and visitor funding can be done from a
+  Server task `shell` command. It reads the operator code from
+  `deploy/production.env` and never prints it. Every write still passes the
+  server's own checks (fresh timestamps, exact manifest hashes, caps, kill
+  switch); the script cannot raise a cap or skip a review field. Run it with
+  no arguments for the command list.
+
 ## Remaining before hosted release
 
 Owner inputs: host account and budget approval, domain choice, provider funding
