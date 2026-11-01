@@ -69,20 +69,20 @@ describe('research workspace', () => {
     await user.click(screen.getByRole('button', { name: /Error-correcting codes/ }))
     expect(screen.getByRole('textbox')).toHaveValue('Error-correcting codes')
 
-    await user.click(screen.getByRole('button', { name: /02Ask/ }))
+    await user.click(screen.getByRole('button', { name: /03Ask/ }))
     expect(screen.getByRole('textbox', { name: 'What question is on your mind?' })).toHaveValue('')
     await user.type(screen.getByRole('textbox'), 'Why do systems sleep?')
     expect(screen.getByRole('button', { name: 'Investigate question' })).toBeDisabled()
     expect(screen.getByText(/known findings, postulated connections, and speculation/)).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: /03Surprise me/ }))
+    await user.click(screen.getByRole('button', { name: /04Surprise me/ }))
     expect(screen.getByRole('textbox', { name: 'What should guide the search? (optional)' })).toBeInTheDocument()
     expect(screen.getByText(/The research model will choose the fields/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Start a discovery' })).toBeDisabled()
 
     await user.click(screen.getByRole('button', { name: /01Explore/ }))
     expect(screen.getByRole('textbox')).toHaveValue('Error-correcting codes')
-    await user.click(screen.getByRole('button', { name: /02Ask/ }))
+    await user.click(screen.getByRole('button', { name: /03Ask/ }))
     expect(screen.getByRole('textbox')).toHaveValue('Why do systems sleep?')
     expect(requests.mock.calls.some(([, options]) => options?.method === 'POST')).toBe(false)
   })

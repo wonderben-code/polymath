@@ -1,7 +1,7 @@
 import { ExploreWorkspace } from './exploreCollection/ExploreWorkspace'
 import { DiscoveryWorkspace } from './discovery/DiscoveryWorkspace'
 import { NativeResumeControl } from './research/NativeResumeControl'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { loadSystemStatus } from './api'
 import type { SystemStatus } from './api'
@@ -20,6 +20,9 @@ import { PublishingSection } from './publishing/PublishingSection'
 import { CALLBACK_PATH, YourZenodo } from './zenodo/YourZenodo'
 import { AccountControl } from './account/AccountControl'
 import { Story } from './Story'
+import { SolveComposer } from './solve/SolveComposer'
+import { SolveWorkspace } from './solve/SolveWorkspace'
+import { createSolve } from './solve/client'
 import { Credits } from './Credits'
 import { ConvergeWorkspace } from './converge/ConvergeWorkspace'
 import { HeroBridge } from './HeroBridge'
@@ -61,8 +64,8 @@ function usePlace(): [Place, (place: Place) => void] {
 
 const modes: { id: Mode; label: string; number: string }[] = [
   { id: 'explore', label: 'Explore', number: '01' },
-  { id: 'ask', label: 'Ask', number: '02' },
-  { id: 'surprise', label: 'Surprise me', number: '03' },
+  { id: 'ask', label: 'Ask', number: '03' },
+  { id: 'surprise', label: 'Surprise me', number: '04' },
 ]
 
 const copy = {
@@ -163,6 +166,9 @@ export function App() {
   const [discoveryRefresh, setDiscoveryRefresh] = useState(0)
   const [selectedFindingId, setSelectedFindingId] = useState<string | null>(null)
   const [converging, setConverging] = useState(false)
+  // Solve, the key finder and key maker, is a mode of its own like Converge.
+  const [solving, setSolving] = useState(false)
+  const [solveFocus, setSolveFocus] = useState<string | null>(null)
   const [convergeFocus, setConvergeFocus] = useState<string | null>(null)
   const [convergeReading, setConvergeReading] = useState<string | null>(null)
   const content = copy[mode]
@@ -281,17 +287,19 @@ export function App() {
               <p className="hero-lede">Science is split into thousands of specialties, and far more is published each year than anyone could read. So an answer found in one field often stays unknown in the field that needs it. Polymath is an AI research partner that reads across all of them, spots where different fields have found the same idea in different words, and checks each connection against the original papers before showing it to you.</p>
               <HeroBridge />
               <div className="mode-switch" role="group" aria-label="Research mode">
-                {modes.map((item) => (
-                  <button key={item.id} type="button" aria-pressed={!converging && mode === item.id}
-                    onClick={() => { setMode(item.id); setConverging(false); setNotice('') }}>
+                {modes.map((item, index) => <Fragment key={item.id}>
+                  <button type="button" aria-pressed={!converging && !solving && mode === item.id}
+                    onClick={() => { setMode(item.id); setConverging(false); setSolving(false); setNotice('') }}>
                     <span className="mode-number">{item.number}</span>{item.label}
                   </button>
-                ))}
-                <button type="button" aria-pressed={converging} onClick={() => { setConverging(true); setNotice('') }}><span className="mode-number">04</span>Converge</button>
+                  {index === 0 && <button type="button" aria-pressed={solving} onClick={() => { setSolving(true); setConverging(false); setNotice('') }}><span className="mode-number">02</span>Solve</button>}
+                </Fragment>)}
+                <button type="button" aria-pressed={converging} onClick={() => { setConverging(true); setSolving(false); setNotice('') }}><span className="mode-number">05</span>Converge</button>
               </div>
-              <p className="composer-description mode-description">{converging ? <>Choose how many fields, and any you want included. Polymath connects them, then finds what those connections share, level after level. <span className="nav-badge">Experimental</span></> : content.description}</p>
+              <p className="composer-description mode-description">{solving ? <>Describe a problem. Polymath looks for an answer anywhere in science, and if none fits, builds one from the closest answers in other fields.</> : converging ? <>Choose how many fields, and any you want included. Polymath connects them, then finds what those connections share, level after level. <span className="nav-badge">Experimental</span></> : content.description}</p>
               {converging && <ConvergeComposer csrfToken={workspace.csrfToken} ready={workspace.phase === 'ready'} onCreated={(programme) => setConvergeFocus(programme.id)} onSessionExpired={workspace.invalidateSession} />}
-              <form onSubmit={handleSubmit} hidden={converging}>
+              {solving && <SolveComposer csrfToken={workspace.csrfToken} ready={workspace.phase === 'ready'} canSubmit={workspace.canSubmit && !artifactBusy && !assessmentBusy} onCreated={(programme) => setSolveFocus(programme.id)} onSessionExpired={workspace.invalidateSession} />}
+              <form onSubmit={handleSubmit} hidden={converging || solving}>
                 <label htmlFor="research-prompt" className="composer-label">{content.label}</label>
                 <div className="prompt-box">
                   <textarea id="research-prompt" value={prompts[mode]}
@@ -324,10 +332,13 @@ export function App() {
               {!(workspace.native.phase === 'disabled' && !workspace.native.access) && <NativeResearchNotice context={workspace.native} />}
             </section>
           </>}
+          <div hidden={!(place === 'research' && solving)}>
+            <SolveWorkspace enabled={workspace.phase === 'ready'} csrfToken={workspace.csrfToken} canSubmit={workspace.canSubmit && !artifactBusy && !assessmentBusy} focusId={solveFocus} submit={(solveMode, goal, parents) => workspace.submit(solveMode, goal, parents)} onOpenRun={(id) => { setSolving(false); openRun(id) }} onSessionExpired={workspace.invalidateSession} />
+          </div>
           <div hidden={!(place === 'research' && converging)}>
             <ConvergeWorkspace enabled={workspace.phase === 'ready'} csrfToken={workspace.csrfToken} canSubmit={workspace.canSubmit && !artifactBusy && !assessmentBusy} focusId={convergeFocus} onFinished={onConvergeFinished} notifyControl={<NotifyToggle notifier={notifier} />} submit={(convergeMode, goal, parents) => workspace.submit(convergeMode, goal, parents)} liveActivity={workspace.activeRun && workspace.events.length ? { runId: workspace.activeRun.id, summary: workspace.events[workspace.events.length - 1].summary } : null} onOpenRun={(id) => { setConvergeReading(id); openRun(id) }} onGoDeeper={goDeeper} onSessionExpired={workspace.invalidateSession} />
           </div>
-          {place === 'research' && (!converging || (convergeReading !== null && convergeReading === workspace.selectedId)) && <>
+          {place === 'research' && !solving && (!converging || (convergeReading !== null && convergeReading === workspace.selectedId)) && <>
             <div ref={focusAnchor} className="focus-anchor" />
             {workspace.selectedId && !workspace.activeRun && <p className="history-note" role="status">Opening the investigation…</p>}
             {workspace.detailError && <div className="research-detail-error" role="alert"><p>{workspace.detailError}</p>{workspace.selectedId && <button type="button" className="text-button" onClick={() => workspace.selectRun(workspace.selectedId!)}>Reload investigation</button>}</div>}
@@ -380,7 +391,7 @@ export function App() {
             {notice && <p className="composer-alert" role="alert">{notice}</p>}
           </section>}
           <div hidden={place !== 'frontier'}>
-            <FrontierWorkspace enabled={workspace.phase === 'ready'} csrfToken={workspace.csrfToken} canSubmit={workspace.canSubmit && !artifactBusy && !assessmentBusy} focusId={frontierFocus} onFinished={onFrontierFinished} notifyControl={<NotifyToggle notifier={notifier} />} submit={(frontierMode, goal, parents) => workspace.submit(frontierMode, goal, parents)} onOpenRun={openRun} onSessionExpired={workspace.invalidateSession} />
+            <FrontierWorkspace enabled={workspace.phase === 'ready'} csrfToken={workspace.csrfToken} canSubmit={workspace.canSubmit && !artifactBusy && !assessmentBusy} focusId={frontierFocus} onFinished={onFrontierFinished} onSolveStep={(programmeId, nodeId) => { if (!workspace.csrfToken) return; void createSolve(workspace.csrfToken, { frontier_programme_id: programmeId, frontier_node_id: nodeId }).then((programme) => { setSolveFocus(programme.id); setSolving(true); setConverging(false); go('research') }).catch(() => undefined) }} notifyControl={<NotifyToggle notifier={notifier} />} submit={(frontierMode, goal, parents) => workspace.submit(frontierMode, goal, parents)} onOpenRun={openRun} onSessionExpired={workspace.invalidateSession} />
           </div>
 
           {place === 'about' && <AboutPlace remaining={freeAccess?.remaining_session_jobs_today} daily={freeAccess?.limits?.max_jobs_per_session_day} />}

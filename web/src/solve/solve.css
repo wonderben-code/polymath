@@ -1,0 +1,44 @@
+/* Solve: the problem as a lock, keys from across science, and a key forged from them. */
+.solve { max-width: 760px; margin: 24px auto 48px; }
+.solve-heading { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.solve-programme { padding: 28px 0 8px; border-top: 1px solid var(--line); }
+.solve-kicker { margin: 0 0 6px; font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.solve-programme > h3 { font-family: var(--serif); font-weight: 400; font-size: 26px; line-height: 1.25; letter-spacing: -.3px; margin: 0 0 8px; color: var(--ink); }
+.lk { margin: 8px 0 18px; }
+.lk svg { width: 100%; height: auto; max-height: 230px; overflow: visible; }
+.lk figcaption { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.lk-lock rect { fill: #ffffff; stroke: var(--ink); stroke-width: 6; }
+.lk-shackle { stroke: var(--ink); transition: transform .8s cubic-bezier(.4, 0, .2, 1); }
+.lk-lock.is-open .lk-shackle { transform: translateY(-14px); }
+.lk-hole { fill: var(--ink); }
+.lk-key { transition: opacity .6s; }
+.lk-key.is-faint { opacity: .55; }
+.lk-key.is-seeking { animation: lk-seek 2.4s ease-in-out infinite; }
+@keyframes lk-seek { 0%, 100% { opacity: .35; } 50% { opacity: .9; } }
+.solve-status { font-size: 15px; color: var(--muted); margin: 0 0 14px; }
+.solve-outcome { margin: 0 0 18px; padding: 18px 22px; border-radius: 16px; background: #ffffff; border: 1px solid var(--line); position: relative; overflow: hidden; }
+.solve-outcome::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--spectrum); }
+.solve-outcome.is-found::before { background: var(--ink); }
+.solve-outcome.is-none::before { background: var(--line); }
+.solve-outcome h3 { margin: 0 0 6px; font-family: var(--serif); font-weight: 400; font-size: 22px; color: var(--ink); }
+.solve-outcome p { margin: 0; font-size: 15px; line-height: 1.65; color: var(--muted); }
+.solve-stage { margin-top: 26px; }
+.solve-stage-title { margin: 0 0 10px; font-size: 13px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.solve-cards { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.solve-card { padding: 18px 20px; border: 1px solid var(--line); border-radius: 14px; background: #ffffff; }
+.solve-card h4 { margin: 0 0 8px; font-family: var(--serif); font-weight: 400; font-size: 18px; line-height: 1.35; color: var(--ink); }
+.solve-card p, .solve-card li { font-size: 14.5px; line-height: 1.6; color: var(--muted); margin: 0 0 8px; }
+.solve-card ul { margin: 0 0 8px; padding-left: 18px; }
+.solve-card strong { color: var(--ink); font-weight: 600; }
+.solve-card-kicker { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 13px; color: var(--ink); }
+.solve-card-kicker::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--field, var(--ink)); }
+.solve-muted { color: var(--muted); }
+.solve-target { display: block; margin-top: 4px; font-size: 13px; }
+.solve-list { margin-top: 36px; }
+.solve-list h3 { font-family: var(--serif); font-weight: 400; font-size: 20px; margin: 0 0 10px; }
+.solve-list ul { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+.solve-list button { width: 100%; display: flex; justify-content: space-between; gap: 16px; padding: 12px 4px; border: 0; border-bottom: 1px solid var(--line); background: transparent; text-align: left; font: inherit; font-size: 15px; color: var(--ink); cursor: pointer; }
+.solve-list button[aria-pressed='true'] { font-weight: 600; }
+.solve-list button span:last-child { flex-shrink: 0; font-size: 13px; }
+@media (prefers-reduced-motion: reduce) { .lk-key.is-seeking { animation: none; } .lk-shackle { transition: none; } }
+@media (max-width: 760px) { .solve-list button { flex-direction: column; gap: 2px; } }
