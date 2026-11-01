@@ -30,6 +30,7 @@ from polymath import (  # noqa: F401
     scientific_context_models,
     sharing_models,
     solve_models,
+    studio_models,
     visitor_zenodo_models,
 )
 from polymath.config import Settings

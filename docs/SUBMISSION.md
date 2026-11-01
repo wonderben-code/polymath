@@ -25,11 +25,11 @@ support (for example, if live research has not been switched on).
 
 ## Short description (about 60 words)
 
-> Discoveries hide between fields of science. Polymath is an AI research
-> partner, powered by Meta's Muse Spark, that reads across every discipline. It
-> solves problems by finding an answer anywhere in science, or forging a new one
-> from the closest answers in other fields. It spots where fields have found the
-> same idea, and ties every claim to the exact passage behind it.
+> Discoveries hide between fields of science. Polymath is an AI research and
+> invention partner, powered by Meta's Muse Spark, that reads across every
+> discipline. Ask it to invent something and it designs it from mechanisms that
+> already work in nature and other fields, with calculations. Ask it to solve a
+> problem and it finds or forges an answer. Every claim cites its passage.
 
 ## Long description
 
@@ -41,6 +41,12 @@ network routing) used to depend on rare people who happened to know both.
 
 **What Polymath does.**
 
+- **Innovation Studio:** ask for anything to be created ("a submarine inspired
+  by whales"). Polymath turns the brief into the functions it needs, hunts
+  distant and strange corners of science for mechanisms that already achieve
+  each one, invents a design from them, engineers it with worked calculations,
+  and stress-tests it against your requirements. Download the dossier, refine
+  it, or continue in Meta AI.
 - **Solve:** describe a problem, the lock. Polymath looks for a key anywhere in
   science. If none fits, it finds the closest fits in other fields, says where
   each fits and falls short, and forges a new key by combining them. A forged
@@ -81,19 +87,23 @@ and budgets; the model decides what to do.
    read an abstract; open an arXiv paper's section index; read a chosen
    full-text window; search or revisit its own saved findings; record or discard
    a hypothesis; or conclude.
-2. **Key finding and key forging.** In Solve, the model judges whether an
+2. **Invention.** In Studio, the model abstracts a brief into functions, picks
+   distant fields to search, then reasons beyond the sources to a new design,
+   marking what is evidenced and what is its own invention, and works out the
+   engineering numbers.
+3. **Key finding and key forging.** In Solve, the model judges whether an
    existing answer fits, finds close fits in other fields and their exact
    shortfalls, then reasons over two to four of them to forge a combined
    solution, tested against the original evidence.
-3. **Autonomous field selection.** In Surprise me the model picks distant fields
+4. **Autonomous field selection.** In Surprise me the model picks distant fields
    and explains why. No field list is supplied.
-4. **Self-critique.** Each bridge carries the strongest objection the model could
+5. **Self-critique.** Each bridge carries the strongest objection the model could
    find, its verdict on it, and a prior-work search.
-5. **Connections between connections.** The model decides whether to save,
+6. **Connections between connections.** The model decides whether to save,
    deepen, combine, rank or exclude bridges, inside one budget.
-6. **Formalise, write and reassess.** The same model turns findings into
+7. **Formalise, write and reassess.** The same model turns findings into
    conjectures, summaries and papers, and reassesses them against new papers.
-7. **Safe at public scale.** Every call is reserved against a hard USD ledger
+8. **Safe at public scale.** Every call is reserved against a hard USD ledger
    before it is sent, so one $150 credit pool can fund visitors without surprises.
 
 Model: `⟨muse-spark-1.3⟩` through `https://api.meta.ai/v1/chat/completions`.
@@ -111,13 +121,14 @@ visitors. Muse Spark makes the agent, not a fixed script, the researcher.
 
 | Time | Show | Say |
 |---|---|---|
-| 0:00–0:15 | Home: "Discoveries hide between fields of science." | "Science is split into thousands of specialties. Answers found in one field stay unknown in another. Polymath, powered by Meta's Muse Spark, reads across all of them." |
-| 0:15–1:00 | **Solve**: type a real problem; the lock appears; stages run live; close fits from two fields; the forged key slides into the lock in their colours | "Describe a problem. Polymath looks for a key anywhere in science. None fits, so it finds the closest answers in other fields, shows where each falls short, and forges a new key from them, every piece tied to its evidence." |
-| 1:00–1:30 | Open the forged key's investigation: the live timeline, a quoted passage, the strongest objection | "Muse Spark chooses every search and reading itself. Every claim links to the exact passage, and it argues against itself before showing you anything." |
-| 1:30–1:50 | **Explore** or **Surprise me** result; Evidence bar set to Peer reviewed | "Explore finds the same idea in distant fields. Choose your evidence bar: frontier preprints, or only peer-reviewed, well-cited work." |
-| 1:50–2:15 | **Converge** circle lighting up; **Frontier** map; "Solve this step" | "Converge connects dozens of fields at once. Frontier turns an open problem into a programme, and any step can be sent to Solve." |
-| 2:15–2:40 | Your library: findings, map; Publishing: connect your own Zenodo; a paper with citations | "Findings become papers with exact citations, published under your own name on Zenodo, when you approve." |
-| 2:40–3:00 | askpolymath.com, credits strip, GitHub | "Polymath. Discoveries hide between fields. Now anyone can find them." |
+| 0:00–0:12 | Home: "Discoveries hide between fields of science." | "Science is split into thousands of specialties. Polymath, powered by Meta's Muse Spark, reads across all of them, to solve and to invent." |
+| 0:12–0:55 | **Studio**: tap *A submarine inspired by whales*; the idea map lights up field by field; the invention, its engineering and calculations, the stress test | "Ask it to invent anything. Muse Spark turns the brief into the functions it needs, hunts the strangest corners of science for mechanisms that already work, then invents a new design from them, engineered with calculations and tested against the brief." |
+| 0:55–1:10 | *Download the design dossier*; *Continue in Meta AI* | "Take the design with you as a full dossier, or keep refining it with Meta AI." |
+| 1:10–1:40 | **Solve**: a real problem; close fits from two fields; the forged key in their colours | "Or describe a problem. Polymath looks for an answer anywhere in science, and if none fits, forges one from the closest answers in other fields." |
+| 1:40–2:00 | Open one investigation: the live timeline, a quoted passage, the strongest objection | "Every search is Muse Spark's choice, every claim links to its exact passage, and it argues against itself before showing you anything." |
+| 2:00–2:25 | **Explore**, **Converge** circle, **Frontier** map with *Solve this step*; Evidence bar | "Explore any idea across fields, converge dozens at once, or take on an open problem step by step, at the evidence bar you choose." |
+| 2:25–2:45 | Sign in; Your library; publish to your own Zenodo | "Sign in with ORCID, GitHub or Google, and publish under your own name on Zenodo." |
+| 2:45–3:00 | askpolymath.com, credits strip, GitHub | "Polymath. Discoveries hide between fields. Now anyone can find them, and build with them." |
 
 Recording notes: record against https://askpolymath.com with real live runs.
 Label any recorded or sped-up segment on screen. Never show operator codes,
