@@ -82,7 +82,8 @@ Ways forward:
      and on Zenodo, using the live site's callback URL.
 
 4. **Accounts: sign in or continue as a guest** (before submission if time
-   allows; otherwise straight after)
+   allows; otherwise straight after) · **built 1 Nov**, see
+   [ACCOUNTS.md](ACCOUNTS.md) (schema 0031)
    - Sign in with ORCID (researchers; it also fills their name and ORCID on
      papers), GitHub or Google.
    - Signing in keeps work forever and across devices; guest work is carried
@@ -106,6 +107,6 @@ Ways forward:
 2. A host: one $12-a-month server is recommended; Netlify alone cannot run the
    backend.
 3. After deployment: free OAuth app registrations (Zenodo sandbox and
-   production; ORCID, GitHub, Google).
+   production, see CONNECT_ZENODO.md; ORCID, GitHub, Google, see ACCOUNTS.md).
 4. Demo video (3 minutes) and the submission form, before Wed 4 Nov, 21:00
    Bangkok.

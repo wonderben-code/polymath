@@ -3,6 +3,7 @@ from sqlalchemy import create_engine, pool
 
 from polymath import (  # noqa: F401
     access_models,
+    account_models,
     artifact_models,
     assessment_models,
     budget_models,

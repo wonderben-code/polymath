@@ -18,6 +18,7 @@ import { FrontierWorkspace } from './frontier/FrontierWorkspace'
 import { ConvergeComposer } from './converge/ConvergeComposer'
 import { PublishingSection } from './publishing/PublishingSection'
 import { CALLBACK_PATH, YourZenodo } from './zenodo/YourZenodo'
+import { AccountControl } from './account/AccountControl'
 import { ConvergeWorkspace } from './converge/ConvergeWorkspace'
 import { HeroBridge } from './HeroBridge'
 import { WaysToUse } from './WaysToUse'
@@ -248,7 +249,7 @@ export function App() {
     <NativeResearchProvider value={workspace.native}>
       <a className="skip-link" href="#workspace">Skip to main content</a>
       <div className="page-shell calm">
-        <SiteHeader current={place} onNavigate={go} />
+        <SiteHeader current={place} onNavigate={go} accessory={<AccountControl csrfToken={workspace.csrfToken} enabled={workspace.phase === 'ready'} />} />
 
         <main id="workspace">
           {place === 'research' && <>

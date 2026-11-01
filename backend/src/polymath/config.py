@@ -72,6 +72,17 @@ class Settings(BaseSettings):
         default=None, pattern=r"^[A-Za-z0-9_.-]{1,200}$"
     )
     zenodo_production_client_secret: SecretStr | None = None
+    # Accounts: sign in with ORCID, GitHub or Google, or continue as a guest
+    # (docs/ACCOUNTS.md). A provider is offered only with its client ID and secret.
+    accounts_enabled: bool = False
+    accounts_key: SecretStr | None = None
+    orcid_client_id: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_.-]{1,200}$")
+    orcid_client_secret: SecretStr | None = None
+    orcid_base_url: Literal["https://orcid.org", "https://sandbox.orcid.org"] = "https://orcid.org"
+    github_client_id: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_.-]{1,200}$")
+    github_client_secret: SecretStr | None = None
+    google_client_id: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_.-]{1,200}$")
+    google_client_secret: SecretStr | None = None
     frontend_dist: Path | None = Field(
         default=None, validation_alias=AliasChoices("FRONTEND_DIST", "STATIC_DIR")
     )
@@ -95,6 +106,10 @@ class Settings(BaseSettings):
         "zenodo_connection_key",
         "zenodo_sandbox_client_secret",
         "zenodo_production_client_secret",
+        "accounts_key",
+        "orcid_client_secret",
+        "github_client_secret",
+        "google_client_secret",
         mode="before",
     )
     @classmethod
@@ -216,6 +231,19 @@ class Settings(BaseSettings):
                 key = b""
             if len(key) != 32:
                 raise ValueError("ZENODO_CONNECTION_KEY must be 32 random bytes in base64")
+        return self
+
+    @model_validator(mode="after")
+    def require_accounts_configuration(self) -> "Settings":
+        if self.accounts_enabled:
+            if self.accounts_key is None or self.public_site_origin is None:
+                raise ValueError("Accounts require ACCOUNTS_KEY and the site origin")
+            try:
+                key = base64.b64decode(self.accounts_key.get_secret_value(), validate=True)
+            except ValueError:
+                key = b""
+            if len(key) != 32:
+                raise ValueError("ACCOUNTS_KEY must be 32 random bytes in base64")
         return self
 
     @property
