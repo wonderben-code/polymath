@@ -24,7 +24,7 @@ from test_publication import publication as publication_fixture
 from test_run_api import bootstrap
 
 from polymath.access_models import BrowserSession
-from polymath.artifact_models import GeneratedArtifact
+from polymath.artifact_models import ArtifactRequest, GeneratedArtifact
 from polymath.publication_contracts import PublicationMetadata
 from polymath.run_api import create_run_router
 from polymath.visitor_zenodo import (
@@ -37,7 +37,11 @@ from polymath.visitor_zenodo import (
     unseal,
 )
 from polymath.visitor_zenodo_api import create_visitor_zenodo_router
-from polymath.visitor_zenodo_models import ZenodoConnection, ZenodoOAuthState
+from polymath.visitor_zenodo_models import (
+    VisitorPublishingPreference,
+    ZenodoConnection,
+    ZenodoOAuthState,
+)
 from polymath.visitor_zenodo_worker import VisitorZenodoWorker
 from polymath.zenodo import ZenodoClient
 
@@ -532,3 +536,130 @@ def test_an_unexpected_error_never_stops_the_worker_or_repeats_a_creation(visito
     visitor.worker.client_factory = real
     visitor.http.post(f"/api/v1/zenodo/publications/{record['id']}/retry", headers=visitor.headers)
     assert run(visitor) == "published"
+
+
+# Publishing levels on the visitor's own connection ----------------------------
+
+
+def levels(case, level, **changes):
+    return case.http.post(
+        "/api/v1/zenodo/autopilot/preferences",
+        headers=case.headers,
+        json={
+            "level": level,
+            "creators": [{"name": "Synthetic Visitor"}],
+            **changes,
+        },
+    )
+
+
+def switched_on(case, level, **changes):
+    response = levels(case, level, **changes)
+    assert response.status_code == 200, response.text
+    # The fixture's finding was saved moments before; count it as new.
+    with Session(case.engine) as session, session.begin():
+        session.execute(
+            update(VisitorPublishingPreference).values(enabled_at=datetime(2000, 1, 1, tzinfo=UTC))
+        )
+    return response.json()
+
+
+def step(case):
+    response = case.http.post("/api/v1/zenodo/autopilot/next", headers=case.headers)
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+def write(case, item):
+    with Session(case.engine) as session:
+        request = session.get(ArtifactRequest, case.artifact.run_id)
+    assert item["result_id"] == str(request.source_result_id)
+    response = case.http.post(
+        f"/api/v1/zenodo/autopilot/items/{item['item_id']}/write",
+        headers=case.headers,
+        json={"run_id": str(case.artifact.run_id)},
+    )
+    assert response.status_code == 200, response.text
+
+
+def items(case):
+    return case.http.get("/api/v1/zenodo/autopilot/items").json()["items"]
+
+
+@pytest.mark.integration
+def test_publish_to_practice_writes_prepares_and_publishes_on_its_own(visitor):
+    connect(visitor)
+    assert levels(visitor, 1, creators=[]).json()["level"] == 1
+    assert step(visitor) == {"action": "none", "reason": "manual"}
+    switched_on(visitor, 3)
+    first = step(visitor)
+    assert first["action"] == "write" and first["kind"] == "write_paper"
+    write(visitor, first)
+    assert step(visitor) == {"action": "none", "reason": "nothing_new"}
+    [item] = items(visitor)
+    assert item["status"] == "queued" and item["destination"] == "sandbox"
+    assert run(visitor) == "published"
+    [item] = items(visitor)
+    assert item["status"] == "published" and item["doi"] == "10.5072/zenodo.100"
+    record = visitor.http.get(f"/api/v1/zenodo/publications/{item['publication_id']}").json()
+    assert record["creators"][0]["name"] == "Synthetic Visitor"
+    assert "not independent scientific verification" in record["description"]
+
+
+@pytest.mark.integration
+def test_draft_for_me_stops_at_ready_for_one_tap(visitor):
+    connect(visitor)
+    switched_on(visitor, 2)
+    write(visitor, step(visitor))
+    assert step(visitor)["action"] == "none"
+    [item] = items(visitor)
+    assert item["status"] == "ready"
+    assert [call for call in visitor.fake.calls if "/api/" in call] == []
+    record = visitor.http.get(f"/api/v1/zenodo/publications/{item['publication_id']}").json()
+    publish(visitor, record)
+    [item] = items(visitor)
+    assert item["status"] == "queued"
+
+
+@pytest.mark.integration
+def test_real_publishing_needs_its_own_connection_and_one_confirmation(visitor):
+    connect(visitor)
+    response = levels(visitor, 4)
+    assert response.status_code == 409 and response.json()["detail"] == "zenodo_not_connected"
+    connect(visitor, "production")
+    response = levels(visitor, 4)
+    assert response.json()["detail"] == "production_confirmation_required"
+    assert levels(visitor, 4, confirm_production=True).json()["production_confirmed"]
+    assert levels(visitor, 2, creators=[]).json()["detail"] == "publishing_name_required"
+
+
+@pytest.mark.integration
+def test_lowering_the_level_never_lets_a_permanent_record_through(visitor):
+    connect(visitor)
+    connect(visitor, "production")
+    switched_on(visitor, 4, confirm_production=True)
+    write(visitor, step(visitor))
+    with Session(visitor.engine) as session, session.begin():
+        session.execute(update(VisitorPublishingPreference).values(level=3))
+    assert step(visitor)["action"] == "none"
+    [item] = items(visitor)
+    assert item["destination"] == "production" and item["status"] == "ready"
+    assert run(visitor) == "idle"
+
+
+@pytest.mark.integration
+def test_another_session_cannot_see_or_steer_the_visitors_items(visitor):
+    connect(visitor)
+    switched_on(visitor, 2)
+    first = step(visitor)
+    with TestClient(visitor.http.app) as stranger:
+        headers = bootstrap(stranger)
+        assert stranger.get("/api/v1/zenodo/autopilot/items").json() == {"items": []}
+        skipped = stranger.post(
+            f"/api/v1/zenodo/autopilot/items/{first['item_id']}/skip", headers=headers
+        )
+        assert skipped.status_code == 404
+    done = visitor.http.post(
+        f"/api/v1/zenodo/autopilot/items/{first['item_id']}/skip", headers=visitor.headers
+    )
+    assert done.json()["status"] == "skipped"

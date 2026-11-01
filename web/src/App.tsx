@@ -332,7 +332,7 @@ export function App() {
             <KnowledgeBrowser enabled={workspace.phase === 'ready'} onOpenRun={openRun} onOpenFinding={openFindingHere} refreshToken={`${workspace.activeRun?.result_id ?? ''}:${assessmentRefresh}:${discoveryRefresh}`} canInvestigate={workspace.canSubmit && !artifactBusy && !assessmentBusy} investigating={workspace.submitting} onInvestigateBridges={investigateBridges} csrfToken={workspace.csrfToken} onSessionExpired={workspace.invalidateSession} onAssessmentApplied={assessmentChanged} onAssessmentBusyChange={setAssessmentBusy} deeperFrom={deeperFrom} onDeeperShown={() => setDeeperFrom(null)} />
           </>}
           <div hidden={place !== 'library'}>
-            <YourZenodo csrfToken={workspace.csrfToken} enabled={workspace.phase === 'ready'} />
+            <YourZenodo csrfToken={workspace.csrfToken} enabled={workspace.phase === 'ready'} native={workspace.native.submission ?? undefined} />
             <PublishingSection csrfToken={workspace.csrfToken} enabled={workspace.phase === 'ready'} native={workspace.native.submission ?? undefined} />
           </div>
 

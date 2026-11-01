@@ -18,7 +18,7 @@ Created 27 October 2026. Every push to `main` is Bitcoin-timestamped through Ope
 - **Write and publish.** Plain summary or formal paper → approve → DOI on Zenodo.
 - **Surprise me**. Polymath picks the fields itself and goes hunting for convergences, and you watch it think.
 - **Converge (experimental).** Choose how many fields (up to 200) and, if you like, which ones. Polymath connects them, then finds what those connections share, level after level, drawn as an ensō with the deepest convergence at its centre.
-- **Your own Zenodo.** Any visitor can connect their own Zenodo account and publish a finding under their own name, after reviewing the exact record. Nobody can publish to anyone else's account.
+- **Your own Zenodo.** Any visitor can connect their own Zenodo account and publish findings under their own name, by hand after reviewing the exact record, or on their own chosen level (draft for me, publish to practice, publish for real). Nobody can publish to anyone else's account.
 - **Publish to Zenodo, your way.** Choose once: ask every time, draft for me, publish to the sandbox, or publish for real with a one-time confirmation, an evidence bar and a daily cap. Every automatic step is recorded with the choice that allowed it.
 - **Go deeper.** Any saved connection can be combined with others to find the structure they share, and again from there.
 - **Frontier (experimental).** Give it an unsolved problem: it surveys the literature, names the gaps, searches other fields for solutions, breaks stubborn gaps into smaller steps and maps the path, with every node labelled by how well it is supported.

@@ -70,8 +70,8 @@ Ways forward:
 3. **Connect Zenodo for every visitor** (before submission; live test after
    deployment) · **built 30 Oct**, see [CONNECT_ZENODO.md](CONNECT_ZENODO.md):
    connect/disconnect, and publish any written finding with an exact review
-   (practice or permanent). Still to build: the publishing levels/autopilot
-   for visitors' own connections (today they publish one finding at a time).
+   (practice or permanent). Publishing levels for visitors' own connections
+   built 1 Nov (schema 0030).
    - A *Connect Zenodo* button uses Zenodo's OAuth sign-in (sandbox and
      production) with the `deposit:write` and `deposit:actions` scopes.
    - Tokens are stored encrypted per visitor and deleted on *Disconnect*.

@@ -23,6 +23,7 @@ from polymath.run_api import (
     _PrivateHTTPException,
     _PrivateRoute,
 )
+from polymath.visitor_publishing import VisitorPublishing, VisitorPublishingError
 from polymath.visitor_zenodo import VisitorZenodoError, VisitorZenodoPolicy, VisitorZenodoStore
 
 ERROR_STATUS = {
@@ -40,6 +41,12 @@ ERROR_STATUS = {
     "zenodo_reconnect_required": 409,
     "zenodo_daily_limit": 429,
     "zenodo_publication_invalid": 422,
+    "invalid_publishing_preferences": 422,
+    "publishing_name_required": 422,
+    "production_confirmation_required": 409,
+    "publishing_item_not_found": 404,
+    "publishing_stage_not_due": 409,
+    "publishing_link_invalid": 409,
 }
 
 Destination = Literal["sandbox", "production"]
@@ -64,6 +71,27 @@ class Preview(Strict):
     metadata: dict[str, Any]
 
 
+class Creator(Strict):
+    name: str = Field(min_length=1, max_length=200)
+    affiliation: str | None = Field(default=None, max_length=300)
+    orcid: str | None = Field(default=None, max_length=19)
+
+
+class Preferences(Strict):
+    level: int = Field(ge=1, le=4)
+    draft_destination: Destination = "sandbox"
+    write_kind: Literal["write_summary", "write_paper"] = "write_paper"
+    full_text_only: bool = False
+    daily_cap: int = Field(default=3, ge=1, le=10)
+    creators: list[Creator] = Field(default_factory=list, max_length=10)
+    license: Literal["cc-by-4.0", "cc0-1.0"] = "cc-by-4.0"
+    confirm_production: bool = False
+
+
+class AttachWrite(Strict):
+    run_id: str = Field(min_length=36, max_length=36)
+
+
 class Publish(Strict):
     manifest_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     confirm_permanent: bool = False
@@ -83,6 +111,7 @@ def create_visitor_zenodo_router(
     token_transport=None,
 ) -> APIRouter:
     store = VisitorZenodoStore(engine, policy)
+    levels = VisitorPublishing(engine, store)
     router = APIRouter(
         prefix="/api/v1/zenodo",
         route_class=_PrivateRoute,
@@ -98,7 +127,7 @@ def create_visitor_zenodo_router(
             return _authenticated(session, request).token_hash
 
     def failure(error: Exception):
-        if isinstance(error, VisitorZenodoError):
+        if isinstance(error, (VisitorZenodoError, VisitorPublishingError)):
             code = str(error)
             return _PrivateHTTPException(ERROR_STATUS.get(code, 422), code)
         return _PrivateHTTPException(503, "zenodo_storage_unavailable")
@@ -106,7 +135,7 @@ def create_visitor_zenodo_router(
     def call(operation):
         try:
             return operation()
-        except (VisitorZenodoError, SQLAlchemyError) as error:
+        except (VisitorZenodoError, VisitorPublishingError, SQLAlchemyError) as error:
             raise failure(error) from None
 
     @router.get("/status")
@@ -178,5 +207,38 @@ def create_visitor_zenodo_router(
     def retry(publication_id: str, request: Request) -> dict:
         owner_hash = owner(request, write=True)
         return call(lambda: store.retry(owner_hash, _uuid(publication_id)))
+
+    # Publishing levels for the visitor's own connection ----------------------
+
+    @router.get("/autopilot/preferences")
+    def autopilot_preferences(request: Request) -> dict:
+        owner_hash = owner(request)
+        return call(lambda: levels.preferences(owner_hash))
+
+    @router.post("/autopilot/preferences")
+    def save_autopilot_preferences(body: Preferences, request: Request) -> dict:
+        owner_hash = owner(request, write=True)
+        values = body.model_dump()
+        return call(lambda: levels.set_preferences(owner_hash, **values))
+
+    @router.get("/autopilot/items")
+    def autopilot_items(request: Request) -> dict:
+        owner_hash = owner(request)
+        return {"items": call(lambda: levels.items(owner_hash))}
+
+    @router.post("/autopilot/next")
+    def autopilot_next(request: Request) -> dict:
+        owner_hash = owner(request, write=True)
+        return call(lambda: levels.next_step(owner_hash))
+
+    @router.post("/autopilot/items/{item_id}/write")
+    def autopilot_write(item_id: str, body: AttachWrite, request: Request) -> dict:
+        owner_hash = owner(request, write=True)
+        return call(lambda: levels.attach_write(owner_hash, _uuid(item_id), _uuid(body.run_id)))
+
+    @router.post("/autopilot/items/{item_id}/skip")
+    def autopilot_skip(item_id: str, request: Request) -> dict:
+        owner_hash = owner(request, write=True)
+        return call(lambda: levels.skip(owner_hash, _uuid(item_id)))
 
     return router

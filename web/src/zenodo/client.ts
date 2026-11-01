@@ -144,3 +144,61 @@ export function errorWords(code: string): string {
     default: return 'Zenodo could not be reached just now. Please try again.'
   }
 }
+
+// Publishing levels for the visitor's own connection --------------------------
+
+export type ZenodoLevel = 1 | 2 | 3 | 4
+export type ZenodoItemStatus = 'pending_write' | 'writing' | 'drafted' | 'ready' | 'queued' | 'published' | 'failed' | 'skipped'
+export interface ZenodoPreferences { level: ZenodoLevel; draft_destination: Destination; write_kind: 'write_summary' | 'write_paper'; full_text_only: boolean; daily_cap: number; creators: Creator[]; license: 'cc-by-4.0' | 'cc0-1.0'; enabled_at: string | null; production_confirmed: boolean }
+export interface ZenodoItem { id: string; result_id: string; title: string; level: number; destination: Destination; status: ZenodoItemStatus; reason: string | null; publication_id: string | null; doi: string | null; record_url: string | null; created_at: string }
+export type ZenodoStep = { action: 'write'; item_id: string; result_id: string; kind: 'write_summary' | 'write_paper' } | { action: 'wait'; item_id: string } | { action: 'none'; reason: string }
+
+const ITEM_STATUSES: ZenodoItemStatus[] = ['pending_write', 'writing', 'drafted', 'ready', 'queued', 'published', 'failed', 'skipped']
+
+function parseCreators(value: unknown): Creator[] {
+  return Array.isArray(value) && value.length <= 10 ? value.map((entry) => { const creator = object(entry); return { name: text(creator.name, 200), affiliation: nullableText(creator.affiliation, 300), orcid: nullableText(creator.orcid, 19) } }) : invalid()
+}
+
+export function parsePreferences(value: unknown): ZenodoPreferences {
+  const item = object(value)
+  const level = [1, 2, 3, 4].includes(item.level as number) ? item.level as ZenodoLevel : invalid()
+  return {
+    level, draft_destination: destination(item.draft_destination), write_kind: item.write_kind === 'write_summary' ? 'write_summary' : 'write_paper',
+    full_text_only: item.full_text_only === true, daily_cap: typeof item.daily_cap === 'number' ? item.daily_cap : 3, creators: parseCreators(item.creators),
+    license: item.license === 'cc0-1.0' ? 'cc0-1.0' : 'cc-by-4.0', enabled_at: nullableText(item.enabled_at, 64), production_confirmed: item.production_confirmed === true,
+  }
+}
+
+export function parseItem(value: unknown): ZenodoItem {
+  const item = object(value)
+  const id = text(item.id, 36)
+  if (!UUID.test(id)) invalid()
+  return {
+    id, result_id: text(item.result_id, 36), title: text(item.title, 300), level: typeof item.level === 'number' ? item.level : invalid(), destination: destination(item.destination),
+    status: ITEM_STATUSES.includes(item.status as ZenodoItemStatus) ? item.status as ZenodoItemStatus : invalid(), reason: nullableText(item.reason, 80),
+    publication_id: nullableText(item.publication_id, 36), doi: nullableText(item.doi, 200), record_url: https(nullableText(item.record_url), ['zenodo.org', 'sandbox.zenodo.org']), created_at: text(item.created_at, 64),
+  }
+}
+
+function parseStep(value: unknown): ZenodoStep {
+  const item = object(value)
+  if (item.action === 'write') {
+    const id = text(item.item_id, 36), result = text(item.result_id, 36)
+    if (!UUID.test(id) || !UUID.test(result)) invalid()
+    return { action: 'write', item_id: id, result_id: result, kind: item.kind === 'write_summary' ? 'write_summary' : 'write_paper' }
+  }
+  if (item.action === 'wait') return { action: 'wait', item_id: text(item.item_id, 36) }
+  return { action: 'none', reason: typeof item.reason === 'string' ? item.reason.slice(0, 40) : 'nothing_new' }
+}
+
+export async function zenodoPreferences(signal?: AbortSignal): Promise<ZenodoPreferences> { return parsePreferences(await request('/api/v1/zenodo/autopilot/preferences', { signal })) }
+export async function saveZenodoPreferences(values: Omit<ZenodoPreferences, 'enabled_at' | 'production_confirmed'> & { confirm_production?: boolean }, csrf: string | null): Promise<ZenodoPreferences> {
+  return parsePreferences(await request('/api/v1/zenodo/autopilot/preferences', { method: 'POST', csrf, body: values }))
+}
+export async function zenodoItems(signal?: AbortSignal): Promise<ZenodoItem[]> {
+  const list = object(await request('/api/v1/zenodo/autopilot/items', { signal })).items
+  return Array.isArray(list) ? list.map(parseItem) : invalid()
+}
+export async function nextZenodoStep(csrf: string | null): Promise<ZenodoStep> { return parseStep(await request('/api/v1/zenodo/autopilot/next', { method: 'POST', csrf })) }
+export async function attachZenodoWrite(itemId: string, runId: string, csrf: string | null): Promise<void> { await request(`/api/v1/zenodo/autopilot/items/${itemId}/write`, { method: 'POST', csrf, body: { run_id: runId } }) }
+export async function skipZenodoItem(itemId: string, csrf: string | null): Promise<void> { await request(`/api/v1/zenodo/autopilot/items/${itemId}/skip`, { method: 'POST', csrf }) }
