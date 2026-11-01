@@ -265,7 +265,7 @@ def test_whole_run_outcome_counters_and_events_cannot_be_reset_or_unbounded(chan
     if change == "low_calls":
         usage = Usage(model_calls=8)
     elif change == "over_calls":
-        usage = Usage(model_calls=21)
+        usage = Usage(model_calls=81)
     elif change == "unsafe_tokens":
         usage = Usage(model_calls=10, input_tokens_reported=2**53)
     else:

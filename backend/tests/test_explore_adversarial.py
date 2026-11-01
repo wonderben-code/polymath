@@ -201,7 +201,7 @@ def test_visible_stage_receipts_must_be_earlier_exact_explore_base_stages(proble
         ("action_ordinal", 0),
         ("action_ordinal", 17),
         ("model_request_id", "model-0000"),
-        ("model_request_id", "model-0021"),
+        ("model_request_id", "model-0081"),
     ],
 )
 def test_ranking_cannot_expand_original_global_action_or_call_ceiling(field, value):
@@ -334,7 +334,7 @@ def test_partial_outcome_retains_interim_prefix_and_later_unranked_stage_honestl
     "usage",
     [
         Usage(model_calls=7),
-        Usage(model_calls=21),
+        Usage(model_calls=81),
         Usage(model_calls=10, calls_without_usage=11),
         Usage(model_calls=10, output_tokens_reported=-1),
     ],

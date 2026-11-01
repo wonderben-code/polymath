@@ -58,9 +58,12 @@ def test_artifact_and_assessment_limits_accept_the_wider_context():
         ArtifactLimits(max_context_characters=240_001)
 
 
-def test_discovery_limits_accept_the_wider_action_budget():
+def test_discovery_limits_take_the_wider_call_budget_but_keep_twenty_actions():
+    # Stage receipts carry the action ordinal, bounded to 20 in the archived
+    # protocol, so a wider call budget pays for repairs and retries, not actions.
     from polymath.research.discovery import DiscoveryLimits
 
-    assert DiscoveryLimits(max_model_calls=48, max_actions=48).max_actions == 48
+    limits = DiscoveryLimits(max_model_calls=48, max_actions=20, model_timeout_seconds=75)
+    assert (limits.max_model_calls, limits.max_actions) == (48, 20)
     with pytest.raises(ValueError, match="max_actions"):
-        DiscoveryLimits(max_model_calls=80, max_actions=81)
+        DiscoveryLimits(max_model_calls=48, max_actions=21)

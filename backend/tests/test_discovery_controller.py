@@ -700,8 +700,9 @@ def test_assessment_score_is_required_and_limits_share_the_native_ceiling():
     with pytest.raises(ValueError):
         ResearchLimits(max_actions=MAX_MODEL_CALLS + 1)
     assert DiscoveryLimits(max_actions=20, model_timeout_seconds=90).max_actions == 20
+    assert DiscoveryLimits(max_model_calls=MAX_MODEL_CALLS, max_actions=20).max_model_calls == 80
     with pytest.raises(ValueError):
-        DiscoveryLimits(max_model_calls=MAX_MODEL_CALLS, max_actions=MAX_MODEL_CALLS + 1)
+        DiscoveryLimits(max_model_calls=MAX_MODEL_CALLS, max_actions=21)
 
 
 def test_ordinary_bridge_schema_does_not_gain_ladder_fields():

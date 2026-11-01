@@ -15,7 +15,6 @@ from polymath.discovery_contracts import (
     StageContext,
     StageParentFinding,
 )
-from polymath.native_ceilings import MAX_MODEL_CALLS
 from polymath.research.controller import ResearchLimits
 from polymath.research.models import (
     FieldSelection,
@@ -126,8 +125,11 @@ class DiscoveryLimits(ResearchLimits):
             tool_timeout_seconds=self.tool_timeout_seconds,
             model_timeout_seconds=min(self.model_timeout_seconds, 60.0),
         )
-        if type(self.max_actions) is not int or not 1 <= self.max_actions <= MAX_MODEL_CALLS:
-            raise ValueError(f"discovery max_actions must be between 1 and {MAX_MODEL_CALLS}")
+        # Stage receipts carry the action ordinal (bounded to 20 in the archived
+        # protocol), so the ladder's action budget stays at 20 while the call
+        # ceiling may widen for repairs and retries.
+        if type(self.max_actions) is not int or not 1 <= self.max_actions <= 20:
+            raise ValueError("discovery max_actions must be between1 and20")
         if type(self.model_timeout_seconds) not in (int, float) or (
             not math.isfinite(self.model_timeout_seconds)
             or not 0.001 <= self.model_timeout_seconds <= 90

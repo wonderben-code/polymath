@@ -673,10 +673,19 @@ async def test_incompatible_scope_stops_before_any_model_or_store_action(kwargs)
 
 @pytest.mark.asyncio
 async def test_surprise_twenty_action_limit_cannot_leak_into_new_explore_protocol():
+    # Stage receipts carry the action ordinal, so the Explore collection keeps
+    # its 16-action budget whatever the (wider) call budget; the ladder's 20
+    # actions still cannot leak in.
+    from polymath.explore_collection_contracts import MAX_EXPLORE_ACTIONS
+
+    assert MAX_EXPLORE_ACTIONS == 16
     model = RecordingModel([])
     with pytest.raises(ValueError, match="explore_collection_action_limit"):
         await ResearchController(
-            model, DiscoveryFixtureTools(), DiscoveryLimits(), explore_collection_sink=FixtureSink()
+            model,
+            DiscoveryFixtureTools(),
+            DiscoveryLimits(max_model_calls=48, max_actions=20),
+            explore_collection_sink=FixtureSink(),
         ).investigate(GOAL, explore_collection_intent=ExploreCollectionIntent())
     assert model.calls == 0
 
