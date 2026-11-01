@@ -258,7 +258,7 @@ body { background: var(--paper); color: var(--ink); font-size: 16px; line-height
 .status-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px; list-style: none; margin: 0; padding: 0; }
 .status-strip li { display: inline-flex; align-items: center; gap: 6px; margin: 0; font-size: 13px; color: var(--muted); }
 .status-strip .status-name { display: inline-flex; align-items: center; gap: 6px; }
-.status-strip .status-name::after { content: ':'; }
+.status-strip .status-name::after { content: ':'; margin-left: -6px; }
 .footer-links { display: inline-flex; gap: 20px; }
 
 /* The investigation focus view uses the full width, softly. */
@@ -467,3 +467,11 @@ body { background: var(--paper); color: var(--ink); font-size: 16px; line-height
 .calm .ways-line { margin: 8px 4px 0; font-size: 13px; color: var(--muted); }
 .calm .ways-line a { color: var(--muted); text-underline-offset: 3px; }
 @media (max-width: 900px) { .ways-list { grid-template-columns: 1fr; } }
+
+/* QA pass, 1 Nov: one quiet pill for every secondary action, and calm library sections. */
+.calm .history-more { border-radius: 999px; padding: 8px 18px; font-size: 13px; border-color: #9cbcae; color: #234e3d; }
+.library-sections-row { max-width: 760px; margin: 0 auto 28px; }
+.library-sections { margin: 0; }
+.knowledge-papers, .knowledge-node-details { margin-top: 16px; }
+.knowledge-papers > summary, .knowledge-node-details > summary { cursor: pointer; padding: 8px 0; font-size: 15px; color: var(--accent, #266b58); }
+.zenodo-unavailable { max-width: 760px; margin: 8px auto 64px; font-size: 15px; line-height: 1.65; color: var(--muted, #5e6c64); }

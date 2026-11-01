@@ -131,7 +131,7 @@ describe('unknown scientific enqueue in the shared native workspace', () => {
         if (failure === 'lost') throw new TypeError('Synthetic committed enqueue response loss')
         return failure === 'malformed' ? Response.json({ malformed: 'Synthetic possible committed receipt' }) : Response.json({ detail: 'meta_research_storage_unavailable' }, { status: 503 })
       }
-      if (path === '/api/v1/runs') return Response.json({ runs: [], next_cursor: null })
+      if (path === '/api/v1/runs?own=true') return Response.json({ runs: [], next_cursor: null })
       throw new Error(`Unexpected synthetic scientific workspace path: ${path}`)
     }); vi.stubGlobal('fetch', fetch)
     const { result } = renderHook(() => useResearchWorkspace(true, true, true))
@@ -144,7 +144,7 @@ describe('unknown scientific enqueue in the shared native workspace', () => {
     act(() => result.current.refresh())
     await waitFor(() => expect(result.current.canSubmit).toBe(true))
     expect(fetch.mock.calls.filter(([, options]) => options?.method === 'POST')).toHaveLength(1)
-    expect(fetch.mock.calls.filter(([path, options]) => path === '/api/v1/runs' && options?.method === 'GET')).toHaveLength(2)
+    expect(fetch.mock.calls.filter(([path, options]) => path === '/api/v1/runs?own=true' && options?.method === 'GET')).toHaveLength(2)
     expect(result.current.runs).toEqual([])
   })
   it.each(['malformed', 'storage503'] as const)('locks an unknown artifact enqueue (%s) until its owned saved-work GET refresh', async (failure) => {
@@ -179,7 +179,7 @@ describe('unknown scientific enqueue in the shared native workspace', () => {
     if (path === '/api/v1/operator/session') return Response.json(operatorFixture(true))
       if (path === '/api/v1/budget/research/current') return Response.json(currentActivation())
       if (path === '/api/v1/runs' && options?.method === 'POST') return Response.json({ detail: 'meta_research_authority_expired' }, { status: 409 })
-      if (path === '/api/v1/runs') return Response.json({ runs: [run()], next_cursor: null })
+      if (path === '/api/v1/runs?own=true') return Response.json({ runs: [run()], next_cursor: null })
       throw new Error(`Unexpected synthetic scientific workspace path: ${path}`)
     }); vi.stubGlobal('fetch', fetch)
     const { result } = renderHook(() => useResearchWorkspace(true, true, true))

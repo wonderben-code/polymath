@@ -2,7 +2,7 @@ const GUIDE = 'https://github.com/wonderben-code/polymath/blob/main/docs/RUN_YOU
 
 /** The three ways to use Polymath, each stated plainly. */
 export function WaysToUse({ remaining, daily }: { remaining?: number | null; daily?: number | null }) {
-  const allowance = remaining != null && daily != null ? `${remaining} of ${daily} free investigations left today in this browser.` : 'A few free investigations a day in each browser, while free use is open.'
+  const allowance = remaining != null && daily != null ? `${remaining} of ${daily} free investigations left today.` : 'A few free investigations a day for each visitor, while free use is open.'
   return (
     <section className="about-section ways" id="ways" aria-labelledby="ways-title">
       <h2 id="ways-title">Ways to use Polymath</h2>
@@ -10,7 +10,7 @@ export function WaysToUse({ remaining, daily }: { remaining?: number | null; dai
         <li className="ways-card">
           <span className="ways-kicker">Free · limited daily use</span>
           <h3>Use it free</h3>
-          <p>{allowance} Polymath pays for these, so each browser has a daily limit.</p>
+          <p>{allowance} Polymath pays for these, so each visitor has a daily limit.</p>
         </li>
         <li className="ways-card">
           <span className="ways-kicker">Unlimited · available now</span>

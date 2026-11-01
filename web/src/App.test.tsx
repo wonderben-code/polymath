@@ -29,7 +29,7 @@ function mockServer({ ready = true, metaConfigured = false, researchAvailable = 
       })
     }
     if (path === '/api/v1/session') return Response.json({ csrf_token: 'a'.repeat(64), expires_at: '2100-01-01T00:00:00Z' })
-    if (path === '/api/v1/runs') return Response.json({ runs: [], next_cursor: null })
+    if (path === '/api/v1/runs?own=true') return Response.json({ runs: [], next_cursor: null })
     if (path.startsWith('/api/v1/knowledge/graph?')) return Response.json({
       nodes: [], edges: [], truncated: false,
       coverage: { scope: 'current_browser_session', findings_considered: 0 },

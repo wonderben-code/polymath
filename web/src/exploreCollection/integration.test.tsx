@@ -24,7 +24,7 @@ function server(overrides?: (path: string, options?: RequestInit) => Response | 
     if (String(path) === '/api/v1/research/protocols') return Response.json({ protocol: 'polymath-research-protocols-v1', activation_sha256: SHA, capabilities: [] })
     if (String(path) === '/api/v1/research/explore-protocols') return Response.json(cap())
     if (String(path) === '/api/v1/runs' && options?.method === 'POST') { const body = JSON.parse(String(options.body)); return Response.json(run({ ...body })) }
-    if (String(path) === '/api/v1/runs') return Response.json({ runs: [], next_cursor: null })
+    if (String(path) === '/api/v1/runs?own=true') return Response.json({ runs: [], next_cursor: null })
     return Response.json(run())
   }); vi.stubGlobal('fetch', fetch); vi.stubGlobal('EventSource', class extends EventTarget { close() {} }); return fetch
 }

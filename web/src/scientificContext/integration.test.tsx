@@ -84,7 +84,7 @@ describe('ordinary explicit task selects the approved variant once', () => {
       if (String(path).endsWith('/access')) return Response.json(publicAccess())
       if (String(path).endsWith('/protocols')) return Response.json(protocols())
       if (String(path) === '/api/v1/runs' && options?.method === 'POST') return Response.json({ ...run(), ask_overview_intent: { protocol: 'polymath-ask-claim-overview-v1' } })
-      if (String(path) === '/api/v1/runs') return Response.json({ runs: [], next_cursor: null })
+      if (String(path) === '/api/v1/runs?own=true') return Response.json({ runs: [], next_cursor: null })
       return Response.json(run())
     }); vi.stubGlobal('fetch', fetch); vi.stubGlobal('EventSource', class extends EventTarget { close() {} })
     const { result } = renderHook(() => useResearchWorkspace(true, true, true)); await waitFor(() => expect(result.current.canAsk).toBe(true))

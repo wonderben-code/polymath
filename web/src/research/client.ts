@@ -345,7 +345,8 @@ export async function openResearchSession(signal?: AbortSignal): Promise<Researc
 
 export async function listResearchRuns(signal?: AbortSignal, before?: string): Promise<RunHistory> {
   if (before) id(before)
-  const path = '/api/v1/runs' + (before ? `?before=${encodeURIComponent(before)}` : '')
+  // Only investigations the visitor started; programme steps live in their programmes.
+  const path = '/api/v1/runs?own=true' + (before ? `&before=${encodeURIComponent(before)}` : '')
   const payload = object(await request(path, signal))
   return { runs: list(payload.runs, parseRun, 50), next_cursor: nullableId(payload.next_cursor) }
 }

@@ -110,6 +110,12 @@ class Settings(BaseSettings):
         "orcid_client_secret",
         "github_client_secret",
         "google_client_secret",
+        "zenodo_sandbox_client_id",
+        "zenodo_production_client_id",
+        "orcid_client_id",
+        "github_client_id",
+        "google_client_id",
+        "public_site_origin",
         mode="before",
     )
     @classmethod

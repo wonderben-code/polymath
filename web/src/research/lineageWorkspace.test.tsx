@@ -29,7 +29,7 @@ function fixtureServer(available = true) {
       created = run(CREATED_RUN, body.goal)
       return Response.json(created, { status: 201 })
     }
-    if (path === '/api/v1/runs') return Response.json({ runs: [], next_cursor: null })
+    if (path === '/api/v1/runs?own=true') return Response.json({ runs: [], next_cursor: null })
     if (path === `/api/v1/runs/${CREATED_RUN}`) return Response.json(created)
     if (path === `/api/v1/runs/${PRIOR_RUN}`) return Response.json(run(PRIOR_RUN, 'Older synthetic investigation', 'succeeded'))
     if (path.startsWith('/api/v1/knowledge/graph')) return Response.json({
@@ -86,6 +86,7 @@ describe('higher-level research workspace submission', () => {
     const requests = fixtureServer(false)
     render(<App />)
     await userEvent.click(screen.getByRole('link', { name: 'Your library' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Map' }))
     const list = await screen.findByRole('list', { name: 'Saved knowledge records' })
     await userEvent.click(within(list).getByRole('button', { name: 'Finding Synthetic bridge 1' }))
     await userEvent.click(screen.getByRole('button', { name: 'Open research record' }))

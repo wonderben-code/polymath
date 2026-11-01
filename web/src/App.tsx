@@ -29,6 +29,11 @@ import { createProgramme, FrontierApiError } from './frontier/client'
 
 type Mode = 'explore' | 'ask' | 'surprise'
 
+type LibrarySection = 'findings' | 'map' | 'watching' | 'publishing'
+const LIBRARY_SECTIONS: { id: LibrarySection; label: string }[] = [
+  { id: 'findings', label: 'Findings' }, { id: 'map', label: 'Map' }, { id: 'watching', label: 'Watching' }, { id: 'publishing', label: 'Publishing' },
+]
+
 function placeFor(pathname: string): Place {
   if (pathname === CALLBACK_PATH) return 'library'
   return PLACES.find((item) => item.path !== '/' && (pathname === item.path || pathname === `${item.path}/`))?.id ?? 'research'
@@ -167,7 +172,9 @@ export function App() {
   const openFindingHere = useCallback((id: string) => { pendingFocus.current = true; openFinding(id); go('research') }, [openFinding, go])
   const investigateBridges = useCallback(async (ids: string[]) => { pendingFocus.current = true; go('research'); await workspace.investigateBridges(ids) }, [workspace.investigateBridges, go])
   const [deeperFrom, setDeeperFrom] = useState<string | null>(null)
-  const goDeeper = useCallback((resultId: string) => { setDeeperFrom(resultId); go('library') }, [go])
+  // Your library shows one calm section at a time; Zenodo's return lands on Publishing.
+  const [librarySection, setLibrarySection] = useState<LibrarySection>(() => window.location.pathname === CALLBACK_PATH ? 'publishing' : 'findings')
+  const goDeeper = useCallback((resultId: string) => { setDeeperFrom(resultId); setLibrarySection('findings'); go('library') }, [go])
   const focusedId = selectedFindingId ?? workspace.activeRun?.id
   useEffect(() => {
     if (!pendingFocus.current || !focusedId) return
@@ -329,11 +336,14 @@ export function App() {
           </>}
 
           {place === 'library' && <>
-            <header className="place-heading"><h1>Your library</h1><p>Everything you have saved in this browser: findings, the papers behind them, how they connect, and the literature you are watching.</p></header>
-            <KnowledgeBrowser enabled={workspace.phase === 'ready'} onOpenRun={openRun} onOpenFinding={openFindingHere} refreshToken={`${workspace.activeRun?.result_id ?? ''}:${assessmentRefresh}:${discoveryRefresh}`} canInvestigate={workspace.canSubmit && !artifactBusy && !assessmentBusy} investigating={workspace.submitting} onInvestigateBridges={investigateBridges} csrfToken={workspace.csrfToken} onSessionExpired={workspace.invalidateSession} onAssessmentApplied={assessmentChanged} onAssessmentBusyChange={setAssessmentBusy} deeperFrom={deeperFrom} onDeeperShown={() => setDeeperFrom(null)} />
+            <header className="place-heading"><h1>Your library</h1><p>Everything you have saved: your findings, how they connect, the literature you are watching, and publishing.</p></header>
+            <div className="library-sections-row"><div className="mode-switch library-sections" role="group" aria-label="Library section">
+              {LIBRARY_SECTIONS.map((item) => <button key={item.id} type="button" aria-pressed={librarySection === item.id} onClick={() => setLibrarySection(item.id)}>{item.label}</button>)}
+            </div></div>
+            <div hidden={librarySection === 'publishing'}><KnowledgeBrowser section={librarySection === 'publishing' ? 'findings' : librarySection} enabled={workspace.phase === 'ready'} onOpenRun={openRun} onOpenFinding={openFindingHere} refreshToken={`${workspace.activeRun?.result_id ?? ''}:${assessmentRefresh}:${discoveryRefresh}`} canInvestigate={workspace.canSubmit && !artifactBusy && !assessmentBusy} investigating={workspace.submitting} onInvestigateBridges={investigateBridges} csrfToken={workspace.csrfToken} onSessionExpired={workspace.invalidateSession} onAssessmentApplied={assessmentChanged} onAssessmentBusyChange={setAssessmentBusy} deeperFrom={deeperFrom} onDeeperShown={() => setDeeperFrom(null)} /></div>
           </>}
-          <div hidden={place !== 'library'}>
-            <YourZenodo csrfToken={workspace.csrfToken} enabled={workspace.phase === 'ready'} native={workspace.native.submission ?? undefined} />
+          <div hidden={place !== 'library' || librarySection !== 'publishing'}>
+            <YourZenodo csrfToken={workspace.csrfToken} enabled={workspace.phase === 'ready'} native={workspace.native.submission ?? undefined} standalone />
             <PublishingSection csrfToken={workspace.csrfToken} enabled={workspace.phase === 'ready'} native={workspace.native.submission ?? undefined} />
           </div>
 
