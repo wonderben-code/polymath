@@ -18,6 +18,8 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from polymath import __version__
+from polymath.accounts import AccountPolicy
+from polymath.accounts_api import create_accounts_router
 from polymath.artifact_api import create_artifact_router
 from polymath.assessment_api import create_assessment_router
 from polymath.budget_admin_api import create_budget_admin_router
@@ -305,6 +307,9 @@ def create_app(
         )
     )
     application.include_router(
+        create_accounts_router(application.state.engine, AccountPolicy.from_settings(settings))
+    )
+    application.include_router(
         create_visitor_zenodo_router(
             application.state.engine, VisitorZenodoPolicy.from_settings(settings)
         )
@@ -396,7 +401,14 @@ def create_app(
             or request.url.path.startswith("/shared/")
             or request.url.path.startswith("/api/v1/budget")
             or request.url.path
-            in ("/library", "/library/", "/shared", "/operator/budget", "/zenodo/callback")
+            in (
+                "/library",
+                "/library/",
+                "/shared",
+                "/operator/budget",
+                "/zenodo/callback",
+                "/account/callback",
+            )
         ):
             response.headers["Cache-Control"] = "no-store"
             response.headers["X-Content-Type-Options"] = "nosniff"

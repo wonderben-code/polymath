@@ -5,10 +5,12 @@ from datetime import datetime
 
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
     Index,
+    Integer,
     LargeBinary,
     String,
     UniqueConstraint,
@@ -116,5 +118,74 @@ class VisitorPublication(Base):
     lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class VisitorPublishingPreference(Base):
+    __tablename__ = "visitor_publishing_preferences"
+    __table_args__ = (
+        CheckConstraint("level BETWEEN 1 AND 4", name="ck_visitor_publishing_level"),
+        CheckConstraint(
+            "draft_destination IN ('sandbox','production')", name="ck_visitor_publishing_draft"
+        ),
+        CheckConstraint(
+            "write_kind IN ('write_summary','write_paper')", name="ck_visitor_publishing_kind"
+        ),
+        CheckConstraint("daily_cap BETWEEN 1 AND 10", name="ck_visitor_publishing_cap"),
+        CheckConstraint("license IN ('cc-by-4.0','cc0-1.0')", name="ck_visitor_publishing_license"),
+        CheckConstraint(
+            "jsonb_typeof(creators) = 'array' AND jsonb_array_length(creators) <= 10",
+            name="ck_visitor_publishing_creators",
+        ),
+    )
+
+    owner_session_hash: Mapped[str] = mapped_column(String(64), _owner(), primary_key=True)
+    level: Mapped[int] = mapped_column(Integer, server_default="1")
+    draft_destination: Mapped[str] = mapped_column(String(16), server_default="sandbox")
+    write_kind: Mapped[str] = mapped_column(String(16), server_default="write_paper")
+    full_text_only: Mapped[bool] = mapped_column(Boolean, server_default="false")
+    daily_cap: Mapped[int] = mapped_column(Integer, server_default="3")
+    creators: Mapped[list] = mapped_column(JSONB, server_default="[]")
+    license: Mapped[str] = mapped_column(String(16), server_default="cc-by-4.0")
+    enabled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    production_confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class VisitorPublishingItem(Base):
+    __tablename__ = "visitor_publishing_items"
+    __table_args__ = (
+        UniqueConstraint("owner_session_hash", "result_id", name="uq_visitor_publishing_item"),
+        CheckConstraint("level BETWEEN 2 AND 4", name="ck_visitor_item_level"),
+        CheckConstraint(
+            "destination IN ('sandbox','production')", name="ck_visitor_item_destination"
+        ),
+        CheckConstraint(
+            "write_kind IN ('write_summary','write_paper')", name="ck_visitor_item_kind"
+        ),
+        CheckConstraint(
+            "status IN ('pending_write','writing','drafted','ready','queued','published',"
+            "'failed','skipped')",
+            name="ck_visitor_item_status",
+        ),
+        Index("ix_visitor_publishing_items_owner_created", "owner_session_hash", "created_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    owner_session_hash: Mapped[str] = mapped_column(String(64), _owner())
+    result_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("evidence_results.id"))
+    level: Mapped[int] = mapped_column(Integer)
+    destination: Mapped[str] = mapped_column(String(16))
+    write_kind: Mapped[str] = mapped_column(String(16))
+    status: Mapped[str] = mapped_column(String(16), server_default="pending_write")
+    reason: Mapped[str | None] = mapped_column(String(80))
+    artifact_run_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    artifact_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("generated_artifacts.id")
+    )
+    publication_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("visitor_publications.id", ondelete="SET NULL")
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

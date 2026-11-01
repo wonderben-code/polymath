@@ -3,6 +3,8 @@ import { PLACES } from '../shell/SiteChrome'
 import type { Destination } from '../publications/client'
 import { beginZenodoConnect, completeZenodoConnect, DESTINATION_WORDS, disconnectZenodo, errorWords, retryZenodoRecord, STATUS_WORDS, zenodoRecords, zenodoStatus, ZenodoError } from './client'
 import type { VisitorPublication, ZenodoStatus } from './client'
+import type { NativeSubmissionContext } from '../research/nativeAdmission'
+import { ZenodoLevels } from './ZenodoLevels'
 import './zenodo.css'
 
 export const CALLBACK_PATH = '/zenodo/callback'
@@ -23,9 +25,9 @@ export function recordLine(record: VisitorPublication): string {
   return `${where} · ${STATUS_WORDS[record.status]}`
 }
 
-interface Props { csrfToken: string | null; enabled: boolean }
+interface Props { csrfToken: string | null; enabled: boolean; native?: NativeSubmissionContext }
 
-export function YourZenodo({ csrfToken, enabled }: Props) {
+export function YourZenodo({ csrfToken, enabled, native }: Props) {
   const uid = useId()
   const heading = useRef<HTMLHeadingElement>(null)
   const pending = useRef<{ code: string; state: string } | null>(null)
@@ -97,6 +99,7 @@ export function YourZenodo({ csrfToken, enabled }: Props) {
             : <button type="button" className="zenodo-primary" disabled={busy || !csrfToken} onClick={() => void act(() => connectZenodo(row.destination, csrfToken))}>Connect</button>}
         </li>)}
       </ul>
+      <ZenodoLevels key={status.destinations.map((row) => `${row.destination}:${row.connected}`).join()} csrfToken={csrfToken} status={status} native={native} />
       {published.length > 0 && <section className="zenodo-records" aria-labelledby={`${uid}-records`}>
         <h3 id={`${uid}-records`}>Your records</h3>
         <ul>{published.map((record) => <li key={record.id} className={`zenodo-record is-${record.status}`}>

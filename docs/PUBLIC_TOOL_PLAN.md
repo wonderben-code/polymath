@@ -70,8 +70,8 @@ Ways forward:
 3. **Connect Zenodo for every visitor** (before submission; live test after
    deployment) · **built 30 Oct**, see [CONNECT_ZENODO.md](CONNECT_ZENODO.md):
    connect/disconnect, and publish any written finding with an exact review
-   (practice or permanent). Still to build: the publishing levels/autopilot
-   for visitors' own connections (today they publish one finding at a time).
+   (practice or permanent). Publishing levels for visitors' own connections
+   built 1 Nov (schema 0030).
    - A *Connect Zenodo* button uses Zenodo's OAuth sign-in (sandbox and
      production) with the `deposit:write` and `deposit:actions` scopes.
    - Tokens are stored encrypted per visitor and deleted on *Disconnect*.
@@ -82,7 +82,8 @@ Ways forward:
      and on Zenodo, using the live site's callback URL.
 
 4. **Accounts: sign in or continue as a guest** (before submission if time
-   allows; otherwise straight after)
+   allows; otherwise straight after) · **built 1 Nov**, see
+   [ACCOUNTS.md](ACCOUNTS.md) (schema 0031)
    - Sign in with ORCID (researchers; it also fills their name and ORCID on
      papers), GitHub or Google.
    - Signing in keeps work forever and across devices; guest work is carried
@@ -106,6 +107,6 @@ Ways forward:
 2. A host: one $12-a-month server is recommended; Netlify alone cannot run the
    backend.
 3. After deployment: free OAuth app registrations (Zenodo sandbox and
-   production; ORCID, GitHub, Google).
+   production, see CONNECT_ZENODO.md; ORCID, GitHub, Google, see ACCOUNTS.md).
 4. Demo video (3 minutes) and the submission form, before Wed 4 Nov, 21:00
    Bangkok.

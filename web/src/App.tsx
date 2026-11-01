@@ -18,6 +18,7 @@ import { FrontierWorkspace } from './frontier/FrontierWorkspace'
 import { ConvergeComposer } from './converge/ConvergeComposer'
 import { PublishingSection } from './publishing/PublishingSection'
 import { CALLBACK_PATH, YourZenodo } from './zenodo/YourZenodo'
+import { AccountControl } from './account/AccountControl'
 import { ConvergeWorkspace } from './converge/ConvergeWorkspace'
 import { HeroBridge } from './HeroBridge'
 import { WaysToUse } from './WaysToUse'
@@ -248,7 +249,7 @@ export function App() {
     <NativeResearchProvider value={workspace.native}>
       <a className="skip-link" href="#workspace">Skip to main content</a>
       <div className="page-shell calm">
-        <SiteHeader current={place} onNavigate={go} />
+        <SiteHeader current={place} onNavigate={go} accessory={<AccountControl csrfToken={workspace.csrfToken} enabled={workspace.phase === 'ready'} />} />
 
         <main id="workspace">
           {place === 'research' && <>
@@ -332,7 +333,7 @@ export function App() {
             <KnowledgeBrowser enabled={workspace.phase === 'ready'} onOpenRun={openRun} onOpenFinding={openFindingHere} refreshToken={`${workspace.activeRun?.result_id ?? ''}:${assessmentRefresh}:${discoveryRefresh}`} canInvestigate={workspace.canSubmit && !artifactBusy && !assessmentBusy} investigating={workspace.submitting} onInvestigateBridges={investigateBridges} csrfToken={workspace.csrfToken} onSessionExpired={workspace.invalidateSession} onAssessmentApplied={assessmentChanged} onAssessmentBusyChange={setAssessmentBusy} deeperFrom={deeperFrom} onDeeperShown={() => setDeeperFrom(null)} />
           </>}
           <div hidden={place !== 'library'}>
-            <YourZenodo csrfToken={workspace.csrfToken} enabled={workspace.phase === 'ready'} />
+            <YourZenodo csrfToken={workspace.csrfToken} enabled={workspace.phase === 'ready'} native={workspace.native.submission ?? undefined} />
             <PublishingSection csrfToken={workspace.csrfToken} enabled={workspace.phase === 'ready'} native={workspace.native.submission ?? undefined} />
           </div>
 

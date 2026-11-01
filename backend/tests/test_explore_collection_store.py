@@ -19,6 +19,7 @@ from test_memory import owner
 from test_worker import database as database_fixture
 
 from polymath.access_models import BrowserSession
+from polymath.account_models import Account, AccountOAuthState
 from polymath.budget import BudgetService
 from polymath.converge_models import ConvergeProgramme, ConvergeStep
 from polymath.discovery_contracts import DiscoveryIntent
@@ -49,6 +50,8 @@ from polymath.research.discovery import DiscoveryLimits
 from polymath.stage_owners import StageOwnerError, has_stage_intent, intent_sha256, load_stage_owner
 from polymath.visitor_zenodo_models import (
     VisitorPublication,
+    VisitorPublishingItem,
+    VisitorPublishingPreference,
     ZenodoConnection,
     ZenodoOAuthState,
 )
@@ -105,7 +108,8 @@ async def test_populated_surprise_migration_round_trip_changes_only_three_owner_
     )
     # Tables created after 0024 cannot exist at that revision: 0025's own
     # tables and the later Frontier (0026), Converge (0027), publishing (0028) and
-    # visitor Zenodo (0029) tables.
+    # visitor Zenodo (0029, 0030) and
+    # account (0031) tables.
     later = {
         model.__tablename__
         for model in (
@@ -119,6 +123,10 @@ async def test_populated_surprise_migration_round_trip_changes_only_three_owner_
             ZenodoOAuthState,
             ZenodoConnection,
             VisitorPublication,
+            VisitorPublishingPreference,
+            VisitorPublishingItem,
+            AccountOAuthState,
+            Account,
         )
     }
     excluded = {model.__tablename__ for model in MODELS} | later | {"alembic_version"}

@@ -22,6 +22,25 @@ Nothing ever publishes to the site owner's Zenodo account: the owner's
 publisher path (docs/PUBLISHING.md) is separate and unchanged, and a visitor
 can only reach their own connection.
 
+## Publishing levels on your own Zenodo
+
+Once connected, a visitor chooses how much Polymath may do, in Your library:
+
+1. **Ask me every time.** Nothing happens on its own.
+2. **Draft for me.** When a finding holds, Polymath writes it up (through the
+   ordinary writing route and its free-use limits) and prepares the exact
+   record. The visitor taps *Publish*.
+3. **Publish to practice.** As 2, then published to their Zenodo sandbox.
+4. **Publish for real.** As 3, to Zenodo with a DOI, after one explicit
+   confirmation.
+
+Each visitor sets their name (and ORCID), a daily limit, paper or summary, and
+optionally "only findings backed by full-text evidence". Switching a level on
+never sweeps up earlier findings, and lowering the level never lets a record
+prepared for real publishing through. Only the writing step needs the
+visitor's open page; the server prepares and confirms records itself, and the
+worker publishes them. Schema 0030.
+
 ## How it works
 
 - **Sign-in with Zenodo (OAuth).** Polymath asks Zenodo for only the

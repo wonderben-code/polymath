@@ -193,3 +193,68 @@ describe('Publish to your Zenodo', () => {
     expect(screen.getByRole('button', { name: 'Review the record' })).toBeDisabled()
   })
 })
+
+describe('Publishing levels on your own Zenodo', () => {
+  const ITEM = '88888888-8888-4888-8888-888888888888'
+  function prefs(changes: Record<string, unknown> = {}) { return { level: 1, draft_destination: 'sandbox', write_kind: 'write_paper', full_text_only: false, daily_cap: 3, creators: [], license: 'cc-by-4.0', enabled_at: null, production_confirmed: false, ...changes } }
+  function item(changes: Record<string, unknown> = {}) { return { id: ITEM, result_id: '99999999-9999-4999-8999-999999999999', title: 'A synthetic finding', level: 2, destination: 'sandbox', write_kind: 'write_paper', status: 'ready', reason: null, artifact_id: ARTIFACT, publication_id: RECORD, manifest_sha256: 'd'.repeat(64), doi: null, record_url: null, created_at: '2026-11-01T00:00:00Z', updated_at: '2026-11-01T00:00:00Z', ...changes } }
+
+  it('offers only the levels your connections allow, and asks once before publishing for real', async () => {
+    let saved = prefs()
+    const calls = server((call) => {
+      if (call.url === '/api/v1/zenodo/status') return status(true, true)
+      if (call.url === '/api/v1/zenodo/publications') return { publications: [] }
+      if (call.url === '/api/v1/zenodo/autopilot/preferences' && call.method === 'POST') { const body = call.body as Record<string, unknown>; saved = prefs({ ...body, confirm_production: undefined, production_confirmed: body.confirm_production === true }); return saved }
+      if (call.url === '/api/v1/zenodo/autopilot/preferences') return saved
+      if (call.url === '/api/v1/zenodo/autopilot/items') return { items: [] }
+      if (call.url === '/api/v1/zenodo/autopilot/next') return { action: 'none', reason: 'nothing_new' }
+      return undefined
+    })
+    render(<YourZenodo csrfToken={BROWSER_CSRF} enabled />)
+    const group = await screen.findByRole('group', { name: 'How much should Polymath do?' })
+    expect(group).toHaveTextContent('Ask me every time')
+    await userEvent.click(screen.getByRole('radio', { name: /Publish for real/ }))
+    expect(screen.getByRole('button', { name: 'Save this choice' })).toBeDisabled()
+    await userEvent.type(screen.getByLabelText('Your name, on every record'), 'Synthetic Visitor')
+    await userEvent.click(screen.getByRole('button', { name: 'Save this choice' }))
+    expect(screen.getByRole('alertdialog', { name: 'Publish permanently, on your behalf?' })).toBeInTheDocument()
+    expect(calls.some((call) => call.method === 'POST' && call.url.endsWith('/preferences'))).toBe(false)
+    await userEvent.click(screen.getByRole('button', { name: 'Yes, publish for real' }))
+    await waitFor(() => expect(calls.find((call) => call.method === 'POST' && call.url.endsWith('/preferences'))?.body).toMatchObject({ level: 4, confirm_production: true, creators: [{ name: 'Synthetic Visitor', affiliation: null, orcid: null }] }))
+    await waitFor(() => expect(calls.some((call) => call.url === '/api/v1/zenodo/autopilot/next')).toBe(true))
+  })
+
+  it('keeps the practice and real levels closed without those connections', async () => {
+    server((call) => {
+      if (call.url === '/api/v1/zenodo/status') return status(true, false)
+      if (call.url === '/api/v1/zenodo/publications') return { publications: [] }
+      if (call.url === '/api/v1/zenodo/autopilot/preferences') return prefs()
+      if (call.url === '/api/v1/zenodo/autopilot/items') return { items: [] }
+      return undefined
+    })
+    render(<YourZenodo csrfToken={BROWSER_CSRF} enabled />)
+    expect(await screen.findByRole('radio', { name: /Publish for real/ })).toBeDisabled()
+    expect(screen.getByRole('radio', { name: /Publish to practice/ })).toBeEnabled()
+  })
+
+  it('writes a new finding up through the ordinary route and links it, then publishes a ready one with one tap', async () => {
+    let wrote = false
+    const calls = server((call) => {
+      if (call.url === '/api/v1/zenodo/status') return status(true)
+      if (call.url === '/api/v1/zenodo/publications') return { publications: [] }
+      if (call.url === '/api/v1/zenodo/autopilot/preferences') return prefs({ level: 2, creators: [{ name: 'Synthetic Visitor', affiliation: null, orcid: null }] })
+      if (call.url === '/api/v1/zenodo/autopilot/items') return { items: [item()] }
+      if (call.url === '/api/v1/zenodo/autopilot/next') { const first = !wrote; wrote = true; return first ? { action: 'write', item_id: ITEM, result_id: '99999999-9999-4999-8999-999999999999', kind: 'write_paper' } : { action: 'none', reason: 'nothing_new' } }
+      if (call.url === '/api/v1/artifacts/jobs') return { id: '12121212-1212-4121-8121-121212121212', mode: 'explore', task_kind: 'write_paper', goal: 'Synthetic write-up', status: 'queued', created_at: '2026-11-01T00:00:00Z', updated_at: '2026-11-01T00:00:00Z', result_id: null, artifact_id: null, error_code: null, external_outcome_unknown: false }
+      if (call.url === `/api/v1/zenodo/autopilot/items/${ITEM}/write`) return item({ status: 'writing' })
+      if (call.url === `/api/v1/zenodo/publications/${RECORD}`) return record()
+      if (call.url === `/api/v1/zenodo/publications/${RECORD}/publish`) return record({ status: 'queued' })
+      return undefined
+    })
+    render(<YourZenodo csrfToken={BROWSER_CSRF} enabled />)
+    await waitFor(() => expect(calls.find((call) => call.url.endsWith('/write'))?.body).toEqual({ run_id: '12121212-1212-4121-8121-121212121212' }))
+    expect(calls.find((call) => call.url === '/api/v1/artifacts/jobs')?.body).toMatchObject({ kind: 'write_paper', source_result_id: '99999999-9999-4999-8999-999999999999' })
+    await userEvent.click(await screen.findByRole('button', { name: 'Publish' }))
+    await waitFor(() => expect(calls.find((call) => call.url.endsWith('/publish'))?.body).toEqual({ manifest_sha256: 'd'.repeat(64), confirm_permanent: false }))
+  })
+})

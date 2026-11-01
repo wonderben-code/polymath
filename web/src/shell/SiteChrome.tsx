@@ -9,7 +9,7 @@ export const PLACES = [
 export type Place = (typeof PLACES)[number]['id']
 
 /** One quiet header for every page, so Polymath always feels like one place. */
-export function SiteHeader({ current, onNavigate }: { current?: Place; onNavigate?: (place: Place) => void }) {
+export function SiteHeader({ current, onNavigate, accessory }: { current?: Place; onNavigate?: (place: Place) => void; accessory?: ReactNode }) {
   const follow = (place: Place) => (event: MouseEvent<HTMLAnchorElement>) => { if (onNavigate) { event.preventDefault(); onNavigate(place) } }
   return (
     <header className="site-header">
@@ -20,6 +20,7 @@ export function SiteHeader({ current, onNavigate }: { current?: Place; onNavigat
       <nav className="place-navigation" aria-label="Polymath">
         {PLACES.map((item) => <a key={item.id} href={item.path} aria-current={current === item.id ? 'page' : undefined} onClick={follow(item.id)}>{item.label}{item.id === 'frontier' && <span className="nav-badge">Experimental</span>}</a>)}
       </nav>
+      {accessory}
     </header>
   )
 }

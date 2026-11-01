@@ -56,3 +56,17 @@
 .zenodo-outcome { font-size: 15px; margin: 16px 0 0; color: var(--ink, #1f332c); }
 .zenodo-outcome.is-published { color: var(--accent, #266b58); }
 @media (max-width: 760px) { .zenodo-where, .zenodo-grid { grid-template-columns: 1fr; } .zenodo-record, .zenodo-destinations li { flex-direction: column; align-items: flex-start; } }
+
+/* Publishing levels for the visitor's own connection. */
+.zenodo-levels { margin-top: 32px; }
+.zenodo-levels > h3, .zenodo-levels .zenodo-records h3 { font-family: var(--serif, Georgia, serif); font-weight: 400; font-size: 21px; margin: 0 0 12px; }
+.zenodo-level-grid { border: 0; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.zenodo-level { position: relative; display: grid; gap: 4px; padding: 16px 18px 16px 46px; border: 1px solid var(--hairline, #e2e4da); border-radius: 16px; background: #fffefb; cursor: pointer; transition: border-color .2s, background .2s; }
+.zenodo-level input { position: absolute; left: 18px; top: 20px; accent-color: var(--accent, #266b58); width: 16px; height: 16px; }
+.zenodo-level.is-chosen { border-color: #9cbcae; background: #eef2ec; }
+.zenodo-level.is-unavailable { opacity: .6; cursor: not-allowed; }
+.zenodo-check { display: flex !important; align-items: center; gap: 10px; color: var(--ink, #1f332c) !important; }
+.zenodo-check input { accent-color: var(--accent, #266b58); width: 16px; height: 16px; }
+.zenodo-autopilot { align-self: center; font-size: 14px; color: var(--muted, #56645c); }
+@media (max-width: 760px) { .zenodo-level-grid { grid-template-columns: 1fr; } }
+@media (prefers-reduced-motion: reduce) { .zenodo-level { transition: none; } }
