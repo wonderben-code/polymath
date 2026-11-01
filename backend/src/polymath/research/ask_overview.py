@@ -28,6 +28,7 @@ from polymath.research.models import (
     StrictModel,
     _validate_public_text,
 )
+from polymath.schema_cache import json_schema
 from polymath.scientific_context_contracts import (
     ASK_OVERVIEW_PROTOCOL,
     AskOverviewIntent,
@@ -81,7 +82,7 @@ ASK_OVERVIEW_ACTION_ADAPTER = TypeAdapter(AskOverviewAction)
 
 def ask_overview_initial_messages(goal: str, *, memory_available: bool) -> list[dict[str, str]]:
     """Same exact builder for profile sizing, admission preflight and execution."""
-    schema = json.dumps(ASK_OVERVIEW_ACTION_ADAPTER.json_schema(), separators=(",", ":"))
+    schema = json.dumps(json_schema(ASK_OVERVIEW_ACTION_ADAPTER), separators=(",", ":"))
     return [
         {
             "role": "system",
@@ -137,10 +138,10 @@ def ask_overview_protocol_payload() -> dict:
     return {
         "controller_protocol": ASK_OVERVIEW_CONTROLLER_PROTOCOL,
         "intent_protocol": ASK_OVERVIEW_PROTOCOL,
-        "intent_schema": AskOverviewIntent.model_json_schema(),
+        "intent_schema": json_schema(AskOverviewIntent),
         "overview_binding_protocol": ASK_OVERVIEW_PROTOCOL,
-        "overview_binding_schema": AskOverviewBinding.model_json_schema(),
+        "overview_binding_schema": json_schema(AskOverviewBinding),
         "system_prompt": ASK_OVERVIEW_SYSTEM_PROMPT,
         "mode_instructions": MODE_INSTRUCTIONS["ask"],
-        "action_schema": ASK_OVERVIEW_ACTION_ADAPTER.json_schema(),
+        "action_schema": json_schema(ASK_OVERVIEW_ACTION_ADAPTER),
     }

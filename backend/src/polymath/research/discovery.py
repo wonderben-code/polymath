@@ -25,6 +25,7 @@ from polymath.research.models import (
     SourceReference,
     VerifiedQuote,
 )
+from polymath.schema_cache import json_schema
 
 DISCOVERY_SYSTEM_PROMPT = """You are Polymath's Meta-powered Surprise discovery controller.
 Choose the next action adaptively from observed evidence. Return one JSON action
@@ -300,7 +301,7 @@ def discovery_initial_messages(
             "role": "system",
             "content": DISCOVERY_SYSTEM_PROMPT
             + "\nAction schema:\n"
-            + json.dumps(DISCOVERY_ACTION_ADAPTER.json_schema(), separators=(",", ":")),
+            + json.dumps(json_schema(DISCOVERY_ACTION_ADAPTER), separators=(",", ":")),
         },
         {
             "role": "user",

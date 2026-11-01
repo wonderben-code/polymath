@@ -20,6 +20,7 @@ from polymath.research.models import (
     ReadFullTextWindowAction,
     SearchAction,
 )
+from polymath.schema_cache import json_schema
 from polymath.scientific_context_contracts import (
     ASK_OVERVIEW_PROTOCOL,
     ASK_REASSESSMENT_OVERVIEW_PROTOCOL,
@@ -71,7 +72,7 @@ def ask_reassessment_overview_initial_messages(
     Controller execution always requires a validated real AssessmentBasis.
     """
     schema = json.dumps(
-        ASK_REASSESSMENT_OVERVIEW_ACTION_ADAPTER.json_schema(), separators=(",", ":")
+        json_schema(ASK_REASSESSMENT_OVERVIEW_ACTION_ADAPTER), separators=(",", ":")
     )
     return [
         {
@@ -114,11 +115,11 @@ def ask_reassessment_overview_protocol_payload() -> dict:
     return {
         "controller_protocol": ASK_REASSESSMENT_OVERVIEW_CONTROLLER_PROTOCOL,
         "intent_protocol": ASK_REASSESSMENT_OVERVIEW_PROTOCOL,
-        "intent_schema": AskReassessmentOverviewIntent.model_json_schema(),
+        "intent_schema": json_schema(AskReassessmentOverviewIntent),
         "overview_binding_protocol": ASK_OVERVIEW_PROTOCOL,
-        "overview_binding_schema": AskOverviewBinding.model_json_schema(),
-        "assessment_basis_schema": AssessmentBasis.model_json_schema(),
+        "overview_binding_schema": json_schema(AskOverviewBinding),
+        "assessment_basis_schema": json_schema(AssessmentBasis),
         "system_prompt": ASK_REASSESSMENT_OVERVIEW_SYSTEM_PROMPT,
         "excerpt_limitation": EXCERPT_LIMITATION,
-        "action_schema": ASK_REASSESSMENT_OVERVIEW_ACTION_ADAPTER.json_schema(),
+        "action_schema": json_schema(ASK_REASSESSMENT_OVERVIEW_ACTION_ADAPTER),
     }

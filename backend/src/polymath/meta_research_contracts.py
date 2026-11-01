@@ -42,6 +42,7 @@ from polymath.meta_readiness_contracts import (
     quote_proposal,
 )
 from polymath.native_ceilings import LEGACY_CALL_CEILING, MAX_OUTPUT_TOKENS
+from polymath.schema_cache import json_schema
 from polymath.scientific_context_contracts import (
     ArtifactScientificContextIntent,
     AskOverviewIntent,
@@ -302,7 +303,7 @@ def controller_protocol_sha256(task_kind: TaskKind) -> str:
         value = base | {
             "system_prompt": SYSTEM_PROMPT,
             "mode_instructions": MODE_INSTRUCTIONS,
-            "action_schema": ACTION_ADAPTER.json_schema(),
+            "action_schema": json_schema(ACTION_ADAPTER),
         }
     elif task_kind in ("formalise", "write_summary", "write_paper"):
         from polymath.artifact_controller import (
@@ -314,7 +315,7 @@ def controller_protocol_sha256(task_kind: TaskKind) -> str:
         value = base | {
             "system_prompt": SYSTEM_PROMPT,
             "kind_instructions": KIND_INSTRUCTIONS[task_kind],
-            "action_schema": ARTIFACT_ACTION_ADAPTER.json_schema(),
+            "action_schema": json_schema(ARTIFACT_ACTION_ADAPTER),
         }
     elif task_kind == "reassess_finding":
         from polymath.assessment_controller import (
@@ -326,7 +327,7 @@ def controller_protocol_sha256(task_kind: TaskKind) -> str:
         value = base | {
             "system_prompt": SYSTEM_PROMPT,
             "excerpt_limitation": EXCERPT_LIMITATION,
-            "action_schema": ASSESSMENT_ACTION_ADAPTER.json_schema(),
+            "action_schema": json_schema(ASSESSMENT_ACTION_ADAPTER),
         }
     else:
         raise ValueError("unsupported native task protocol")
@@ -338,7 +339,7 @@ def minimum_controller_context_characters(task_kind: TaskKind) -> int:
     if task_kind == "research":
         from polymath.research.controller import ACTION_ADAPTER, MODE_INSTRUCTIONS, SYSTEM_PROMPT
 
-        schema = json.dumps(ACTION_ADAPTER.json_schema(), separators=(",", ":"))
+        schema = json.dumps(json_schema(ACTION_ADAPTER), separators=(",", ":"))
         values = []
         for mode, instruction in MODE_INSTRUCTIONS.items():
             system = (
@@ -367,7 +368,7 @@ def minimum_controller_context_characters(task_kind: TaskKind) -> int:
             SYSTEM_PROMPT,
         )
 
-        schema = json.dumps(ARTIFACT_ACTION_ADAPTER.json_schema(), separators=(",", ":"))
+        schema = json.dumps(json_schema(ARTIFACT_ACTION_ADAPTER), separators=(",", ":"))
         system = (
             SYSTEM_PROMPT
             + "\nCurrent task: "
@@ -381,7 +382,7 @@ def minimum_controller_context_characters(task_kind: TaskKind) -> int:
     if task_kind == "reassess_finding":
         from polymath.assessment_controller import ASSESSMENT_ACTION_ADAPTER, SYSTEM_PROMPT
 
-        schema = json.dumps(ASSESSMENT_ACTION_ADAPTER.json_schema(), separators=(",", ":"))
+        schema = json.dumps(json_schema(ASSESSMENT_ACTION_ADAPTER), separators=(",", ":"))
         return len(SYSTEM_PROMPT + "\nAction schema:\n" + schema) + len(
             json.dumps({"assessment_basis": {}})
         )
@@ -769,7 +770,7 @@ def discovery_controller_sha256() -> str:
             "discovery_protocol": DISCOVERY_PROTOCOL,
             "prior_work_identity_protocol": PRIOR_WORK_IDENTITY_PROTOCOL,
             "system_prompt": DISCOVERY_SYSTEM_PROMPT,
-            "action_schema": DISCOVERY_ACTION_ADAPTER.json_schema(),
+            "action_schema": json_schema(DISCOVERY_ACTION_ADAPTER),
         }
     )
 
