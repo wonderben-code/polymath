@@ -68,10 +68,17 @@ def application(public, *, injected=None, research_policy=None, public_policy=No
 
 
 @pytest.mark.parametrize("custom", ["absent", "looser", "stricter"])
-def test_actual_app_always_combines_injected_limits_with_reviewed_bounds(readiness, custom):
+def test_actual_app_always_combines_injected_limits_with_reviewed_bounds(
+    readiness, custom, monkeypatch
+):
     public = public_delegation(
         readiness, limits(submit_session_per_minute=2 if custom == "stricter" else 1)
     )
+    # Both requests must fall in the same fixed minute window, even when the
+    # test happens to run across a minute boundary.
+    with Session(public.engine) as session:
+        now = session.scalar(select(func.clock_timestamp()))
+    monkeypatch.setattr("polymath.public_resource_controls._now", lambda _: now)
     resolver = (
         None
         if custom == "absent"
