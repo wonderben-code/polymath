@@ -44,7 +44,7 @@ from polymath.frontier_models import FrontierAttempt, FrontierNode, FrontierProg
 from polymath.jobs import JobRepository
 from polymath.meta_research import native_run_input_sha256
 from polymath.meta_research_errors import MetaResearchError
-from polymath.models import ResearchRun
+from polymath.models import ResearchExternalRequest, ResearchRun
 from polymath.publishing_models import PublishingItem, PublishingPreference
 from polymath.research.discovery import DiscoveryLimits
 from polymath.rigour import ResearchRunRigour
@@ -466,3 +466,28 @@ async def test_stop_flush_rechecks_expired_browser_before_terminal_checkpoint(
         assert session.scalar(select(func.count()).select_from(StageCommit)) == 1
         # The earlier acknowledged explicit ranking remains immutable audit.
         assert session.scalar(select(func.count()).select_from(ExploreCollectionFinish)) == 1
+
+
+class ProseRecordingModel(RecordingModel):
+    """Every reply carries a sentence before its action, as the first live run did."""
+
+    async def complete(self, messages, *, max_output_tokens):
+        reply = await super().complete(messages, max_output_tokens=max_output_tokens)
+        return type(reply)("Thinking it through first.\n" + reply.content, 10, 15)
+
+
+async def test_a_collection_whose_replies_wrap_their_actions_in_prose_completes(database):
+    token, run_id = queued(database)
+    model = ProseRecordingModel([*prefix(), *second_branch(), ranking_action])
+    result = await worker(database, model).run_once("store-prose-fixture")
+    assert result.status == "succeeded" and model.calls == 13
+    stages = ExploreCollectionStore(database).list_stages(token, run_id)
+    assert len(stages) == 2
+    # The raw replies, prose included, are what the journal keeps.
+    with Session(database) as session:
+        contents = session.scalars(
+            select(ResearchExternalRequest.observation["content"].astext).where(
+                ResearchExternalRequest.run_id == run_id
+            )
+        ).all()
+    assert contents and all(item.startswith("Thinking it through first.") for item in contents)
