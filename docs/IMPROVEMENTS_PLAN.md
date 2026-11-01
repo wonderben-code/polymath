@@ -154,6 +154,12 @@ Frontier already surveys a problem, names gaps and looks for solutions in other
 fields, so a Solve mode can build on that foundation: problem → candidate keys
 → the fit test → the gap → combined keys → evidence for each piece.
 
+Two ways in (owner, 1 Nov):
+- **Solve on its own:** "Polymath as a problem solver for you". State the
+  problem and get keys, gaps and combined keys.
+- **Inside Frontier:** any Frontier step that needs an answer can call Solve,
+  in addition to Frontier's existing survey, gap and sub-step structure.
+
 ## Questions for the owner
 
 1. Which colour direction (shown as live swatches first)?
