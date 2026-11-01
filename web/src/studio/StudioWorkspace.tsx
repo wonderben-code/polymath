@@ -10,6 +10,8 @@ import type { Gallery, StudioReading } from './dossier'
 import './studio.css'
 
 const POLL_MS = 6000
+const RETRY_HOLD_MS = 30000
+const MAX_HOLDS = 10
 const BRIEF_LIMIT = 1000
 const PIPELINE: { stage: StudioStage; name: string; doing: string }[] = [
   { stage: 'brief', name: 'Brief', doing: 'Understanding the brief and today’s best designs' },
@@ -116,6 +118,8 @@ export function StudioWorkspace({ enabled, csrfToken, canSubmit, paused = false,
   const live = useRef(new Set<string>())
   const busy = useRef(false)
   const briefRef = useRef<HTMLTextAreaElement>(null)
+  const holds = useRef(0)
+  const holdUntil = useRef(0)
   const canSubmitRef = useRef(canSubmit)
   canSubmitRef.current = canSubmit
 
@@ -166,9 +170,16 @@ export function StudioWorkspace({ enabled, csrfToken, canSubmit, paused = false,
       const doing = (stage: StudioStage) => PIPELINE.find((item) => item.stage === stage)!.doing
       if (next.state === 'due') {
         if (!canSubmitRef.current) { setStatus('Waiting until live research is available for this browser.'); return }
+        if (Date.now() < holdUntil.current) return
         setStatus(`${doing(next.stage)}…`)
         const run = await submit(next.mode, next.goal, next.parent_result_ids, { collection: false })
-        if (!run) { setRunning(false); setStatus('The next stage could not be started. Live research may be unavailable; your brief is saved.'); return }
+        if (!run) {
+          // A step that could not be started (a blip, a restart, a rate limit) is tried again shortly; the programme stops only when it keeps failing.
+          holds.current += 1; holdUntil.current = Date.now() + RETRY_HOLD_MS
+          if (holds.current >= MAX_HOLDS) { setRunning(false); setStatus('The next stage could not be started. Live research may be unavailable; your brief is saved.'); return }
+          setStatus('The next stage could not be started yet. Trying again shortly; your brief is saved.'); return
+        }
+        holds.current = 0
         setProgramme(await attachStudioRun(programme.id, csrfToken, { step_id: next.step_id, stage: next.stage, run_id: run.id }))
       } else if (next.state === 'waiting') {
         const stage = updated.steps.find((item) => item.status === 'running')?.stage
