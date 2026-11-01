@@ -2,9 +2,10 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { FormEvent, KeyboardEvent } from 'react'
 import type { OwnedRun } from '../research/client'
 import { attachStudioRun, changeStudio, createStudio, listStudio, loadStudio, MAX_SPECS, nextStudioStep, StudioApiError } from './client'
-import type { Claim, StudioProgramme, StudioStage, StudioSummary, Wildness } from './client'
+import type { Claim, StudioProgramme, StudioStage, StudioStep, StudioSummary, Wildness } from './client'
 import { Constellation, SPECTRUM } from './Constellation'
-import { buildDossier, buildMetaBriefing, dossierFileName, LABEL_WORDS, readStudio, WILDNESS_WORDS } from './dossier'
+import { buildDossier, buildDossierPage, buildMetaBriefing, dossierFileName, LABEL_WORDS, readStudio, WILDNESS_WORDS } from './dossier'
+import type { StudioReading } from './dossier'
 import './studio.css'
 
 const POLL_MS = 4000
@@ -46,8 +47,20 @@ function message(code: string): string {
   return 'Studio could not be reached. Try again in a moment.'
 }
 
-function Claims({ claims }: { claims: Claim[] }) {
-  return <ul className="studio-claims">{claims.map((claim, index) => <li key={index}><span className={`studio-label is-${claim.label}`}>{LABEL_WORDS[claim.label] ?? claim.label}</span>{claim.text}</li>)}</ul>
+function Cite({ number }: { number: number | null }) {
+  return number === null ? null : <sup><a href={`#studio-ref-${number}`} aria-label={`Source ${number}`}>{number}</a></sup>
+}
+
+function Claims({ claims, step, reading }: { claims: Claim[]; step: StudioStep; reading: StudioReading }) {
+  return <ul className="studio-claims">{claims.map((claim, index) => <li key={index}>
+    <span className={`studio-label is-${claim.label}`}>{LABEL_WORDS[claim.label] ?? claim.label}</span>
+    <div className="studio-claim-body">
+      <p>{claim.text}{[...new Set(claim.quotes.map((item) => reading.cite(step, item.source_id)))].map((number, at) => <Cite key={at} number={number} />)}</p>
+      {claim.derivation && <p className="studio-working"><strong>Working:</strong> {claim.derivation}</p>}
+      {claim.caveats.map((caveat, at) => <p key={at} className="studio-caveat">Caveat: {caveat}</p>)}
+      {claim.quotes.length > 0 && <details className="studio-evidence"><summary>Evidence ({claim.quotes.length})</summary>{claim.quotes.map((item, at) => <blockquote key={at}>“{item.quote}”<Cite number={reading.cite(step, item.source_id)} /></blockquote>)}</details>}
+    </div>
+  </li>)}</ul>
 }
 
 function stageState(programme: StudioProgramme, stage: StudioStage): 'done' | 'running' | 'waiting' | 'skipped' {
@@ -151,11 +164,12 @@ export function StudioWorkspace({ enabled, csrfToken, canSubmit, submit, onOpenR
     try { setProgramme(await changeStudio(programme.id, csrfToken, kind)); setRunning(kind === 'resume'); void refreshList() } catch (failure) { fail(failure) }
   }
 
-  function download() {
+  function download(kind: 'html' | 'md') {
     if (!programme) return
-    const url = URL.createObjectURL(new Blob([buildDossier(programme, window.location.origin)], { type: 'text/markdown;charset=utf-8' }))
+    const content = kind === 'html' ? buildDossierPage(programme, window.location.origin) : buildDossier(programme, window.location.origin)
+    const url = URL.createObjectURL(new Blob([content], { type: kind === 'html' ? 'text/html;charset=utf-8' : 'text/markdown;charset=utf-8' }))
     const link = document.createElement('a')
-    link.href = url; link.download = dossierFileName(programme); link.rel = 'noopener'
+    link.href = url; link.download = dossierFileName(programme, kind); link.rel = 'noopener'
     document.body.appendChild(link); link.click(); link.remove()
     window.setTimeout(() => URL.revokeObjectURL(url), 1000)
   }
@@ -237,21 +251,25 @@ export function StudioWorkspace({ enabled, csrfToken, canSubmit, submit, onOpenR
 
         {reading.design && <section className="studio-section studio-invention" aria-labelledby="studio-invention"><h3 id="studio-invention">The invention</h3>
           <p className="studio-big">{reading.design.explanation}</p>
-          {reading.design.mappings.length > 0 && <><h4>How the sources become the design</h4><ul className="studio-mappings">{reading.design.mappings.map((pair, index) => <li key={index}><span>{pair.left}</span><span aria-hidden="true">→</span><span>{pair.right}</span></li>)}</ul></>}
-          <div className="studio-objection"><h4>The strongest objection</h4><p>{reading.design.objection}</p><p><strong>Verdict:</strong> {reading.design.verdict}</p></div>
+          {reading.design.mappings.length > 0 && <><h4>How the sources become the design</h4><ul className="studio-mappings">{reading.design.mappings.map((pair, index) => <li key={index}><span>{pair.left}</span><span aria-hidden="true">→</span><span>{pair.right}</span><small>Assumes: {pair.assumption}</small></li>)}</ul></>}
+          <div className="studio-objection"><h4>The strongest objection</h4><p>{reading.design.objection}</p><p><strong>Verdict:</strong> {reading.design.verdict}</p><p><strong>Limits of novelty:</strong> {reading.design.limitations}</p></div>
+          {reading.designStep && reading.design.quotes.length > 0 && <details className="studio-evidence"><summary>Evidence behind the invention ({reading.design.quotes.length})</summary>{reading.design.quotes.map((item, at) => <blockquote key={at}>“{item.quote}”<Cite number={reading.cite(reading.designStep!, item.source_id)} /></blockquote>)}</details>}
           {reading.designStep?.run_id && <button type="button" className="text-button" onClick={() => onOpenRun(reading.designStep!.run_id!)}>See how it was invented</button>}
         </section>}
 
-        {reading.engineering && <section className="studio-section" aria-labelledby="studio-engineering"><h3 id="studio-engineering">Engineering and calculations</h3><p>{reading.engineering.summary}</p><Claims claims={reading.engineering.claims} /></section>}
-        {reading.test && <section className="studio-section" aria-labelledby="studio-test"><h3 id="studio-test">Stress test against your brief</h3><p>{reading.test.summary}</p><Claims claims={reading.test.claims} /></section>}
+        {reading.engineering && <section className="studio-section" aria-labelledby="studio-engineering"><h3 id="studio-engineering">Engineering and calculations</h3><p>{reading.engineering.summary}</p><Claims claims={reading.engineering.claims} step={programme.steps.find((item) => item.stage === 'engineer')!} reading={reading} /></section>}
+        {reading.test && <section className="studio-section" aria-labelledby="studio-test"><h3 id="studio-test">Stress test against your brief</h3><p>{reading.test.summary}</p><Claims claims={reading.test.claims} step={programme.steps.find((item) => item.stage === 'test')!} reading={reading} /></section>}
         {reading.stillToInvent.length > 0 && <section className="studio-section" aria-labelledby="studio-gaps"><h3 id="studio-gaps">Still to invent</h3><ul className="studio-gaps">{reading.stillToInvent.map((gap) => <li key={gap}><span>{gap}</span><button type="button" className="text-button" onClick={() => onSolveGap(gap)}>Solve this</button></li>)}</ul></section>}
+
+        {reading.references.length > 0 && <section className="studio-section" aria-labelledby="studio-refs"><h3 id="studio-refs">Sources</h3><ol className="studio-refs">{reading.references.map((source, index) => { const link = source.doi ? `https://doi.org/${source.doi}` : source.url; return <li key={link} id={`studio-ref-${index + 1}`}>{source.authors.length > 0 && <>{source.authors.join(', ')}{source.more_authors ? ' et al.' : ''}. </>}<a href={link} target="_blank" rel="noreferrer">{source.title}</a>{source.venue ? `. ${source.venue}` : ''}{source.year ? `, ${source.year}` : ''}.</li> })}</ol></section>}
 
         {reading.design && <section className="studio-section studio-actions" aria-labelledby="studio-next"><h3 id="studio-next">Take it further</h3>
           <div className="studio-action-row">
-            <button type="button" className="primary-button" onClick={download}>Download the design dossier</button>
+            <button type="button" className="primary-button" onClick={() => download('html')}>Download the design dossier</button>
             <button type="button" className="secondary-button" onClick={() => void continueInMeta()}>Continue in Meta AI</button>
             <button type="button" className="secondary-button" onClick={refine}>Refine this design</button>
           </div>
+          <p className="studio-muted">The dossier opens in any browser and prints or saves as a PDF. <button type="button" className="text-button" onClick={() => download('md')}>Download as Markdown</button></p>
           {shared && <p className="studio-muted" role="status">{shared}</p>}
           <p className="studio-muted studio-vision">Coming next: connect your Meta account and keep iterating with Meta without leaving Polymath.</p>
         </section>}

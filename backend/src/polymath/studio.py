@@ -21,6 +21,8 @@ from sqlalchemy import Engine, func, select
 from sqlalchemy.orm import Session
 
 from polymath.access_models import ResearchRunAccess
+from polymath.evidence import EvidenceError, EvidenceStore
+from polymath.evidence_models import EvidenceResult
 from polymath.frontier import _saved_finding
 from polymath.lineage_models import ResearchRunParent
 from polymath.models import ResearchRun
@@ -196,6 +198,35 @@ def _answer(session: Session, step: StudioStep) -> AnswerFinding | None:
     run = session.get(ResearchRun, step.run_id)
     finding = _saved_finding(session, run)[1] if run is not None else None
     return finding if isinstance(finding, AnswerFinding) else None
+
+
+def _sources(session: Session, result_id: uuid.UUID | None) -> list[dict]:
+    """The saved sources behind a result, as a plain reference list."""
+    row = session.get(EvidenceResult, result_id) if result_id is not None else None
+    if row is None:
+        return []
+    try:
+        stored = EvidenceStore._stored_result(session, row)
+    except EvidenceError:
+        return []
+    references = []
+    for source in stored.payload.get("sources", [])[:20]:
+        bibliography = source.get("bibliography") or {}
+        authors = [item.get("name", "") for item in bibliography.get("authors") or []][:3]
+        references.append(
+            {
+                "id": source["source_id"],
+                "title": _clip(source["title"], 400),
+                "url": source["url"],
+                "authors": [_clip(name, 120) for name in authors if name],
+                "more_authors": len(bibliography.get("authors") or []) > 3
+                or bool(bibliography.get("authors_truncated")),
+                "year": bibliography.get("publication_year"),
+                "venue": _clip(bibliography["venue"], 200) if bibliography.get("venue") else None,
+                "doi": bibliography.get("doi"),
+            }
+        )
+    return references
 
 
 def _describe(finding: BridgeFinding) -> str:
@@ -445,39 +476,58 @@ class StudioStore:
         }
 
     def _view(self, session: Session, step: StudioStep) -> dict | None:
-        """The saved finding behind a stage, as plain text for the visitor."""
+        """The saved finding behind a stage, complete enough for a design dossier."""
         if step.result_id is None or step.run_id is None:
             return None
         run = session.get(ResearchRun, step.run_id)
         if run is None:
             return None
-        _, finding = _saved_finding(session, run)
+        result_id, finding = _saved_finding(session, run)
+        sources = _sources(session, result_id)
+        cited = {source["id"] for source in sources}
+
+        def quote(item) -> dict:
+            return {
+                "source_id": item.source_id if item.source_id in cited else None,
+                "quote": _clip(item.quote, 700),
+                "supports": _clip(item.supports, 500),
+            }
+
         if isinstance(finding, BridgeFinding):
             return {
                 "kind": "bridge",
                 "title": finding.title,
                 "field_left": finding.field_left,
                 "field_right": finding.field_right,
-                "explanation": _clip(finding.explanation, 1200),
+                "explanation": finding.explanation,
                 "mappings": [
-                    {"left": _clip(item.left, 200), "right": _clip(item.right, 200)}
-                    for item in finding.mappings[:5]
+                    {"left": item.left, "right": item.right, "assumption": item.assumption}
+                    for item in finding.mappings
                 ],
-                "objection": _clip(finding.strongest_objection, 700),
-                "verdict": _clip(finding.objection_verdict, 700),
-                "open_question": _clip(finding.open_question, 400),
+                "objection": finding.strongest_objection,
+                "verdict": finding.objection_verdict,
+                "limitations": finding.novelty_limitations,
+                "open_question": finding.open_question,
+                "quotes": [quote(item) for item in finding.evidence],
+                "sources": sources,
             }
         if isinstance(finding, AnswerFinding):
             return {
                 "kind": "answer",
-                "summary": _clip(finding.summary, 1200),
+                "summary": finding.summary,
                 "claims": [
-                    {"label": claim.label, "text": _clip(claim.text, 500)}
-                    for claim in finding.claims[:8]
+                    {
+                        "label": claim.label,
+                        "text": claim.text,
+                        "derivation": claim.derivation,
+                        "caveats": list(claim.caveats),
+                        "quotes": [quote(item) for item in claim.evidence],
+                    }
+                    for claim in finding.claims
                 ],
-                "open_questions": [
-                    _clip(gap, 300) for gap in finding.unanswered_questions[:MAX_INSPIRATIONS]
-                ],
+                "limitations": list(finding.limitations),
+                "open_questions": list(finding.unanswered_questions),
+                "sources": sources,
             }
         return {"kind": "insufficient_evidence"}
 

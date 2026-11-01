@@ -12,10 +12,12 @@ export type StudioStage = (typeof STAGES)[number]
 export type Wildness = (typeof WILDNESS)[number]
 export type StudioOutcome = 'designed' | 'inspired' | 'none'
 export type StudioStatus = 'active' | 'paused' | 'completed' | 'stopped'
-export interface Claim { label: string; text: string }
+export interface Quote { source_id: string | null; quote: string; supports: string }
+export interface Source { id: string; title: string; url: string; authors: string[]; more_authors: boolean; year: number | null; venue: string | null; doi: string | null }
+export interface Claim { label: string; text: string; derivation: string | null; caveats: string[]; quotes: Quote[] }
 export type StepFinding =
-  | { kind: 'bridge'; title: string; field_left: string; field_right: string; explanation: string; mappings: { left: string; right: string }[]; objection: string; verdict: string; open_question: string }
-  | { kind: 'answer'; summary: string; claims: Claim[]; open_questions: string[] }
+  | { kind: 'bridge'; title: string; field_left: string; field_right: string; explanation: string; mappings: { left: string; right: string; assumption: string }[]; objection: string; verdict: string; limitations: string; open_question: string; quotes: Quote[]; sources: Source[] }
+  | { kind: 'answer'; summary: string; claims: Claim[]; limitations: string[]; open_questions: string[]; sources: Source[] }
   | { kind: 'insufficient_evidence' }
 export interface StudioStep { id: string; stage: StudioStage; ordinal: number; target: string; status: 'pending' | 'running' | 'done' | 'failed'; outcome: string | null; run_id: string | null; result_id: string | null; premise_result_ids: string[]; finding: StepFinding | null }
 export interface StudioSummary { id: string; brief: string; specs: string[]; wildness: Wildness; status: StudioStatus; outcome: StudioOutcome | null; created_at: string; updated_at: string }
@@ -38,21 +40,32 @@ function oneOf<T extends string>(value: unknown, options: readonly T[]): T { ret
 function list<T>(value: unknown, max: number, parse: (item: unknown) => T): T[] { return Array.isArray(value) && value.length <= max ? value.map(parse) : invalid() }
 const OUTCOMES = ['designed', 'inspired', 'none'] as const
 
+function nullableText(value: unknown, max: number): string | null { return value === null || value === undefined ? null : text(value, max) }
+function parseQuote(value: unknown): Quote { const item = record(value); return { source_id: nullableText(item.source_id, 600), quote: text(item.quote, 800), supports: text(item.supports, 600) } }
+function parseSource(value: unknown): Source {
+  const item = record(value)
+  const url = text(item.url, 2000)
+  if (!/^https:\/\/[^\s]+$/.test(url)) invalid()
+  const year = item.year === null || item.year === undefined ? null : typeof item.year === 'number' && Number.isInteger(item.year) ? item.year : invalid()
+  return { id: text(item.id, 600), title: text(item.title, 400), url, authors: list(item.authors, 3, (entry) => text(entry, 120)), more_authors: item.more_authors === true, year, venue: nullableText(item.venue, 200), doi: nullableText(item.doi, 200) }
+}
+
 function parseFinding(value: unknown): StepFinding | null {
   if (value === null || value === undefined) return null
   const item = record(value)
   if (item.kind === 'bridge') {
     return {
-      kind: 'bridge', title: text(item.title, 400), field_left: text(item.field_left, 300), field_right: text(item.field_right, 300), explanation: text(item.explanation, 1400),
-      mappings: list(item.mappings, 5, (entry) => { const pair = record(entry); return { left: text(pair.left, 220), right: text(pair.right, 220) } }),
-      objection: text(item.objection, 800), verdict: text(item.verdict, 800), open_question: text(item.open_question, 600),
+      kind: 'bridge', title: text(item.title, 400), field_left: text(item.field_left, 300), field_right: text(item.field_right, 300), explanation: text(item.explanation, 3200),
+      mappings: list(item.mappings, 8, (entry) => { const pair = record(entry); return { left: text(pair.left, 1100), right: text(pair.right, 1100), assumption: text(pair.assumption, 1600) } }),
+      objection: text(item.objection, 2200), verdict: text(item.verdict, 2200), limitations: text(item.limitations, 2200), open_question: text(item.open_question, 1600),
+      quotes: list(item.quotes, 12, parseQuote), sources: list(item.sources, 20, parseSource),
     }
   }
   if (item.kind === 'answer') {
     return {
-      kind: 'answer', summary: text(item.summary, 1400),
-      claims: list(item.claims, 8, (entry) => { const claim = record(entry); return { label: text(claim.label, 40), text: text(claim.text, 600) } }),
-      open_questions: list(item.open_questions, 4, (entry) => text(entry, 400)),
+      kind: 'answer', summary: text(item.summary, 3200),
+      claims: list(item.claims, 8, (entry) => { const claim = record(entry); return { label: oneOf(claim.label, ['known', 'postulated', 'speculative'] as const), text: text(claim.text, 2200), derivation: nullableText(claim.derivation, 2200), caveats: list(claim.caveats, 6, (caveat) => text(caveat, 1100)), quotes: list(claim.quotes, 8, parseQuote) } }),
+      limitations: list(item.limitations, 8, (entry) => text(entry, 1100)), open_questions: list(item.open_questions, 8, (entry) => text(entry, 1100)), sources: list(item.sources, 20, parseSource),
     }
   }
   if (item.kind === 'insufficient_evidence') return { kind: 'insufficient_evidence' }
