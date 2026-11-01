@@ -67,6 +67,7 @@ from polymath.publishing_api import create_publishing_router
 from polymath.run_api import create_run_router
 from polymath.sharing_api import create_sharing_router
 from polymath.solve_api import create_solve_router
+from polymath.studio_api import create_studio_router
 from polymath.visitor_zenodo import VisitorZenodoPolicy
 from polymath.visitor_zenodo_api import create_visitor_zenodo_router
 
@@ -309,6 +310,9 @@ def create_app(
     )
     application.include_router(
         create_solve_router(application.state.engine, availability=lambda: settings.solve_enabled)
+    )
+    application.include_router(
+        create_studio_router(application.state.engine, availability=lambda: settings.studio_enabled)
     )
     application.include_router(
         create_accounts_router(application.state.engine, AccountPolicy.from_settings(settings))
