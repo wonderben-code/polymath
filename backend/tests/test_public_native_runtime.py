@@ -152,6 +152,8 @@ async def test_enabled_cli_composes_public_flag_without_changing_private_configu
                 paid_meta_research_enabled=True,
                 public_meta_research_enabled=public_enabled,
                 public_max_delegation_seconds=14 * 86400,
+                public_max_jobs_per_session_day=12,
+                public_max_jobs_per_day=50,
                 openalex_api_key=None,
             ),
             once=True,
