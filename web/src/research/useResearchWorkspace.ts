@@ -20,7 +20,7 @@ function message(code: ResearchApiErrorCode, retry: number | null = null): strin
     case 'session_changed': return 'Your research session changed. Reload saved research before trying again.'
     case 'run_unavailable': return 'This investigation is unavailable in your current session.'
     case 'resource_limited': return `A request or visitor allowance limit was reached. ${retry === null ? 'Wait before trying again.' : `Wait at least ${retry} seconds before trying again.`} No action was retried; saved research remains available.`
-    case 'queue_limit': return 'The research queue or your active-investigation limit has been reached.'
+    case 'queue_limit': return 'One of your investigations is still open (running or paused), or the research queue is full. Continue or cancel the open one first; it is in your recent investigations.'
     case 'invalid_request': return 'Check the research request and try again.'
     case 'invalid_response': return 'The research service returned an unreadable record. Reload saved research to try again.'
     case 'explore_variant_unavailable': return 'The approved Explore features changed. Refresh research access before trying again; this request was not retried.'

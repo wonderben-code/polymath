@@ -214,7 +214,7 @@ Eks hashes the billing screenshot on his Mac with `shasum -a 256 <file>`.
     {"url": "https://dev.meta.ai/docs", "content_sha256": "<hash>"},
     {"url": "https://dev.meta.ai/docs/reasoning", "content_sha256": "<same hash as above>"}
   ],
-  "application_limits": {"max_output_tokens": 4096, "max_context_characters": 90000, "max_model_calls": 12, "request_timeout_seconds": 60},
+  "application_limits": {"max_output_tokens": 4096, "max_context_characters": 200000, "max_model_calls": 48, "request_timeout_seconds": 60},
   "account": {"account_id": "polymath-meta", "hard_cap_microdollars": 145000000, "daily_cap_microdollars": 75000000, "run_cap_microdollars": 5000000, "max_in_flight": 4},
   "native_status": "not_run",
   "execution_available": false
@@ -223,7 +223,7 @@ Eks hashes the billing screenshot on his Mac with `shasum -a 256 <file>`.
 
 5. Press **Preview disabled readiness proposal**. Expect:
    - Total reserve per call $1.345536.
-   - Maximum full-run reservation $16.146432.
+   - Maximum full-run reservation $64.585728 (48 holds of $1.345536; each settles to about a cent as soon as its call returns).
    - "No; the ledger may stop a run before its maximum call count". This is
      expected: each call is held separately and settles at its actual cost of a
      few cents.
