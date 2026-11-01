@@ -49,6 +49,13 @@ class Settings(BaseSettings):
     paid_meta_probe_enabled: bool = False
     paid_meta_research_enabled: bool = False
     public_meta_research_enabled: bool = False
+    # Studio concept art with Meta's image model (docs/STUDIO.md). Off by default;
+    # each image is reserved on the same ledger at a flat price before it is sent.
+    paid_meta_image_enabled: bool = False
+    meta_image_model: str | None = None
+    meta_image_price_microdollars: int = Field(default=10_000, ge=1, le=1_000_000)
+    image_global_daily_limit: int = Field(default=100, ge=1, le=2000)
+    image_session_daily_limit: int = Field(default=3, ge=1, le=50)
     # The longest single free-use delegation an operator may approve (1 h to 14 days).
     public_max_delegation_seconds: int = Field(default=86400, ge=3600, le=14 * 86400)
     public_resource_limits_enabled: bool = False
@@ -218,7 +225,7 @@ class Settings(BaseSettings):
                 raise ValueError("Publication execution requires credentials for each destination")
         return self
 
-    @field_validator("meta_model")
+    @field_validator("meta_model", "meta_image_model")
     @classmethod
     def normalize_model(cls, value: str | None) -> str | None:
         normalized = value.strip() or None if value is not None else None
@@ -226,8 +233,16 @@ class Settings(BaseSettings):
             normalized is not None
             and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:/-]{0,119}", normalized) is None
         ):
-            raise ValueError("META_MODEL must be an explicit bounded model identifier")
+            raise ValueError("Meta model settings must be explicit bounded model identifiers")
         return normalized
+
+    @model_validator(mode="after")
+    def require_explicit_image_configuration(self) -> "Settings":
+        if self.paid_meta_image_enabled and not (
+            self.paid_meta_research_enabled and self.meta_image_model
+        ):
+            raise ValueError("Paid Meta images require paid research authority and an image model")
+        return self
 
     @model_validator(mode="after")
     def require_visitor_zenodo_configuration(self) -> "Settings":

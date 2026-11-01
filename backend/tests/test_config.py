@@ -241,3 +241,14 @@ def test_the_shipped_settings_file_starts_with_its_empty_sign_in_ids(monkeypatch
     settings = Settings(_env_file=None)
     assert settings.github_client_id is None and settings.zenodo_sandbox_client_id is None
     assert not settings.accounts_enabled and settings.visitor_zenodo_destinations == ()
+
+
+def test_paid_images_are_off_by_default_and_never_on_without_paid_research() -> None:
+    base = {"database_url": "postgresql+psycopg://u:p@localhost/db", "_env_file": None}
+    settings = Settings(**base)
+    assert settings.paid_meta_image_enabled is False and settings.meta_image_model is None
+    assert settings.meta_image_price_microdollars == 10_000
+    with pytest.raises(ValidationError, match="Paid Meta images require"):
+        Settings(**base, paid_meta_image_enabled=True, meta_image_model="muse-image-1.0")
+    with pytest.raises(ValidationError):
+        Settings(**base, meta_image_model="not a model id!")
