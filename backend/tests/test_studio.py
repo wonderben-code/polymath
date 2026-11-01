@@ -91,6 +91,16 @@ def test_functions_become_inspirations_then_one_invention_then_a_stress_test(dat
     tested = done["steps"][5]["finding"]
     assert tested["kind"] == "answer" and tested["claims"]
     assert tested["open_questions"] == ["Rain erosion?"]
+    # The dossier gets complete claims with their quotes, and a reference list.
+    assert tested["limitations"] and all("derivation" in claim for claim in tested["claims"])
+    assert tested["sources"] and {"id", "title", "url", "year"} <= set(tested["sources"][0])
+    cited = {source["id"] for source in tested["sources"]}
+    assert all(
+        quote["source_id"] in cited for claim in tested["claims"] for quote in claim["quotes"]
+    )
+    invention = done["steps"][3]["finding"]
+    assert invention["quotes"] and invention["sources"] and invention["limitations"]
+    assert "assumption" in invention["mappings"][0]
     assert store.next_action(token, uuid.UUID(programme["id"])) == {
         "state": "completed",
         "outcome": "designed",

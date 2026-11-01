@@ -2,7 +2,7 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { parseProgramme } from './client'
-import { buildDossier, buildMetaBriefing, dossierFileName } from './dossier'
+import { buildDossier, buildDossierPage, buildMetaBriefing, dossierFileName } from './dossier'
 import { StudioWorkspace } from './StudioWorkspace'
 
 const CSRF = 'a'.repeat(64)
@@ -21,11 +21,15 @@ const RESULT_C = '99999999-9999-4999-8999-999999999999'
 const DATE = '2026-11-01T00:00:00Z'
 const BRIEF = 'A city helicopter quiet enough to land beside a hospital at night'
 
-function bridge(title: string, left: string, right: string) {
-  return { kind: 'bridge', title, field_left: left, field_right: right, explanation: `${title} works in ${left}.`, mappings: [{ left: `${left} mechanism`, right: 'Rotor blade' }], objection: `${title} may not scale.`, verdict: 'Partly answered.', open_question: 'Does it scale?' }
+function source(id: string, title: string) {
+  return { id, title, url: `https://example.org/${id}`, authors: ['A. Author', 'B. Author'], more_authors: true, year: 2021, venue: 'Journal of Flight', doi: null }
 }
-function answer(summary: string, claims: { label: string; text: string }[], open: string[] = []) {
-  return { kind: 'answer', summary, claims, open_questions: open }
+const QUOTE = (id: string) => ({ source_id: id, quote: `A saved passage from ${id} that supports this.`, supports: 'It supports the claim.' })
+function bridge(title: string, left: string, right: string) {
+  return { kind: 'bridge', title, field_left: left, field_right: right, explanation: `${title} works in ${left}.`, mappings: [{ left: `${left} mechanism`, right: 'Rotor blade', assumption: 'Flow regimes are comparable.' }], objection: `${title} may not scale.`, verdict: 'Partly answered.', limitations: 'Studied before in fans.', open_question: 'Does it scale?', quotes: [QUOTE(`s-${left}`)], sources: [source(`s-${left}`, `${left} paper`)] }
+}
+function answer(summary: string, claims: { label: string; text: string; derivation?: string; caveats?: string[] }[], open: string[] = []) {
+  return { kind: 'answer', summary, claims: claims.map((claim) => ({ derivation: null, caveats: [], quotes: [QUOTE('s-shared')], ...claim })), limitations: ['Rough estimates only.'], open_questions: open, sources: [source('s-shared', 'Rotor acoustics handbook')] }
 }
 function step(changes: Record<string, unknown>) {
   return { id: BRIEF_STEP, stage: 'brief', ordinal: 0, target: BRIEF, status: 'pending', outcome: null, run_id: null, result_id: null, premise_result_ids: [], finding: null, ...changes }
@@ -41,8 +45,8 @@ const designed = programme({
     step({ id: IDEA_B, stage: 'inspire', ordinal: 2, status: 'done', outcome: 'bridge', run_id: RUN, result_id: RESULT_B, finding: bridge('Spinning maple seeds', 'Botany', 'Aerospace') }),
     step({ id: IDEA_C, stage: 'inspire', ordinal: 3, status: 'done', outcome: 'bridge', run_id: RUN, result_id: RESULT_C, finding: bridge('Pleated dragonfly wings', 'Entomology', 'Aerospace') }),
     step({ id: DESIGN, stage: 'design', ordinal: 5, status: 'done', outcome: 'bridge', run_id: RUN, premise_result_ids: [RESULT_A, RESULT_B], finding: bridge('Hush: a rotor that flies like an owl', 'Ornithology', 'Botany') }),
-    step({ id: ENGINEER, stage: 'engineer', ordinal: 6, status: 'done', outcome: 'answer', run_id: RUN, finding: answer('Four blades of 4.2 m.', [{ label: 'postulated', text: 'Tip speed 180 m/s from v = ωr with ω = 43 rad/s.' }]) }),
-    step({ id: TEST, stage: 'test', ordinal: 7, status: 'done', outcome: 'answer', run_id: RUN, finding: answer('Plausible against the noise target.', [{ label: 'speculative', text: 'About 6 dB quieter than a plain blade.' }], ['A serration that survives rain erosion']) }),
+    step({ id: ENGINEER, stage: 'engineer', ordinal: 6, status: 'done', outcome: 'answer', run_id: RUN, finding: answer('Four blades of 4.2 m.', [{ label: 'postulated', text: 'Tip speed is about 180 m/s.', derivation: 'v = ωr = 43 rad/s × 4.2 m ≈ 180 m/s.' }]) }),
+    step({ id: TEST, stage: 'test', ordinal: 7, status: 'done', outcome: 'answer', run_id: RUN, finding: answer('Plausible against the noise target.', [{ label: 'speculative', text: 'About 6 dB quieter than a plain blade.', caveats: ['Measured only in wind tunnels.'] }], ['A serration that survives rain erosion']) }),
   ],
 })
 
@@ -109,7 +113,12 @@ describe('Innovation Studio', () => {
     expect(ideas.getByText('Pleated dragonfly wings')).toBeVisible()
     expect(ideas.getByText(/considered, not used/)).toBeVisible()
     expect(within(screen.getByRole('region', { name: 'Engineering and calculations' })).getByText('Postulated')).toBeVisible()
-    expect(screen.getByText(/Tip speed 180 m\/s/)).toBeVisible()
+    expect(screen.getByText(/Tip speed is about 180 m\/s/)).toBeVisible()
+    expect(screen.getByText(/v = ωr = 43 rad\/s × 4.2 m/)).toBeVisible()
+    expect(screen.getByText('Caveat: Measured only in wind tunnels.')).toBeVisible()
+    const references = within(screen.getByRole('region', { name: 'Sources' }))
+    expect(references.getByRole('link', { name: 'Ornithology paper' })).toHaveAttribute('href', 'https://example.org/s-Ornithology')
+    expect(references.getAllByRole('listitem')).toHaveLength(4)
     expect(within(screen.getByRole('region', { name: 'Stress test against your brief' })).getByText('Speculative')).toBeVisible()
     await userEvent.click(within(screen.getByRole('region', { name: 'Still to invent' })).getByRole('button', { name: 'Solve this' }))
     expect(props.onSolveGap).toHaveBeenCalledWith('A serration that survives rain erosion')
@@ -117,7 +126,12 @@ describe('Innovation Studio', () => {
     const created: Blob[] = []
     vi.stubGlobal('URL', Object.assign(URL, { createObjectURL: vi.fn((blob: Blob) => { created.push(blob); return 'blob:dossier' }), revokeObjectURL: vi.fn() }))
     await userEvent.click(screen.getByRole('button', { name: 'Download the design dossier' }))
-    expect(await created[0].text()).toContain('## Engineering and calculations')
+    const page = await created[0].text()
+    expect(page).toContain('<h2>Engineering and calculations</h2>')
+    expect(page).toContain('<strong>Working:</strong> v = ωr = 43 rad/s × 4.2 m ≈ 180 m/s.')
+    expect(page).toContain('<ol class="refs">')
+    await userEvent.click(screen.getByRole('button', { name: 'Download as Markdown' }))
+    expect(await created[1].text()).toContain('## Engineering and calculations')
 
     const writeText = vi.fn(async (_text: string) => undefined)
     Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
@@ -136,7 +150,15 @@ describe('Innovation Studio', () => {
     const parsed = parseProgramme(designed)
     const dossier = buildDossier(parsed, 'https://askpolymath.com')
     for (const heading of ['# Hush: a rotor that flies like an owl', '## The brief', '## Where the ideas came from', '## The invention', '## Engineering and calculations', '## Stress test against the brief', '## Still to invent']) expect(dossier).toContain(heading)
-    expect(dossier).toContain('**Postulated.** Tip speed 180 m/s')
+    expect(dossier).toContain('**Postulated.** Tip speed is about 180 m/s.')
+    expect(dossier).toContain('  - *Working:* v = ωr = 43 rad/s × 4.2 m ≈ 180 m/s.')
+    expect(dossier).toContain('  - *Caveat:* Measured only in wind tunnels.')
+    expect(dossier).toContain('## References')
+    expect(dossier).toMatch(/1\. A\. Author, B\. Author et al\. Rotor acoustics handbook\. Journal of Flight\. 2021\. https:\/\/example\.org\/s-shared/)
+    expect(dossier).toContain('[1]')
+    const page = buildDossierPage(parsed)
+    expect(page.startsWith('<!doctype html>')).toBe(true)
+    expect(page).not.toContain('<script')
     expect(dossier).toContain('considered, not used')
     expect(dossierFileName(parsed)).toBe('polymath-studio-hush-a-rotor-that-flies-like-an-owl.md')
     const long = parseProgramme({ ...designed, brief: 'b'.repeat(1000) })

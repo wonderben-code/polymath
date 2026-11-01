@@ -105,3 +105,14 @@
   .studio-row-label { min-width: 0; width: 100%; }
   .studio-box textarea { font-size: 18px; }
 }
+.studio-claim-body { min-width: 0; }
+.studio-claim-body > p { margin: 0; }
+.studio-working { margin-top: 8px !important; padding: 10px 12px; border-radius: 8px; background: #f7f5f0; font-size: 14px; white-space: pre-wrap; }
+.studio-caveat { margin-top: 6px !important; font-size: 14px; color: #8a5a00; }
+.studio-evidence { margin-top: 8px; font-size: 13.5px; }
+.studio-evidence summary { cursor: pointer; color: var(--muted); }
+.studio-evidence blockquote { margin: 8px 0 0; padding: 6px 12px; border-left: 3px solid var(--hairline); color: #3b3e45; overflow-wrap: anywhere; }
+.studio sup a { margin-left: 2px; font-size: 11px; text-decoration: none; color: var(--blue); }
+.studio-mappings li small { grid-column: 1 / -1; color: var(--muted); font-size: 12.5px; }
+.studio-refs { margin: 0; padding-left: 22px; font-size: 14px; line-height: 1.6; color: var(--ink); }
+.studio-refs li { margin: 0 0 6px; overflow-wrap: anywhere; scroll-margin-top: 80px; }
