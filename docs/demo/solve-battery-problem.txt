@@ -1,0 +1,83 @@
+Discoveries hide between fields of science. Polymath finds them.
+
+Science is split into thousands of specialties, and far more is published each year than anyone could read. So an answer found in one field often stays unknown in the field that needs it. Polymath fuses Meta’s frontier Muse models with an engine that reads across the open record of world science. Meta brings the reasoning and the creativity; Polymath brings the literature, the evidence checks and the memory. Together they find where fields have found the same idea, solve problems with answers from other fields, and invent new things from ideas that already work.
+
+Meta frontier intelligence
+×
+Polymath’s engine across the world’s science
+
+Heat flow
+Option pricing
+the same equation
+Famous examples of the kind of connection Polymath looks for.
+Explore
+Solve
+Ask
+Surprise me
+Converge
+
+Describe a problem. Polymath looks for an answer anywhere in science, and if none fits, builds one from the closest answers in other fields.
+
+Describe the problem you want solved
+Find or forge a key
+→
+Evidence bar
+Frontier
+Standard
+Peer reviewed
+Established
+
+Never retracted work. Preprints included, and labelled as such.
+
+Current funding authority or this browser’s limits do not permit a new model task. Saved research remains readable.
+
+Free · 26 of 30 investigations left today · Ways to use Polymath
+
+Reads from arXiv · OpenAlex · Publishes to Zenodo (CERN)
+
+Allowance checks are paused. Refresh funded access before another model task.
+
+Remaining allowance for this browser at the last check: $13.75059. New jobs remaining today: 26.
+
+Details about this funded access
+Refresh funded research access
+Solve
+
+THE LOCK
+
+How could a battery keep its charge through ten thousand cycles without degrading?
+Searching for a key.
+
+The next search could not be started. Live research may be unavailable; your problem is saved.
+
+Continue solving
+WHAT ALREADY EXISTS
+Multi-phase lithium titanate hydrates have demonstrated more than 10,000 cycles at ~35C with about 130 mAh/g and average fade of only 0.001% per cycle, using single solid-solution behavior without two-phase transformation. This is the closest direct existing solution, but it still fades ~10% over 10,000 cycles, not zero degradation. Standard Li4Ti5O12 (LTO) is a zero-strain anode with almost no volume change (<1%) during insertion/extraction, described as offering cycling stability over 20,000 cycles with long life, safety and power advantages over graphite. Fit to 10,000 cycles is strong on mechanics and cycle count, but at lower cell voltage and energy density than graphite anodes. LTO is not degradation-free: active catalytic surfaces cause electrolyte reactions, surface deposits/layers, gas evolution and pack swelling, linked to moisture, solvent/solute decomposition and catalytic…
+Multi-phase lithium titanate hydrates have demonstrated more than 10,000 cycles at ~35C with about 130 mAh/g and average fade of only 0.001% per cycle, using single solid-solution behavior without two-phase transformation. This is the closest direct existing solution, but it still fades ~10% over 10,000 cycles, not zero degradation.
+Standard Li4Ti5O12 (LTO) is a zero-strain anode with almost no volume change (<1%) during insertion/extraction, described as offering cycling stability over 20,000 cycles with long life, safety and power advantages over graphite. Fit to 10,000 cycles is strong on mechanics and cycle count, but at lower cell voltage and energy density than graphite anodes.
+Hierarchically structured LTO with porous secondary particles delivered 170 mAh/g with no sign of fading after 1,000 cycles at 50C (72-s charge). This supports nanostructure plus non-stoichiometry as a design route, but does not itself demonstrate 10,000 cycles.
+LTO is not degradation-free: active catalytic surfaces cause electrolyte reactions, surface deposits/layers, gas evolution and pack swelling, linked to moisture, solvent/solute decomposition and catalytic activity. Electrolyte reformulation and interface modification are proposed but not proven in these excerpts to give zero loss for 10,000 cycles.
+
+Still unsolved: What electrolyte plus interface combination eliminates LTO gassing and interfacial layers for 10,000 full-cell cycles at practical rates and temperatures? Can any high-energy-density lithium-ion chemistry reach 10,000 cycles with near-zero fade, or is the limit confined to LTO and titanium oxides?
+
+Open the investigation
+CLOSE FITS FROM OTHER FIELDS
+Solid-state ionics and ceramic membranes · Corrosion inhibition and self-healing coatings
+Conformal amorphous Li-permeable shell plus triggered self-healing for LTO gassing interface
+
+Where it fits: Transfer two structures to LTO: (1) ~5 nm conformal amorphous ALD oxide as Li+-permeable sieve that blocks solvent/H2O access to catalytic Ti sites and stays intact, paired with low-water HF-scavenging electrolyte; (2) corrosion nanocontainer logic where repair chemistry releases only on local trigger to heal pinholes without continuous leakage. Fits: LTO zero-strain needs only interfacial, not mechanical, solution; intact barrier lowers impedance/parasitics. Falls short: no 10,000-cycle full-cell gassing proof; left demo is cathode-side 500 cycles with LTO anode, right demo is steel/Al aqueous corrosion, not Li+ nonaqueous.
+
+Where it falls short: Left evidence is cathode coating in solid-state cells for 500 cycles at 4.7V, not LTO coating for gassing in liquid electrolyte for 10k cycles; right evidence is aqueous steel/Al corrosion, where pH triggers differ from nonaqueous HF/H2O triggers and Li+ compatibility is unproven; 5-nm shells develop pinholes and HF attack may undercut barrier, increasing impedance rather than eliminating interfacial layers.
+
+Open the investigation
+Electrochemistry / Battery degradation science · Aerospace fatigue and damage tolerance
+Damage-tolerant derating: high-energy NMC/graphite can approach 10k cycles only below knee thresholds
+
+Where it fits: Harlow et al. benchmark NMC532/graphite shows moderate-energy-density Li-ion can reach million-mile / two-decade lifetimes under controlled cycling, storage and electrolyte optimization. Attia et al. knee review shows this long life is bounded by six knee pathways where hidden trajectories become suddenly rapid. Aerospace damage-tolerance method maps directly: define a safe operating envelope below crack-growth / knee thresholds, validate by test pyramid, and monitor hidden state. It fits 10k-cycle goal only if usable energy, voltage window, temperature and charge rate are derated; it falls short of near-zero fade at 100% high-energy utilization and does not replicate LTO zero-strain immunity.
+
+Where it falls short: Linear threshold analogy fails: batteries have cumulative irreversible electrolyte consumption unlike crack growth that can be arrested below threshold, so derating delays but cannot give near-zero fade to 10k at high energy density; only zero-strain LTO avoids this.
+
+Open the investigation
+Your problems
+How could a battery keep its charge through ten thousand cycles without degrading?
+In progress

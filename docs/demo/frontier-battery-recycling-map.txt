@@ -1,0 +1,58 @@
+FRONTIER RESEARCH · EXPERIMENTAL
+
+Take on a problem nobody has solved yet.
+
+Polymath surveys the literature, names the gaps, looks for solutions in other fields and breaks stubborn gaps into smaller steps, mapping the path from question to answer.
+
+What unsolved problem should Polymath work on?
+Start a frontier programme
+
+Each step runs as an ordinary investigation with its own evidence and budget. Keep this tab open while it works.
+
+Your programmes
+ACTIVE
+How could batteries be recycled without loss of capacity?
+How could batteries be recycled without loss of capacity?
+Pause
+Stop
+Download report
+
+An investigation for this programme is in progress.
+13 of 24 investigations used · depth up to 4
+
+🔔
+Notify me when it’s done
+Notifications are blocked in this browser’s settings.
+Supported by the literature
+2
+Solved in another field
+3
+Derived by model reasoning
+1
+Waiting
+3
+GAP · Solved in another field
+What sorting purity and lithi…
+STEP · Supported by the literature
+Step 1 - Establish the direct…
+STEP · Derived by model reasoning
+Step 2 - Separate reversible …
+STEP · Supported by the literature
+Step 3 - Validate single-loop…
+STEP · Being researched
+Step 4 - Treat route selectio…
+STEP · Waiting
+Step 5 - Run controlled repea…
+STEP · Waiting
+No universal number of full-c…
+GAP · Waiting
+How many direct-recycling loo…
+GAP · Solved in another field
+What are cost, energy and saf…
+CONVERGENCE · Solved in another field
+Look for a shared structure a…
+QUESTION · Surveyed
+How could batteries be recycl…
+Read the map as a list
+
+Experimental Supported means exact quotations from saved sources; derived and conjectured steps are model reasoning, clearly labelled. A solve path is only as strong as its weakest step.
