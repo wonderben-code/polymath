@@ -6,7 +6,7 @@
 
 Created, designed and built by Ekram Alam, as a solo personal project, for the **Meta Global AI Developer Hackathon 2026** (Indie Developer track). Polymath is **Meta × the world’s science**: Meta’s frontier Muse models (Muse Spark today, configurable to any stronger Meta model) bring the reasoning and creativity; Polymath brings the literature engine, evidence checks, memory and budget control. Native access and billing remain unverified, and paid execution is disabled.
 
-**Live at https://askpolymath.com** (deployed 1 November 2026; live Meta research switches on after the key and spending limit are in place).
+**Live at https://askpolymath.com** (deployed 1 November 2026). Live Meta research is switched on for visitors under the owner's spending caps; Explore, Ask, Surprise, Solve, Converge, Formalise, Write paper and public sharing have each completed end to end on the live site with Muse Spark (see `docs/PROGRESS.md`, Live operations).
 
 Created 27 October 2026. Every push to `main` is Bitcoin-timestamped through OpenTimestamps (`.github/workflows/bitcoin-timestamp.yml`, proofs in `timestamps/`).
 
@@ -69,16 +69,16 @@ The implementation baseline is recorded in `docs/ARCHITECTURE.md`. The target is
 - [x] Architecture, full-product roadmap, development plan, and progress tracker recorded
 - [x] A3: application foundation, PostgreSQL migrations, health checks, and automated checks
 - [x] A4: bounded adaptive research-controller prototype and Meta adapter, verified with fixtures
-- [ ] A1–A2, A5: verified Meta capabilities and first real-source investigation
+- [x] A1–A2, A5: Meta capabilities verified live (probe receipt, 1 Nov) and real-source investigations completed on askpolymath.com
 - [x] B3.1: disabled Meta readiness proposals, authenticated budget inspection and safe disable
 - [x] B3.2 implementation: exact one-call Meta approval, observed usage/receipts and free recovery; verified with mock transport
 - [x] B3.3 implementation: native Meta composition for all research/writing/reassessment tasks, exact activation and safe resume; verified with mock transport
-- [ ] B–C live gates: native model/billing verification, execution activation and scientific Explore evaluation
+- [x] B–C live gates: native model/billing verified by probe, execution activated, visitor Explore completed live (two-bridge collection ranked); scientific quality review continues
 - [x] D3 local contract/client: documented v1 API and standalone HTTP client, verified with real loopback worker journeys
 - [x] D2 implementation: funded visitor sessions, persistent resource controls and public browser/API/client access; local mock verification
-- [ ] D live gates: public URL ✓ (https://askpolymath.com, 1 Nov), hosted access/operations and deployed external-client verification
+- [x] D live gates: public URL (https://askpolymath.com), funded visitor access, server task channel for operations, and the standalone client used against the live API
 - [x] E1–E3: Ask and Surprise Me implementation, verified through synthetic worker/browser journeys
-- [ ] E4: live Meta/source evaluation and scientific quality review
+- [ ] E4: Ask and Surprise completed live with cited claims; scientific quality review continues
 - [x] F3–F5 implementation: higher-level research, scheduled collection and cited reassessment
 - [x] F6/C3 implementation: automatic Surprise discovery ladders, public hypothesis decisions and model-assessed novelty/confidence; local verification
 - [x] Shared public reading: exact owner previews, cited snapshots, library/map, expiry and revocation
