@@ -15,6 +15,7 @@ profiles() {
   local list=()
   grep -q '^VISITOR_ZENODO_ENABLED=true' "$ENV" && list+=(--profile zenodo)
   grep -q '^PAID_META_RESEARCH_ENABLED=true' "$ENV" && list+=(--profile research)
+  grep -q '^LITERATURE_INGESTION_ENABLED=true' "$ENV" && list+=(--profile literature)
   echo "${list[@]:-}"
 }
 sql() { dc exec -T db psql -U polymath -d polymath -v ON_ERROR_STOP=1 "$@"; }
