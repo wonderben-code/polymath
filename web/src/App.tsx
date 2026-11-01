@@ -19,6 +19,7 @@ import { ConvergeComposer } from './converge/ConvergeComposer'
 import { PublishingSection } from './publishing/PublishingSection'
 import { CALLBACK_PATH, YourZenodo } from './zenodo/YourZenodo'
 import { AccountControl } from './account/AccountControl'
+import { Story } from './Story'
 import { ConvergeWorkspace } from './converge/ConvergeWorkspace'
 import { HeroBridge } from './HeroBridge'
 import { WaysToUse } from './WaysToUse'
@@ -107,7 +108,16 @@ function StatusLine({ label, value, state }: { label: string; value: string; sta
 
 function AboutPlace({ remaining, daily }: { remaining?: number | null; daily?: number | null }) {
   return <div className="about-place">
-    <header className="place-heading"><h1>How Polymath works</h1><p>Polymath is an AI research partner that reads across disciplines at once. It looks for places where distant fields describe the same hidden structure in different words, tries hard to break every connection it finds, and links each claim to the exact source passage.</p></header>
+    <header className="place-heading"><h1>What Polymath is</h1><p>Science is split into thousands of specialties, and far more is published each year than anyone could read. So an answer found in one field often stays unknown in the field that needs it. Polymath is an AI research partner that reads across all of them. It finds where different fields have discovered the same idea, checks each connection against the original papers, builds deeper connections from the ones that hold, and takes on open problems with tools from other disciplines.</p></header>
+    <section className="about-section" aria-labelledby="impact-title">
+      <h2 id="impact-title">Why it matters</h2>
+      <dl className="about-points">
+        <div><dt>Discoveries between fields</dt><dd>Some of the biggest leaps came from connecting fields: the mathematics of heat became the pricing of options; how ant colonies find food inspired how networks route data. Polymath looks for leaps like these every day.</dd></div>
+        <div><dt>Answers that already exist</dt><dd>A problem that is open in one field may be solved in another. Polymath helps find it, with the passages that show it.</dd></div>
+        <div><dt>Gaps worth working on</dt><dd>It names what nobody has connected yet, so researchers can see where the next work could be.</dd></div>
+        <div><dt>Open problems, step by step</dt><dd>Frontier breaks a hard problem into smaller steps and looks for each answer across disciplines.</dd></div>
+      </dl>
+    </section>
     <section className="about-section" aria-labelledby="intelligence-title">
       <h2 id="intelligence-title">Meta’s Muse Spark decides each step. <em>Polymath keeps it honest.</em></h2>
       <dl className="about-points">
@@ -127,6 +137,10 @@ function AboutPlace({ remaining, daily }: { remaining?: number | null; daily?: n
       </dl>
     </section>
     <WaysToUse remaining={remaining} daily={daily} />
+    <section className="about-section about-credits" aria-labelledby="credits-title">
+      <h2 id="credits-title">Made for the Meta hackathon</h2>
+      <p>Built for the Meta Global AI Developer Hackathon with Cerebral Valley. The research intelligence is Meta’s Muse Spark. Polymath reads from arXiv and OpenAlex, publishes to Zenodo (operated by CERN), and is open source.</p>
+    </section>
   </div>
 }
 
@@ -261,8 +275,8 @@ export function App() {
         <main id="workspace">
           {place === 'research' && <>
             <section className="composer" aria-labelledby="research-title">
-              <h1 id="research-title">Find the hidden connections between fields of science.</h1>
-              <p className="hero-lede">Polymath is an AI research partner. It reads real papers across every discipline, tests each connection it finds, and shows you the exact passages behind it.</p>
+              <h1 id="research-title">Discoveries hide between fields of science. Polymath finds them.</h1>
+              <p className="hero-lede">Science is split into thousands of specialties, and far more is published each year than anyone could read. So an answer found in one field often stays unknown in the field that needs it. Polymath is an AI research partner that reads across all of them, spots where different fields have found the same idea in different words, and checks each connection against the original papers before showing it to you.</p>
               <HeroBridge />
               <div className="mode-switch" role="group" aria-label="Research mode">
                 {modes.map((item) => (
@@ -303,6 +317,7 @@ export function App() {
               </form>
               <p className="availability-note" id="research-availability" role="status">{statusText}</p>
               <p className="ways-line">{freeAccess?.remaining_session_jobs_today != null && freeAccess.limits ? `Free · ${freeAccess.remaining_session_jobs_today} of ${freeAccess.limits.max_jobs_per_session_day} investigations left today · ` : ''}<a href="/about#ways" onClick={(event) => { event.preventDefault(); go('about'); window.setTimeout(() => document.getElementById('ways')?.scrollIntoView?.(), 50) }}>Ways to use Polymath</a></p>
+              <p className="sources-line">Reads from <b>arXiv</b> · <b>OpenAlex</b> <span aria-hidden="true">·</span> Publishes to <b>Zenodo</b> (CERN)</p>
               {notice && <p className="composer-alert" role="alert">{notice}</p>}
               {!(workspace.native.phase === 'disabled' && !workspace.native.access) && <NativeResearchNotice context={workspace.native} />}
             </section>
@@ -322,7 +337,7 @@ export function App() {
             {!selectedFindingId && !workspace.activeRun?.discovery_intent && !workspace.activeRun?.explore_collection_intent && findingResultId && <ShareWorkspace key={`share:${findingResultId}`} sourceResultId={findingResultId} enabled={workspace.phase === 'ready'} csrfToken={workspace.csrfToken} sourceCurrent={findingHead.canGenerate} refreshToken={assessmentRefresh} onSessionExpired={workspace.invalidateSession} />}
             {selectedFindingId && <FindingVersionWorkspace key={selectedFindingId} resultId={selectedFindingId} enabled={workspace.phase === 'ready'} csrfToken={workspace.csrfToken} canGenerate={workspace.canSubmit && !assessmentBusy} refreshToken={assessmentRefresh} onSessionExpired={workspace.invalidateSession} onOpenFinding={openFinding} onOpenRun={openRun} onBusyChange={setArtifactBusy} onClose={() => setSelectedFindingId(null)} />}
 
-            {!converging && <section className="recent" aria-labelledby="history-title">
+            {!converging && !(workspace.phase === 'ready' && recent.length === 0) && <section className="recent" aria-labelledby="history-title">
               <div className="recent-heading"><h2 id="history-title">Recent investigations</h2><button type="button" className="text-button" disabled={workspace.phase === 'loading' || connection !== 'connected' || !system?.database || !system.migrations} onClick={workspace.refresh}>Reload saved research</button></div>
               {recent.length === 0 && <div className="recent-empty">
                 <svg className="recent-mark" viewBox="0 0 120 64" aria-hidden="true"><path d="M10 44 L44 16 L92 26 L62 54 Z M44 16 L62 54" /><circle cx="10" cy="44" r="3.5" /><circle cx="44" cy="16" r="5.5" /><circle cx="92" cy="26" r="4" /><circle cx="62" cy="54" r="3" /></svg>
@@ -333,6 +348,7 @@ export function App() {
               {workspace.nextCursor && <button className="history-more" type="button" disabled={workspace.loadingMore} onClick={() => void workspace.loadMore()}>{workspace.loadingMore ? 'Loading more…' : 'Load earlier investigations'}</button>}
               {workspace.error && <p className="history-error" role="alert">{workspace.error}</p>}
             </section>}
+            {!converging && !workspace.activeRun && !selectedFindingId && !workspace.selectedId && <Story onFrontier={() => go('frontier')} />}
           </>}
 
           {place === 'library' && <>
@@ -375,7 +391,7 @@ export function App() {
             <StatusLine label="Meta connection" state="unknown" value={!system ? 'Not checked' : system.metaConfigured ? 'Key present · unverified' : 'Not configured'} />
             <li><button type="button" className="text-button" disabled={connection === 'loading'} onClick={() => setRetry((value) => value + 1)}>Check again</button></li>
           </ul>
-          <span className="footer-links"><a href="/library">Public library</a><a href="/operator/budget">Operator desk</a><span>A personal project by Ekram Alam</span></span>
+          <span className="footer-links"><a href="/library">Public library</a><a href="/operator/budget">Operator desk</a><span>Built for the Meta Global AI Developer Hackathon with Cerebral Valley · Intelligence by Meta Muse Spark · A project by Ekram Alam</span></span>
         </footer>
       </div>
     </NativeResearchProvider>

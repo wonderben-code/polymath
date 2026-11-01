@@ -99,8 +99,8 @@ export function Observatory({ events, terminal, createdAt, updatedAt, result }: 
       <div className="observatory-stage">
         <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} role="img" aria-label={label} preserveAspectRatio="xMidYMid meet">
           <defs>
-            <radialGradient id="obs-core" cx="50%" cy="45%" r="60%"><stop offset="0%" stopColor="#4f9a83" /><stop offset="70%" stopColor="#266b58" /><stop offset="100%" stopColor="#1d5345" /></radialGradient>
-            <radialGradient id="obs-glow" cx="50%" cy="50%" r="50%"><stop offset="0%" stopColor="#266b58" stopOpacity=".18" /><stop offset="100%" stopColor="#266b58" stopOpacity="0" /></radialGradient>
+            <radialGradient id="obs-core" cx="50%" cy="45%" r="60%"><stop offset="0%" stopColor="#5b606b" /><stop offset="70%" stopColor="#16181d" /><stop offset="100%" stopColor="#16181d" /></radialGradient>
+            <radialGradient id="obs-glow" cx="50%" cy="50%" r="50%"><stop offset="0%" stopColor="#16181d" stopOpacity=".18" /><stop offset="100%" stopColor="#16181d" stopOpacity="0" /></radialGradient>
             <filter id="obs-soft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="2.4" /></filter>
           </defs>
           <circle cx={CX} cy={CY} r={RING + 30} fill="url(#obs-glow)" />

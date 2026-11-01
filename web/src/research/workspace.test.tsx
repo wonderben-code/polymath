@@ -141,7 +141,7 @@ describe('session-owned research workspace', () => {
     expect(stream.close).toHaveBeenCalled()
     state.runs = []
     await user.click(screen.getByRole('button', { name: 'Reload saved research' }))
-    await screen.findByText('No saved investigations in this browser session.')
+    await screen.findByRole('heading', { name: 'How it works' })
     expect(state.sessionCalls).toBe(2)
   })
 
@@ -187,7 +187,7 @@ describe('session-owned research workspace', () => {
     state.runs = []
     render(<App />)
     const user = userEvent.setup()
-    await screen.findByText('No saved investigations in this browser session.')
+    await screen.findByRole('heading', { name: 'How it works' })
     expect(screen.getByRole('button', { name: 'Explore connections' })).toBeDisabled()
     await user.type(screen.getByRole('textbox'), 'A synthetic creation test')
     await user.click(screen.getByRole('button', { name: 'Explore connections' }))

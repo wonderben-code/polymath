@@ -29,9 +29,10 @@ export function HeroBridge() {
       <div className="hero-bridge-scene" key={index} aria-hidden="true">
         <span className="hero-bridge-field is-left">{example.left}</span>
         <svg className="hero-bridge-arc" viewBox="0 0 240 70" preserveAspectRatio="none">
+          <defs><linearGradient id="hero-arc-spectrum" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stopColor="var(--amber)" /><stop offset="1" stopColor="var(--blue)" /></linearGradient></defs>
           <path d="M 6 64 Q 120 -26 234 64" pathLength={1} />
-          <circle cx="6" cy="64" r="4" />
-          <circle cx="234" cy="64" r="4" />
+          <circle className="is-left" cx="6" cy="64" r="4" />
+          <circle className="is-right" cx="234" cy="64" r="4" />
         </svg>
         <span className="hero-bridge-field is-right">{example.right}</span>
         <span className="hero-bridge-shared">{example.shared}</span>
