@@ -59,3 +59,17 @@ async def test_a_whole_investigation_of_prose_wrapped_actions_is_never_rejected(
     result = await ResearchController(model, ModeFixtureTools()).investigate("Synthetic concept")
     assert result.status == "insufficient_evidence"
     assert not any(observation and observation.get("error") for observation in model.observations)
+
+
+def test_stage_protocols_parse_a_recorded_reply_with_prose_around_it():
+    from polymath.explore_collection_contracts import ExploreCollectionIntent
+    from polymath.stage_protocols import StageProtocolBinding
+
+    binding = StageProtocolBinding(
+        mode="explore",
+        intent=ExploreCollectionIntent(protocol="polymath-explore-collection-v1", max_bridges=3),
+        protocol="polymath-explore-collection-v1",
+        config_sha256="a" * 64,
+    )
+    reply = "SOC spans physics and faults — gathering evidence next." + json.dumps(SEARCH)
+    assert binding.parse_action(reply).query == "sandpile model"

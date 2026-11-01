@@ -61,11 +61,14 @@ class StageProtocolBinding:
         )
 
     def parse_action(self, content):
+        # The recorded reply is raw; the action may sit inside prose or a fence.
+        from polymath.research.reply import action_json
+
         if self.mode == "surprise":
-            return DISCOVERY_ACTION_ADAPTER.validate_json(content)
+            return DISCOVERY_ACTION_ADAPTER.validate_json(action_json(content))
         from polymath.explore_collection_contracts import EXPLORE_ACTION_ADAPTER
 
-        return EXPLORE_ACTION_ADAPTER.validate_json(content)
+        return EXPLORE_ACTION_ADAPTER.validate_json(action_json(content))
 
     def parse_packet(self, value):
         if self.mode == "surprise":

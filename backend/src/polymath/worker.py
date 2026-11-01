@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import logging
 import uuid
 from collections.abc import Callable
 from contextlib import suppress
@@ -48,6 +49,8 @@ from polymath.research.models import (
     SourceDocument,
     SourceReference,
 )
+
+_LOG = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from polymath.assessment_controller import AssessmentLimits
@@ -824,7 +827,12 @@ class _RecordedDiscoverySink:
             raise ExecutionStopped(f"{self.failure_prefix}_journal_not_saved") from None
         except asyncio.CancelledError:
             raise
-        except Exception:
+        except Exception as error:
+            # The run records only the fixed code; the type goes to the server log so
+            # the cause is never invisible. Never the message: it could carry text.
+            _LOG.warning(
+                "%s store call %s interrupted: %s", self.failure_prefix, name, type(error).__name__
+            )
             raise ExecutionStopped(f"{self.failure_prefix}_store_interrupted") from None
 
     async def begin_context(self, context) -> None:
