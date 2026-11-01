@@ -516,3 +516,6 @@ body { background: var(--paper); color: var(--ink); font-size: 16px; line-height
 .credits strong::before { content: ''; display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 8px; vertical-align: 2px; background: var(--spectrum); }
 .credits span { font-size: 13px; color: var(--muted); }
 @media (max-width: 760px) { .credits { grid-template-columns: 1fr; gap: 22px; } }
+.credits-logo { display: block; width: auto; max-width: 160px; margin: 2px 0 4px; }
+.credits-mark { display: inline-block; vertical-align: -3px; margin-right: 8px; }
+.credits strong:has(.credits-mark)::before { display: none; }
