@@ -139,6 +139,21 @@ Logos are used only within each organisation's published guidelines, and never
 in a way that suggests endorsement. Otherwise their names are set in clean
 type.
 
+## 6. Idea to explore next (owner, 1 Nov): "Solve", lock and key
+
+Not on the current build list; to be explored when the time is right.
+
+The biggest value is not only finding connections but **solving problems across
+fields**. The visitor states a problem (the lock). Polymath searches across
+fields for an existing answer that fits (the key). If none fits fully, it
+names the gap or hole in the best partial answers, then looks across fields,
+and combinations of fields, to assemble a key that does fit, with every piece
+tied to its evidence.
+
+Frontier already surveys a problem, names gaps and looks for solutions in other
+fields, so a Solve mode can build on that foundation: problem → candidate keys
+→ the fit test → the gap → combined keys → evidence for each piece.
+
 ## Questions for the owner
 
 1. Which colour direction (shown as live swatches first)?
