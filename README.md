@@ -12,6 +12,7 @@ Created 27 October 2026. Every push to `main` is Bitcoin-timestamped through Ope
 
 ## What it lets you do
 - **Solve a problem.** Describe a problem; Polymath looks for an answer anywhere in science, and if none fits, forges one from the closest answers in other fields.
+- **Choose your evidence bar.** Frontier, Standard, Peer reviewed or Established: decide how vetted the literature must be.
 - **Explore a concept.** Discover bridges to other fields, each with papers on both sides, a mapping, evidence, the strongest objection, novelty and confidence.
 - **Ask "what is the truth about X?"** A search engine for answers not yet written, with every statement marked Known / Postulated / Speculative.
 - **Watch it think.** See the research unfold live.

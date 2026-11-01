@@ -379,9 +379,16 @@ def build_native_research_worker(
     def forbidden_legacy_model(snapshot):
         raise ExecutionStopped("native_legacy_factory_forbidden")
 
+    def rigour_of(snapshot) -> str:
+        from polymath.rigour import level_for
+
+        with Session(engine) as session:
+            return level_for(session, snapshot.id)
+
     def source_tools(context: _RunContext, snapshot: RunSnapshot):
         return OpenLiteratureTools(
             openalex_api_key=openalex_api_key,
+            rigour=rigour_of(snapshot),
             provider_slot=DatabaseProviderPacer(
                 engine,
                 authorize=lambda session: _authorize_provider(session, context.lease),
@@ -393,7 +400,11 @@ def build_native_research_worker(
         engine,
         model_factory=forbidden_legacy_model,
         tools_factory=tools_factory
-        or (lambda _: OpenLiteratureTools(openalex_api_key=openalex_api_key)),
+        or (
+            lambda snapshot: OpenLiteratureTools(
+                openalex_api_key=openalex_api_key, rigour=rigour_of(snapshot)
+            )
+        ),
         tools_context_factory=source_tools if tools_factory is None else None,
         policy=None,
         runtime_profile_resolver=resolve,

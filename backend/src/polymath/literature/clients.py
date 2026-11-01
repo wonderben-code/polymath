@@ -481,10 +481,15 @@ class OpenAlexClient(_BoundedClient):
             return {}
         return {"Authorization": f"Bearer {self._api_key.get_secret_value().strip()}"}
 
-    async def search(self, query: str, *, limit: int = 5) -> list[DiscoveredSource]:
+    async def search(
+        self, query: str, *, limit: int = 5, filter: str | None = None
+    ) -> list[DiscoveredSource]:
         query = validate_query(query)
         validate_result_limit(limit)
         params: dict[str, str | int] = {"search": query, "per-page": limit}
+        if filter is not None:
+            # A fixed rigour filter from polymath.rigour, never visitor text.
+            params["filter"] = filter
         payload, retrieved_at = await self._request(params)
         return parse_openalex_records(payload, retrieved_at, limit)
 

@@ -20,6 +20,7 @@ import { PublishingSection } from './publishing/PublishingSection'
 import { CALLBACK_PATH, YourZenodo } from './zenodo/YourZenodo'
 import { AccountControl } from './account/AccountControl'
 import { Story } from './Story'
+import { RigourBar } from './research/RigourBar'
 import { SolveComposer } from './solve/SolveComposer'
 import { SolveWorkspace } from './solve/SolveWorkspace'
 import { createSolve } from './solve/client'
@@ -325,6 +326,7 @@ export function App() {
                 )}
                 {mode === 'surprise' && workspace.discoveryIntent && <details className="calm-details"><summary>About this run’s limits</summary><p>This approved discovery run can save up to {workspace.discoveryIntent.max_stages} evidence-backed bridges, with local depth up to {workspace.discoveryIntent.max_depth}. The model chooses whether to explore, deepen, connect saved stages or stop. The ceilings do not promise a discovery.</p></details>}
               </form>
+              {!converging && <RigourBar />}
               <p className="availability-note" id="research-availability" role="status">{statusText}</p>
               <p className="ways-line">{freeAccess?.remaining_session_jobs_today != null && freeAccess.limits ? `Free · ${freeAccess.remaining_session_jobs_today} of ${freeAccess.limits.max_jobs_per_session_day} investigations left today · ` : ''}<a href="/about#ways" onClick={(event) => { event.preventDefault(); go('about'); window.setTimeout(() => document.getElementById('ways')?.scrollIntoView?.(), 50) }}>Ways to use Polymath</a></p>
               <p className="sources-line">Reads from <b>arXiv</b> · <b>OpenAlex</b> <span aria-hidden="true">·</span> Publishes to <b>Zenodo</b> (CERN)</p>

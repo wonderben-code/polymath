@@ -26,6 +26,7 @@ from polymath import (  # noqa: F401
     publication_models,
     publishing_models,
     readiness_models,
+    rigour,
     scientific_context_models,
     sharing_models,
     solve_models,

@@ -97,6 +97,8 @@ class CreateRun(BaseModel):
     discovery_intent: DiscoveryIntent | None = None
     ask_overview_intent: AskOverviewIntent | None = None
     explore_collection_intent: ExploreCollectionIntent | None = None
+    # The rigour bar (polymath.rigour); left out, the standard bar applies.
+    rigour: Literal["frontier", "standard", "peer_reviewed", "established"] | None = None
 
     @field_validator("explore_collection_intent", mode="before")
     @classmethod
@@ -288,6 +290,11 @@ def _summary(run: ResearchRun, *, session: Session | None = None) -> dict:
         explore = load_explore_collection_intent(session, run)
         if explore is not None:
             result["explore_collection_intent"] = explore.model_dump(mode="json")
+        from polymath.rigour import recorded_level
+
+        rigour = recorded_level(session, run.id)
+        if rigour is not None:
+            result["rigour"] = rigour
         controls = native_run_controls(session, run)
         if controls is not None:
             result["native_research"] = controls
@@ -413,6 +420,10 @@ def create_run_router(
                 session.add(run)
                 session.flush()
                 session.add(ResearchRunAccess(run_id=run.id, session_hash=owner.token_hash))
+                if body.rigour is not None:
+                    from polymath.rigour import ResearchRunRigour
+
+                    session.add(ResearchRunRigour(run_id=run.id, level=body.rigour))
                 if body.discovery_intent is not None:
                     from polymath.discovery_admission import bind_discovery_intent
 
