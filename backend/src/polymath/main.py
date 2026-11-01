@@ -410,6 +410,11 @@ def create_app(
         response = await call_next(request)
         if request.url.path.startswith("/api/v1/"):
             response.headers["Cache-Control"] = "no-store"
+        elif request.url.path.startswith("/assets/"):
+            # Hashed build files never change; the page that names them must
+            # always be revalidated, or a visitor keeps an index that points at
+            # files a later release has replaced.
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
         if (
             request.url.path.startswith("/api/v1/public/")
             or request.url.path.startswith("/api/v1/shares")
@@ -485,8 +490,8 @@ def create_app(
                 raise HTTPException(status_code=404, detail="Not Found")
             candidate = (frontend / path).resolve()
             if candidate.is_relative_to(frontend) and candidate.is_file():
-                return FileResponse(candidate)
-            return FileResponse(frontend / "index.html")
+                return FileResponse(candidate, headers={"Cache-Control": "no-cache"})
+            return FileResponse(frontend / "index.html", headers={"Cache-Control": "no-cache"})
 
     # The ASGI resource gate is outermost and bounds bodies before FastAPI can
     # parse them. Disabled construction performs no database or model action.

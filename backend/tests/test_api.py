@@ -228,3 +228,22 @@ def test_public_html_has_privacy_headers_without_creating_owner_session(tmp_path
 def test_invalid_static_directory_fails_configuration(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="built index.html"):
         create_app(Settings(STATIC_DIR=tmp_path, _env_file=None))
+
+
+def test_index_page_revalidates_while_hashed_assets_are_immutable(tmp_path) -> None:
+    # A visitor who opened the site before a release must not keep an index
+    # that names build files the release replaced (seen live as a 404 on an
+    # old bundle). The page revalidates; the hashed files cache for good.
+    dist = tmp_path / "dist"
+    (dist / "assets").mkdir(parents=True)
+    (dist / "index.html").write_text("<!doctype html><title>Polymath</title>")
+    (dist / "assets" / "index-abc123.js").write_text("console.log(1)")
+    application = create_app(Settings(frontend_dist=dist, _env_file=None))
+    with TestClient(application) as client:
+        for path in ("/", "/studio", "/frontier"):
+            response = client.get(path)
+            assert response.status_code == 200
+            assert response.headers["cache-control"] == "no-cache"
+        asset = client.get("/assets/index-abc123.js")
+        assert asset.status_code == 200
+        assert asset.headers["cache-control"] == "public, max-age=31536000, immutable"
