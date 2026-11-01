@@ -233,13 +233,21 @@ export function StudioWorkspace({ enabled, csrfToken, canSubmit, refreshAccess, 
   const paint = useCallback(async (view: ArtView) => {
     if (!programmeId || !csrfToken || painting) return
     setPainting(true); setError('')
-    try { await renderStudioImage(programmeId, csrfToken, view); await loadImages(programmeId) } catch (failure) { fail(failure); live.current.delete(programmeId) } finally { setPainting(false) }
+    try { await renderStudioImage(programmeId, csrfToken, view); await loadImages(programmeId) } catch (failure) {
+      fail(failure)
+      // A paced request is tried again shortly; any other refusal leaves the gallery for the visitor to continue.
+      if (failure instanceof StudioApiError && failure.code === 'rate_limited') setPaintRetry((value) => value + 1)
+      else live.current.delete(programmeId)
+    } finally { setPainting(false) }
   }, [programmeId, csrfToken, painting, loadImages, fail])
+  const [paintRetry, setPaintRetry] = useState(0)
+  const [paintTurn, setPaintTurn] = useState(0)
+  useEffect(() => { if (!paintRetry) return; const timer = window.setTimeout(() => setPaintTurn((value) => value + 1), 20000); return () => window.clearTimeout(timer) }, [paintRetry])
   // An invention designed while this page is open fills its gallery automatically.
   const nextView = missing[0]
   useEffect(() => {
     if (programmeId && designed && imagesAvailable && imagesFor === programmeId && nextView && !rendering && !painting && live.current.has(programmeId)) void paint(nextView)
-  }, [programmeId, designed, imagesAvailable, imagesFor, nextView, rendering, painting, paint])
+  }, [programmeId, designed, imagesAvailable, imagesFor, nextView, rendering, painting, paint, paintTurn])
 
   async function change(kind: 'pause' | 'resume' | 'stop') {
     if (!programme || !csrfToken) return
