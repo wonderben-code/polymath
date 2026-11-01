@@ -161,6 +161,23 @@ streaming through Caddy unbuffered (a newly written event arrived within
 seconds; heartbeats continued). This is not a hosted deployment: a public domain,
 real certificate issuance and the chosen host remain to be verified.
 
+**Launch rehearsal, 1 November.** `scripts/setup-server.sh` makes the settings
+file; the same generated settings and a freshly built production image started
+healthy under Docker (schema 0031) behind Caddy with `POLYMATH_DOMAIN=localhost`.
+Checked through HTTPS: readiness, the home page, Your library's sections, the
+Publishing note before Zenodo is connected, accounts and visitor Zenodo
+reporting off by default, a `Secure` cookie, HSTS, nosniff and the HTTP→HTTPS
+308 redirect, with no page errors on a 390-pixel phone. The rehearsal found and
+fixed one launch blocker: empty sign-in app IDs in the shipped settings file had
+stopped the server.
+
+**Fastest launch.** On a fresh "Docker on Ubuntu" droplet, with the domain's
+DNS `A` record pointing at it, run as root:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/wonderben-code/polymath/main/scripts/setup-server.sh | bash -s -- your.domain
+```
+
 The API trusts forwarding headers only from the proxy's fixed address
 (`172.30.0.10`), so visitor identity, the https scheme, Secure cookies and Origin
 checks come from Caddy and cannot be spoofed by a client header. This was checked
