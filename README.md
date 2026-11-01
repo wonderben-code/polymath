@@ -11,6 +11,7 @@ Built by Ekram Alam, as a solo personal project, for the **Meta Global AI Develo
 Created 27 October 2026. Every push to `main` is Bitcoin-timestamped through OpenTimestamps (`.github/workflows/bitcoin-timestamp.yml`, proofs in `timestamps/`).
 
 ## What it lets you do
+- **Invent something new.** Innovation Studio turns a brief into a new design built from mechanisms that already work across science, engineered with calculations and stress-tested against your requirements.
 - **Solve a problem.** Describe a problem; Polymath looks for an answer anywhere in science, and if none fits, forges one from the closest answers in other fields.
 - **Choose your evidence bar.** Frontier, Standard, Peer reviewed or Established: decide how vetted the literature must be.
 - **Explore a concept.** Discover bridges to other fields, each with papers on both sides, a mapping, evidence, the strongest objection, novelty and confidence.
@@ -51,6 +52,7 @@ Created 27 October 2026. Every push to `main` is Bitcoin-timestamped through Ope
 | [docs/PUBLISHING.md](docs/PUBLISHING.md) | Publishing levels and the publishing autopilot (site publisher) |
 | [docs/ACCOUNTS.md](docs/ACCOUNTS.md) | Sign in with ORCID, GitHub or Google, or continue as a guest |
 | [docs/CONNECT_ZENODO.md](docs/CONNECT_ZENODO.md) | Connect Zenodo for every visitor: OAuth, encrypted tokens, exact records |
+| [docs/STUDIO.md](docs/STUDIO.md) | Innovation Studio: brief, inspirations from across science, an invention, engineering and a stress test |
 | [docs/SIGN_IN_SETUP.md](docs/SIGN_IN_SETUP.md) | Switching on Sign in and Connect Zenodo: register the free apps, then one helper command |
 | [docs/CONVERGE.md](docs/CONVERGE.md) | Experimental Converge mode: many fields, their connections and deeper levels |
 | [docs/FRONTIER.md](docs/FRONTIER.md) | Experimental Frontier mode specification (draft for review) |
@@ -101,6 +103,7 @@ Explore, Ask, and Surprise Me now share the worker, budget controls, immutable e
 
 Explicit owner sharing now creates an exact public finding snapshot with short cited excerpts, preserved uncertainty, an expiry date and a revoke control. A separate public library/search/map reads only those shared snapshots, without opening private investigations or starting research. Later reassessment updates the status badge while preserving the original shared content. This feature is separately disabled by default; enabling it never makes existing findings public automatically.
 
+- [x] Innovation Studio (schema 0034): brief → inspirations → invention → engineering → stress test, dossier and Meta AI hand-off; verified locally with synthetic runs, not yet live
 ## Ownership
 Polymath is a personal project, created, owned and developed solely by Ekram Alam as an individual. It is not affiliated with, owned by, sponsored by or developed on behalf of any company, employer or other organisation, and no organisation holds any rights in it. All rights in the project are held by Ekram Alam and are licensed under Apache 2.0.
 

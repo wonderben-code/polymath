@@ -1,16 +1,21 @@
-# Innovation Studio (proposal)
+# Innovation Studio
 
-Owner's idea, 1 November 2026. **Status: proposed; waiting on the owner's
-decisions below before building.** Visual mockup:
-[mockups/studio.html](mockups/studio.html) (illustrative placeholders only).
+Owner's idea, 1 November 2026; built the same day. Studio is reached from the
+**Studio** place in the header (`/studio`, marked Experimental). The first
+visual mockup is kept at [mockups/studio.html](mockups/studio.html).
 
 ## The idea in one line
 
-Describe something you want to make, with the specs it must meet. Polymath
-searches distant and unusual corners of science for mechanisms that already
-achieve each requirement somewhere else (an owl's silent wing, a dragonfly's
-pleated wing, a maple seed's spin), designs something new from them, and tests
-the design against your specs, the literature and its own strongest objection.
+Ask for anything to be created. Meta's Muse Spark searches distant and unusual
+corners of science for mechanisms that already work (an owl's silent wing, a
+maple seed's spin, a whale's dive). It invents a new design from them, engineers
+it with worked calculations, and stress-tests it against your requirements. You
+can then download it, refine it, or continue in Meta AI.
+
+**Frontier intelligence plus the literature.** The literature supplies proven
+raw material, each piece tied to a saved passage. Meta supplies the inventive
+leap: it is told to be bold, to reason beyond its sources, and to say which
+parts are evidenced and which are its own invention.
 
 ## How it differs from the other modes
 
@@ -18,95 +23,114 @@ the design against your specs, the literature and its own strongest objection.
 |---|---|---|
 | Explore | a concept | the same idea in other fields |
 | Solve | a problem (a lock) | an existing answer, or one forged from close fits |
-| **Studio** | **a thing to make, plus specs** | **design concepts built from cross-field inspiration, checked against the specs** |
+| **Studio** | **something to create, plus requirements** | **a new invention built from cross-field mechanisms, engineered and stress-tested** |
 
-Solve answers "how could this work?" Studio answers "what should we build?"
-They feed each other: every *still to invent* gap in a design can be sent to
-Solve with one tap.
+Every *still to invent* gap on a Studio design can be sent to Solve.
 
-## How it works: Meta's intelligence plus the literature
+## How it works
 
-Each stage is an ordinary Polymath investigation, like Solve and Frontier:
-Meta's Muse Spark chooses every search and reading, quotes must match saved
-text, objections are recorded, every call is budgeted, and the programme itself
-never spends.
+Each stage is an ordinary Polymath investigation: Meta chooses every search
+and reading, quotes must match saved text, objections are recorded, and every
+call is budgeted. The programme itself never calls a model or spends. The
+visitor's browser queues each due stage through the ordinary run API and
+attaches the run (`backend/src/polymath/studio.py`).
 
-1. **Understand the brief (Ask).** "What must a [thing] achieve, which of these
-   specs are hardest for today's designs, and why?" The answer's known claims
-   give the state of the art (the baseline to beat). Its open questions become
-   the **functions to find inspiration for** (for example *quiet lift*,
-   *light stiff blades*, *safe descent without power*). This is the
-   function-first method that biomimicry and TRIZ use: abstract the function,
-   and the search can reach any field.
-2. **Inspiration sweep (Explore, up to four).** For each function: "Find how
-   distant fields achieve [function]: living things, geology, materials, other
-   engineering, mathematics." The visitor's **wildness dial** (*nearby fields*,
-   *far fields*, *strange corners*) sets how distant. Each saved bridge is one
-   inspiration: the mechanism, the passage behind it, how it maps across, and
-   where it may not transfer.
-3. **Design (Explore, built on two to four inspirations).** The existing
-   higher-level investigation combines them: "Integrate these into one design
-   that meets the specs. Say what each source contributes, and what conflicts."
-   A second combination can give a second concept.
-4. **Stress test (Ask).** "Judge this design against each spec, check for prior
-   art, and estimate the key numbers." Every verdict is labelled Known,
-   Postulated or Speculative with its own passages. The strongest objection
-   always covers **scale**, the classic trap of bio-inspired design: what works
-   at insect size can fail at helicopter size. Optional **Formalise** turns the
-   key quantities into explicit back-of-envelope checks with their formulas.
+1. **Brief (Ask).** It finds what today's best designs achieve and which
+   requirements are hardest, and why. Each hard requirement comes back as a
+   function to achieve: *"How could a design achieve quiet lift while…?"* Once
+   a requirement is stated as a function, the search can reach any field.
+2. **Inspiration (Explore, up to four).** For each function, it finds a
+   mechanism that already achieves it in a field far from the design's own.
+   How far is set by the wildness dial: *Nearby fields*, *Far fields* or
+   *Strange corners*. Each result gives the mechanism, how it maps into the
+   design, and where it may not transfer (scale, materials, environment). With
+   no named functions, three deliberately different places are searched.
+3. **Invention (Explore built on 2–4 inspirations).** The higher-level
+   investigation invents one design from them. It names each component and
+   its source, explains how the whole works and where the parts conflict,
+   marks what is evidenced and what is invented, and tests the design against
+   its strongest objection, always including scale. A single inspiration
+   cannot be a lineage parent, so it is carried in the goal instead.
+4. **Engineering (Ask).** It specifies the components, materials, dimensions
+   and operating parameters, and works the key calculations step by step:
+   formula, sourced inputs, result and units. It labels which values come from
+   the literature and which are design choices or estimates.
+5. **Stress test (Ask).** It judges each requirement, checks whether the
+   design or a close one already exists, checks the numbers, and names what
+   still needs inventing.
 
-At most eight investigations per design; one at a time while the page is open;
-every one also appears in Your library.
+That makes at most eight investigations per invention. Outcomes:
+- *designed*: a design was made and engineered;
+- *inspired*: mechanisms were found, but no design held up;
+- *none*: no mechanism was found.
 
-## What the visitor sees (see the mockup)
+## What the visitor sees
 
-- **Composer:** the brief, spec chips (*+ Add a spec*), the wildness dial,
-  *Design it*.
-- **Design sheet** on a faint engineering grid:
-  - the concept's name and one-line pitch, with an honest status label
-    (*theoretical concept, not built or tested*);
-  - **where the ideas came from:** a constellation with each source field in
-    its Prism colour, and dashed lines for ideas considered and set aside;
-  - an **inspiration card** for each idea, with the exact passage behind it;
-  - **against your specs:** met by design, plausible or open, with reasons;
-  - **the strongest objection** and its verdict, plus the prior art check;
-  - **still to invent**, each gap with *Solve this*;
-  - **back-of-envelope checks**;
-  - actions: see concept 2, write it up as a concept note, publish to your
-    Zenodo, open as a Frontier programme.
+- **Composer:** "What would you like to create?", requirement chips (up to
+  six), the wildness dial, and four starters:
+  - a bio-compatible outdoor neural interface;
+  - a whale-inspired submarine;
+  - a hospital-quiet helicopter;
+  - a Dyson swarm.
+- **Design sheet** on an engineering grid:
+  - live progress (Brief, Inspiration, Invention, Engineering, Stress test);
+  - an honest label: *Theoretical invention, not built or tested*;
+  - the **idea map**, with each source field in its Prism colour flowing into
+    the invention, dashed lines for ideas considered and set aside, and live
+    "searching" threads while running;
+  - **where the ideas came from**, each with its limits and evidence;
+  - **the invention**: how the sources become the design, plus the strongest
+    objection and its verdict;
+  - **engineering and calculations**, and the **stress test**, each claim
+    labelled *Known*, *Postulated* or *Speculative*;
+  - **still to invent**, each item with *Solve this*;
+  - **Take it further**:
+    - *Download the design dossier* (a complete Markdown document);
+    - *Continue in Meta AI* (copies a design briefing and opens meta.ai);
+    - *Refine this design* (starts a new round from it).
+    - A labelled vision line: connecting a Meta account to iterate without
+      leaving Polymath. Meta offers no such connection to apps today, and
+      visitors never paste Meta keys.
+- **Your inventions**: everything designed in this browser or account.
 
-Publishing a concept note on Zenodo also creates public, dated prior art, which
-is useful for inventors.
+## Data (schema 0034)
+
+- `studio_programmes`: owner session, brief, requirements (JSON, at most six),
+  wildness, status and outcome.
+- `studio_steps`: programme, stage (brief, inspire, design, engineer, test),
+  target, exact run (unique), saved result, outcome, premises and failed
+  attempts. A failed stage is retried once.
 
 ## Honesty rules
 
-- Every inspiration must quote a real saved passage; no invented sources.
-- A design is always labelled a proposal; the label never says *works*.
-- Spec verdicts use the evidence labels, and numbers are labelled estimates.
-- Ideas that failed the stress test stay visible as *considered, set aside*.
+- Every inspiration cites a real saved passage; no invented sources.
+- A design is always labelled a theoretical invention, and the design stage
+  must say which parts are evidenced and which are invented.
+- Numbers are labelled by their source, and the dossier says estimates must be
+  checked before real use.
+- Ideas that did not hold up stay visible as *considered, not used*.
 
-## Build plan (reuses the Solve architecture almost one for one)
+## Verified (locally)
 
-1. Owner decisions below, then this document becomes the plan of record.
-2. Engine: `studio_programmes` and `studio_steps` (schema 0034); planner
-   (understand → inspire → design → stress test); attach validation;
-   PostgreSQL tests for every path (inspirations found, none found, one design,
-   two designs, failures retried once, ownership, limits).
-3. API `/api/v1/studio` (same shape as Solve).
-4. Web: composer, design sheet, constellation, autopilot, *Solve this*, write
-   and publish; tests; real-browser check on desktop and phone.
-5. Docs and submission: Studio in the demo script.
-6. Live quality, once Meta research is switched on, with three briefs: a quiet
-   city helicopter, a deep-sea submarine and a theoretical Dyson swarm.
-
-Steps 2 to 5 are about one focused day, like Solve.
-
-## Decisions for the owner
-
-1. **Name:** *Studio* in the mode row, *Innovation Studio* as the page title
-   (recommended); or *Invent* or *Design*.
-2. **Place:** a mode in the main composer like Solve (recommended: one box,
-   one place to start), or its own tab beside Frontier.
-3. **Concept sketch:** if a Meta image model is available through the Meta
-   Model API, add an *artist's impression* of each design. It would be clearly
-   labelled and would be another creative use of Meta. Needs checking first.
+- Seven PostgreSQL tests cover:
+  - the full path (functions, inspirations, invention, engineering, stress
+    test);
+  - three-angle search with a single inspiration;
+  - nothing found;
+  - a failed design retried once;
+  - failed engineering still leading to the stress test;
+  - validation, ownership and pause;
+  - bounded goals;
+  - the API (session, CSRF, no echo).
+- Drift 0; downgrade and upgrade clean; migration round trip passes.
+- Six web tests cover:
+  - the composer, starters, chips and wildness;
+  - autopilot through the ordinary route;
+  - the full design sheet with every action;
+  - the dossier and briefing;
+  - the outcome when nothing held up;
+  - label wrapping.
+- A real-browser check at 1440 and 390 pixels with a seeded invention found
+  axe clean, no overflow and no page errors.
+- Live quality needs Meta research switched on. First briefs: the four
+  starters.

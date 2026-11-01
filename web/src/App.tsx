@@ -121,6 +121,7 @@ function AboutPlace({ remaining, daily }: { remaining?: number | null; daily?: n
         <div><dt>Discoveries between fields</dt><dd>Some of the biggest leaps came from connecting fields: the mathematics of heat became the pricing of options; how ant colonies find food inspired how networks route data. Polymath looks for leaps like these every day.</dd></div>
         <div><dt>Answers that already exist</dt><dd>A problem that is open in one field may be solved in another. Polymath helps find it, with the passages that show it.</dd></div>
         <div><dt>Gaps worth working on</dt><dd>It names what nobody has connected yet, so researchers can see where the next work could be.</dd></div>
+        <div><dt>Inventions from across science</dt><dd>Innovation Studio turns a brief into a new design built from mechanisms that already work in other fields, engineered with calculations and tested against the brief.</dd></div>
         <div><dt>Open problems, step by step</dt><dd>Frontier breaks a hard problem into smaller steps and looks for each answer across disciplines.</dd></div>
       </dl>
     </section>
@@ -364,7 +365,7 @@ export function App() {
               {workspace.nextCursor && <button className="history-more" type="button" disabled={workspace.loadingMore} onClick={() => void workspace.loadMore()}>{workspace.loadingMore ? 'Loading more…' : 'Load earlier investigations'}</button>}
               {workspace.error && <p className="history-error" role="alert">{workspace.error}</p>}
             </section>}
-            {!converging && !workspace.activeRun && !selectedFindingId && !workspace.selectedId && <><Story onFrontier={() => go('frontier')} /><Credits /></>}
+            {!converging && !workspace.activeRun && !selectedFindingId && !workspace.selectedId && <><Story onFrontier={() => go('frontier')} onStudio={() => go('studio')} /><Credits /></>}
           </>}
 
           {place === 'library' && <>

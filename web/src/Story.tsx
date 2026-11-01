@@ -6,7 +6,7 @@ const STEPS = [
   { title: 'Builds bigger', line: 'Connections combine into deeper ones, and open problems are tackled step by step.', colour: 'var(--amber)' },
 ]
 
-export function Story({ onFrontier }: { onFrontier: () => void }) {
+export function Story({ onFrontier, onStudio }: { onFrontier: () => void; onStudio?: () => void }) {
   return (
     <section className="story" aria-labelledby="story-title">
       <h2 id="story-title" className="story-heading">How it works</h2>
@@ -20,6 +20,7 @@ export function Story({ onFrontier }: { onFrontier: () => void }) {
             <li>Stuck on a problem? Find a field that may already have solved it.</li>
             <li>Find the gaps: what nobody has connected yet.</li>
             <li>Explore any idea across the whole of science.</li>
+            <li>Invent something new from ideas that already work in nature and across science. {onStudio && <a href="/studio" onClick={(event) => { event.preventDefault(); onStudio() }}>Try Studio</a>}</li>
             <li>Take on an open problem, step by step. <a href="/frontier" onClick={(event) => { event.preventDefault(); onFrontier() }}>Try Frontier</a></li>
             <li>Write it up and publish it under your own name.</li>
           </ul>
