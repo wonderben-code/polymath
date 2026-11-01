@@ -2,7 +2,14 @@ name: Application checks
 
 on:
   push:
+    # ops/request.json pushes to server-ops only carry a Server task request.
+    branches-ignore: [server-ops]
   pull_request:
+
+# A newer push to the same branch supersedes the checks still running for it.
+concurrency:
+  group: checks-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
