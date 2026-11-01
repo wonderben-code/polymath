@@ -227,7 +227,7 @@ Use a **new incognito/private window** so you test as a fresh visitor.
 4. **Across devices** (optional but lovely): sign in with the same provider on
    Eks's phone. The same library appears.
 5. **Connect Zenodo:** while signed in, open **Your library → Publishing**. The
-   Zenodo and Zenodo Sandbox rows each show **Connect**. Click **Connect** on
+   **Zenodo** and **Zenodo sandbox** rows each show **Connect**. Click **Connect** on
    **Zenodo sandbox**, approve on Zenodo's page (**Authorize**), and you return
    to Polymath showing **Connected.** Repeat for the real Zenodo row; this only
    connects and publishes nothing.
