@@ -24,6 +24,7 @@ from polymath.discovery_admission import load_discovery_intent
 from polymath.dispatch import _call_key
 from polymath.evidence import _canonical, _hash
 from polymath.explore_collection_admission import load_explore_collection_intent
+from polymath.hold_limits import UNKNOWN_HOLD_ADMISSION_LIMIT
 from polymath.jobs import _clear_lease, _event, _owned
 from polymath.lineage_models import ResearchRunParent
 from polymath.meta_probe_models import (
@@ -47,10 +48,6 @@ from polymath.operator_auth import require_operator
 from polymath.operator_models import OperatorSession
 from polymath.readiness_models import MetaReadinessProposalRecord
 from polymath.run_api import ACTIVE_STATES, QUEUE_LOCK_KEY, _PrivateHTTPException
-
-# How many unknown holds (each counted at its full reserved maximum) may stand before
-# admission closes for everyone until a person settles them.
-UNKNOWN_HOLD_ADMISSION_LIMIT = 3
 
 
 def _id(value):

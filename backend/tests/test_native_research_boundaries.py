@@ -222,7 +222,7 @@ def four_concurrent_slots(data):
 @pytest.mark.parametrize("native", [four_concurrent_slots], indirect=True)
 @pytest.mark.asyncio
 async def test_unknown_holds_stay_counted_and_close_admission_only_in_a_run(native):
-    from polymath.meta_research import UNKNOWN_HOLD_ADMISSION_LIMIT
+    from polymath.hold_limits import UNKNOWN_HOLD_ADMISSION_LIMIT
 
     dispatcher = MetaResearchDispatcher(
         native.engine, native.policy, native.readiness_policy, native.operator_policy
@@ -266,6 +266,10 @@ async def test_unknown_holds_stay_counted_and_close_admission_only_in_a_run(nati
             # One stray unknown stays counted at its reserved maximum; others continue.
             other = enqueue_native(native, goal=f"Another question {index}")
             assert JobRepository(native.engine).get(other).status == "queued"
+            claimed = JobRepository(native.engine).claim_next(
+                "worker-1", native_only=True, native_account_id=account_id
+            )
+            assert claimed is not None and claimed.run_id == other
             JobRepository(native.engine).request_cancel(other)
             JobRepository(native.engine).finalize_cancellation(other)
     with pytest.raises(MetaResearchError, match="meta_research_prior_unresolved"):
