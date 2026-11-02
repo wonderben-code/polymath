@@ -446,6 +446,22 @@ async def test_known_model_and_usage_in_http_failure_are_counted_without_protoco
 
 
 @pytest.mark.asyncio
+async def test_a_refusal_keeps_its_own_words_but_a_server_error_with_text_keeps_none():
+    _, policy, _, manifest = probe_fixture()
+    refused = await adapter(
+        policy, lambda _: httpx.Response(400, json={"error": {"message": "policy violation"}})
+    ).observe(manifest.request)
+    assert refused.http_status == 400 and refused.input_tokens is None
+    assert refused.error_code == "model_request_failed"
+    assert refused.content is not None and "policy violation" in refused.content
+    assert refused.content_sha256 == hashlib.sha256(refused.content.encode()).hexdigest()
+    throttled = await adapter(policy, lambda _: httpx.Response(429, content=b"slow down")).observe(
+        manifest.request
+    )
+    assert throttled.error_code == "model_rate_limited" and throttled.content == "slow down"
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "body", [b"\xff\xfe", b"{", b'{"model":"a","model":"b"}', b'{"usage":{"prompt_tokens":NaN}}']
 )
