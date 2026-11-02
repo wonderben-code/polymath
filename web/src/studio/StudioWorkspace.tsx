@@ -39,6 +39,8 @@ export interface StudioWorkspaceProps {
   canSubmit: boolean
   /** Present while the allowance poll has paused; a running programme calls it so live research is checked again. */
   refreshAccess?: () => void
+  /** Cancels an investigation this programme created but could not attach. */
+  cancelRun?: (runId: string) => Promise<void>
   /** Live research is switched off or not funded for this browser right now. */
   paused?: boolean
   submit: (mode: 'ask' | 'explore', goal: string, parentResultIds: readonly string[], options?: { collection?: boolean }) => Promise<OwnedRun | undefined>
@@ -103,7 +105,7 @@ function stageState(programme: StudioProgramme, stage: StudioStage): 'done' | 'r
   return 'waiting'
 }
 
-export function StudioWorkspace({ enabled, csrfToken, canSubmit, refreshAccess, paused = false, submit, onOpenRun, onSolveGap, onSessionExpired }: StudioWorkspaceProps) {
+export function StudioWorkspace({ enabled, csrfToken, canSubmit, refreshAccess, cancelRun, paused = false, submit, onOpenRun, onSolveGap, onSessionExpired }: StudioWorkspaceProps) {
   const [brief, setBrief] = useState('')
   const [specs, setSpecs] = useState<string[]>([])
   const [spec, setSpec] = useState('')
@@ -132,6 +134,8 @@ export function StudioWorkspace({ enabled, csrfToken, canSubmit, refreshAccess, 
   submitRef.current = submit
   const refreshAccessRef = useRef(refreshAccess)
   refreshAccessRef.current = refreshAccess
+  const cancelRunRef = useRef(cancelRun)
+  cancelRunRef.current = cancelRun
   const refreshedAt = useRef(0)
 
   const fail = useCallback((failure: unknown) => {
@@ -203,7 +207,13 @@ export function StudioWorkspace({ enabled, csrfToken, canSubmit, refreshAccess, 
           setStatus('The next stage could not be started yet. Trying again shortly; your brief is saved.'); return
         }
         holds.current = 0
-        setProgramme(await attachStudioRun(programme.id, csrfToken, { step_id: next.step_id, stage: next.stage, run_id: run.id }))
+        let attached
+        try { attached = await attachStudioRun(programme.id, csrfToken, { step_id: next.step_id, stage: next.stage, run_id: run.id }) } catch (failure) {
+          // The programme changed under the step (paused or stopped); the investigation it created must not run on alone.
+          void cancelRunRef.current?.(run.id)
+          throw failure
+        }
+        setProgramme(attached)
       } else if (next.state === 'waiting') {
         const stage = updated.steps.find((item) => item.status === 'running')?.stage
         setStatus(stage ? `${doing(stage)}…` : 'Working…')

@@ -57,7 +57,9 @@ function server(responses: Record<string, unknown>) {
     calls.push({ url, method: init?.method ?? 'GET', body: init?.body ? JSON.parse(String(init.body)) : null })
     const key = Object.keys(responses).find((prefix) => url === prefix || url.endsWith(prefix))
     if (!key) throw new Error(`Unexpected ${url}`)
-    return Response.json(responses[key])
+    const value = responses[key]
+    if (value && typeof value === 'object' && '__status' in value) { const { __status, ...body } = value as { __status: number }; return Response.json(body, { status: __status }) }
+    return Response.json(value)
   }))
   return calls
 }
@@ -145,6 +147,20 @@ describe('Innovation Studio', () => {
     expect(failures).toBe(1)
     expect(screen.queryByRole('button', { name: 'Continue inventing' })).toBeNull()
     expect(props.submit).not.toHaveBeenCalled()
+  })
+
+  it('cancels the investigation it created when the programme refuses to attach it', async () => {
+    server({
+      '/api/v1/studio': programme(),
+      [`/api/v1/studio/${PROGRAMME}/next`]: { next: { state: 'due', step_id: BRIEF_STEP, stage: 'brief', mode: 'ask', goal: 'Design brief: …', parent_result_ids: [] }, programme: programme() },
+      [`/api/v1/studio/${PROGRAMME}/attach`]: { __status: 409, detail: 'studio_programme_not_active' },
+    })
+    const cancelRun = vi.fn(async () => undefined)
+    const props = workspace({ cancelRun })
+    await userEvent.type(screen.getByLabelText('What would you like to create?'), BRIEF)
+    await userEvent.click(screen.getByRole('button', { name: 'Invent it' }))
+    await waitFor(() => expect(props.submit).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(cancelRun).toHaveBeenCalledWith(RUN))
   })
 
   it('presents the invention, its sources, engineering and stress test, and every way to take it further', async () => {

@@ -19,6 +19,8 @@ export interface FrontierWorkspaceProps {
   canSubmit: boolean
   /** Present while the allowance poll has paused; a running programme calls it so live research is checked again. */
   refreshAccess?: () => void
+  /** Cancels an investigation this programme created but could not attach. */
+  cancelRun?: (runId: string) => Promise<void>
   focusId: string | null
   submit: (mode: 'ask' | 'explore', goal: string, parentResultIds: readonly string[], options?: { collection?: boolean }) => Promise<OwnedRun | undefined>
   onOpenRun: (id: string) => void
@@ -38,7 +40,7 @@ function message(code: string): string {
   return 'Frontier could not be reached. Try again in a moment.'
 }
 
-export function FrontierWorkspace({ enabled, csrfToken, canSubmit, refreshAccess, focusId, submit, onOpenRun, onSessionExpired, onFinished, notifyControl, onSolveStep }: FrontierWorkspaceProps) {
+export function FrontierWorkspace({ enabled, csrfToken, canSubmit, refreshAccess, cancelRun, focusId, submit, onOpenRun, onSessionExpired, onFinished, notifyControl, onSolveStep }: FrontierWorkspaceProps) {
   const [programmes, setProgrammes] = useState<FrontierSummary[]>([])
   const [programme, setProgramme] = useState<FrontierProgramme | null>(null)
   const [selectedNode, setSelectedNode] = useState<string | null>(null)
@@ -55,6 +57,8 @@ export function FrontierWorkspace({ enabled, csrfToken, canSubmit, refreshAccess
   submitRef.current = submit
   const refreshAccessRef = useRef(refreshAccess)
   refreshAccessRef.current = refreshAccess
+  const cancelRunRef = useRef(cancelRun)
+  cancelRunRef.current = cancelRun
   const refreshedAt = useRef(0)
 
   const fail = useCallback((failure: unknown) => {
@@ -103,7 +107,13 @@ export function FrontierWorkspace({ enabled, csrfToken, canSubmit, refreshAccess
           setStatus('The next step could not be queued yet. Trying again shortly; the programme is saved.'); return
         }
         holds.current = 0
-        setProgramme(await attachFrontierRun(programme.id, csrfToken, { node_id: next.node_id, action: next.action, run_id: run.id }))
+        let attached
+        try { attached = await attachFrontierRun(programme.id, csrfToken, { node_id: next.node_id, action: next.action, run_id: run.id }) } catch (failure) {
+          // The programme changed under the step (paused or stopped); the investigation it created must not run on alone.
+          void cancelRunRef.current?.(run.id)
+          throw failure
+        }
+        setProgramme(attached)
       } else if (next.state === 'waiting') {
         setStatus('An investigation for this programme is in progress.')
       } else {
