@@ -298,3 +298,20 @@ describe('constellation label', () => {
     expect(lines[1].endsWith('…')).toBe(true)
   })
 })
+
+describe('still to invent keeps one wording per question', () => {
+  it('drops restatements that differ only in punctuation or a word or two', async () => {
+    const { distinctQuestions } = await import('./dossier')
+    expect(distinctQuestions([
+      'Radiated noise of tubercled/serrated edges + 100-bar pump in water?',
+      'Hull/bladder fatigue and compressibility over hundreds of 1000-m yoyos?',
+      'Radiated noise of tubercled/serrated edges + 100bar pump in water?',
+      'Bladder compressibility and hull fatigue over hundreds of 1000m yoyos?',
+      'Fouling penalty on fine edges and cleaning method?',
+    ])).toEqual([
+      'Radiated noise of tubercled/serrated edges + 100-bar pump in water?',
+      'Hull/bladder fatigue and compressibility over hundreds of 1000-m yoyos?',
+      'Fouling penalty on fine edges and cleaning method?',
+    ])
+  })
+})
