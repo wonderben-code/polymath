@@ -16,6 +16,7 @@ from sqlalchemy import Engine, func, or_, select, text
 from sqlalchemy.orm import Session
 
 from polymath.budget_models import BudgetReservation
+from polymath.hold_limits import UNKNOWN_HOLD_ADMISSION_LIMIT
 from polymath.meta_research_models import NativeResearchRunBinding
 from polymath.models import ResearchEvent, ResearchExternalRequest, ResearchRun
 from polymath.public_research_models import PublicResearchDelegation, PublicResearchRunAccess
@@ -309,17 +310,17 @@ def _native_claim_blocked(session: Session, account_id: str) -> bool:
     )
     if session.scalar(active) is not None:
         return True
-    if (
-        session.scalar(
-            select(BudgetReservation.id)
-            .where(
-                BudgetReservation.account_id == account_id,
-                BudgetReservation.status == "unknown",
-            )
-            .limit(1)
+    # Unknown holds stay counted at their reserved maximum; one stray unknown does
+    # not stop the worker, a run of them does (see polymath.hold_limits).
+    unknown = session.scalar(
+        select(func.count())
+        .select_from(BudgetReservation)
+        .where(
+            BudgetReservation.account_id == account_id,
+            BudgetReservation.status == "unknown",
         )
-        is not None
-    ):
+    )
+    if unknown >= UNKNOWN_HOLD_ADMISSION_LIMIT:
         return True
     # Probe and research requests share the ledger. Also retain a native-bound
     # prepared journal with a missing reservation rather than assume no send.
