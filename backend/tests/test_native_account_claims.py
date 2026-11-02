@@ -19,6 +19,7 @@ from test_worker import database as database_fixture
 from polymath.budget_models import BudgetReservation
 from polymath.evidence import EvidenceStore
 from polymath.evidence_models import EvidenceQuote, EvidenceResult, SourceRetrieval
+from polymath.hold_limits import UNKNOWN_HOLD_ADMISSION_LIMIT
 from polymath.jobs import JobRepository
 from polymath.models import ResearchExternalRequest, ResearchRun
 from polymath.public_research_models import PublicResearchDelegation
@@ -175,7 +176,7 @@ def test_expiry_exposes_ambiguity_and_never_claims_waiting_work(readiness, ambig
     assert lease.run_id == first
     if ambiguous == "probe_unknown":
         # Probe accounting shares the exact account despite having no native
-        # research RunBinding. An unknown probe hold must pause public claims.
+        # research RunBinding. An unknown probe hold counts like any other.
         with Session(public.engine) as session, session.begin():
             probe = session.scalar(select(BudgetReservation))
             probe.status = "unknown"
@@ -206,8 +207,20 @@ def test_expiry_exposes_ambiguity_and_never_claims_waiting_work(readiness, ambig
         session.get(ResearchRun, first).lease_expires_at = public.now - timedelta(seconds=1)
     assert first in jobs.interrupt_expired()
     assert jobs.get(first).status == "interrupted"
-    assert scoped_claim(jobs, public) is None
-    assert jobs.get(second).status == "queued" and jobs.get(second).lease_token == 0
+    if ambiguous == "prepared":
+        # A stranded prepared journal is a possible unrecorded send: nothing new runs.
+        assert scoped_claim(jobs, public) is None
+        assert jobs.get(second).status == "queued" and jobs.get(second).lease_token == 0
+        return
+    # One unknown hold stays counted at its full reserved maximum and does not pause
+    # the account's other work; a run of them does, until a person settles them.
+    claimed = scoped_claim(jobs, public)
+    assert claimed is not None and claimed.run_id == second
+    for _ in range(UNKNOWN_HOLD_ADMISSION_LIMIT - 1):
+        reservation(public, first, 100, status="unknown")
+    third = admit(public, owner(public.engine, "third-claim"), network="c" * 64)
+    assert scoped_claim(jobs, public, "native-worker-2") is None
+    assert jobs.get(third).status == "queued" and jobs.get(third).lease_token == 0
 
 
 def test_expired_known_run_stays_interrupted_while_next_visitor_runs(readiness):
