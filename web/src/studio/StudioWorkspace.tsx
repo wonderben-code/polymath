@@ -146,7 +146,13 @@ export function StudioWorkspace({ enabled, csrfToken, canSubmit, refreshAccess, 
 
   async function open(id: string) {
     setError(''); setShared('')
-    try { setProgramme(await loadStudio(id)); setRunning(false); setStatus('') } catch (failure) { fail(failure) }
+    try {
+      const loaded = await loadStudio(id)
+      // A stage still running on the server keeps being watched, so it is absorbed and the next stage starts without another press.
+      const underway = loaded.status === 'active' && loaded.steps.some((step) => step.status === 'running')
+      if (underway) live.current.add(loaded.id)
+      setProgramme(loaded); setRunning(underway); setStatus('')
+    } catch (failure) { fail(failure) }
   }
 
   function addSpec() {

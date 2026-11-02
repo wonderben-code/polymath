@@ -85,7 +85,7 @@ export function ConvergeWorkspace({ enabled, csrfToken, canSubmit, refreshAccess
 
   const open = useCallback(async (id: string) => {
     setError('')
-    try { setProgramme(await loadConvergence(id)); setSelected(null) } catch (failure) { fail(failure) }
+    try { const loaded = await loadConvergence(id); setProgramme(loaded); setSelected(null); if (loaded.status === 'active' && loaded.steps.some((step) => step.status === 'running')) setRunning(true) } catch (failure) { fail(failure) }
   }, [fail])
 
   useEffect(() => { void refreshList() }, [refreshList])

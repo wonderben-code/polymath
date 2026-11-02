@@ -70,7 +70,7 @@ export function FrontierWorkspace({ enabled, csrfToken, canSubmit, refreshAccess
 
   const open = useCallback(async (id: string) => {
     setError('')
-    try { setProgramme(await loadProgramme(id)); setSelectedNode(null) } catch (failure) { fail(failure) }
+    try { const loaded = await loadProgramme(id); setProgramme(loaded); setSelectedNode(null); if (loaded.status === 'active' && loaded.nodes.some((node) => node.status === 'running')) setRunning(true) } catch (failure) { fail(failure) }
   }, [fail])
 
   useEffect(() => { void refreshList() }, [refreshList])
