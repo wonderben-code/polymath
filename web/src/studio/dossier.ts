@@ -33,7 +33,7 @@ export function readStudio(programme: StudioProgramme): StudioReading {
   const setAside = of('inspire').filter((step) => step.status === 'done' && step.finding?.kind !== 'bridge')
   const test = answer(of('test')[0])
   const engineering = answer(of('engineer')[0])
-  const stillToInvent = [...new Set([...(test?.open_questions ?? []), ...(engineering?.open_questions ?? [])])].slice(0, 6)
+  const stillToInvent = distinctQuestions([...(test?.open_questions ?? []), ...(engineering?.open_questions ?? [])]).slice(0, 6)
   // One numbered reference list for the whole invention, in reading order.
   const references: Source[] = []
   const numbers = new Map<string, number>()
@@ -213,4 +213,21 @@ export function dossierFileName(programme: StudioProgramme, extension: 'md' | 'h
   const title = readStudio(programme).design?.title ?? programme.brief
   const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60) || 'design'
   return `polymath-studio-${slug}.${extension}`
+}
+
+/** Open questions from the stress test and the engineering step often restate each other ("100-bar" against "100bar"); keep the first wording of each. */
+export function distinctQuestions(questions: string[]): string[] {
+  const words = (text: string) => new Set(text.toLowerCase().replace(/[^a-z0-9 ]+/g, '').split(/\s+/).filter((word) => word.length > 2))
+  const kept: { text: string; words: Set<string> }[] = []
+  for (const question of questions) {
+    const text = question.trim(); if (!text) continue
+    const own = words(text)
+    const repeated = kept.some((item) => {
+      const smaller = Math.min(own.size, item.words.size); if (smaller === 0) return item.text.toLowerCase() === text.toLowerCase()
+      let shared = 0; for (const word of own) if (item.words.has(word)) shared++
+      return shared / smaller >= 0.75
+    })
+    if (!repeated) kept.push({ text, words: own })
+  }
+  return kept.map((item) => item.text)
 }
