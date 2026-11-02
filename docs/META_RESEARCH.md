@@ -77,8 +77,11 @@ counted against the account's existing hard, daily and concurrency limits.
 Both attested credit and remaining provider allowance conservatively cover the
 entire committed ledger plus each new reservation. Do not reuse an attestation
 as though settled charges disappeared when their holds cleared. Unknown work
-blocks new activation and fresh native calls; it is never inferred free or
-silently reconciled by this feature.
+blocks new activation; it is never inferred free or silently reconciled by
+this feature. Each unknown hold stays counted at its full reserved maximum, so
+a single stray unknown (a timed-out or refused call) does not close fresh
+native calls for everyone; once three stand unsettled, admission closes until
+a person has settled them.
 
 The explicit activation action saves immutable manifest/approval records and
 changes only the native scope/binding, control epoch and reviewed kill-clear.
