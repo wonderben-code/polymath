@@ -1,7 +1,7 @@
 import { act, render, renderHook, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { CompletionToast, NotifyToggle, useNotifier, useRunCompletion } from './notifier'
+import { CompletionToast, NotifyToggle, brief, useNotifier, useRunCompletion } from './notifier'
 
 class FakeNotification {
   static permission: NotificationPermission = 'default'
@@ -64,5 +64,14 @@ describe('notify when done', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Shown in page')
     await userEvent.click(screen.getByRole('button', { name: 'Dismiss' }))
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
+  })
+})
+
+describe('the finish toast keeps a long step prompt short', () => {
+  it('announces the first sentence of the goal, clipped, never the whole prompt', () => {
+    const prompt = 'Work out the key calculations step by step, each with its formula, its inputs and where they come from. ' + 'Requirements: dives to 1,000 metres; nearly silent; uses little energy. '.repeat(12)
+    expect(brief(prompt)).toBe('Work out the key calculations step by step, each with its formula, its inputs and where they come from…')
+    expect(brief('Why does time only run forward?')).toBe('Why does time only run forward?')
+    expect(brief('x'.repeat(300))).toHaveLength(141)
   })
 })
