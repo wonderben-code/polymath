@@ -875,7 +875,11 @@ class ResearchController:
         async def reject(code: str) -> bool:
             nonlocal repairs
             repairs += 1
-            await event("action_rejected", "Rejected an invalid action or unsupported evidence.")
+            # The code names what was wrong (a quote not found, an unknown source, an
+            # invalid shape) so a failed investigation can be understood afterwards.
+            await event(
+                "action_rejected", f"Rejected an invalid action or unsupported evidence: {code}."
+            )
             observation(
                 {
                     "error": code,

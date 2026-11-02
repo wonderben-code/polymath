@@ -93,9 +93,11 @@ function Claims({ claims, step, reading }: { claims: Claim[]; step: StudioStep; 
   </li>)}</ul>
 }
 
-function stageState(programme: StudioProgramme, stage: StudioStage): 'done' | 'running' | 'waiting' | 'skipped' {
+function stageState(programme: StudioProgramme, stage: StudioStage): 'done' | 'running' | 'waiting' | 'skipped' | 'failed' {
   const steps = programme.steps.filter((step) => step.stage === stage)
   if (steps.some((step) => step.status === 'running')) return 'running'
+  // A stage whose every attempt failed is not done; the design went on without it.
+  if (steps.length && steps.every((step) => step.status === 'failed')) return 'failed'
   if (steps.length && steps.every((step) => step.status === 'done' || step.status === 'failed')) return 'done'
   if (!steps.length && programme.status === 'completed') return 'skipped'
   return 'waiting'
@@ -342,7 +344,7 @@ export function StudioWorkspace({ enabled, csrfToken, canSubmit, refreshAccess, 
 
       {programme && reading && <article className="studio-sheet" aria-labelledby="studio-sheet-title">
         <ol className="studio-pipeline" aria-label="Progress">
-          {PIPELINE.map((item) => { const state = stageState(programme, item.stage); return <li key={item.stage} className={`is-${state}`}><span className="studio-pip" aria-hidden="true" />{item.name}<span className="sr-only"> · {state}</span></li> })}
+          {PIPELINE.map((item) => { const state = stageState(programme, item.stage); return <li key={item.stage} className={`is-${state}`}><span className="studio-pip" aria-hidden="true" />{item.name}<span className="sr-only"> · {state === 'failed' ? 'could not finish' : state}</span></li> })}
         </ol>
         <p className="studio-eyebrow">{programme.outcome === 'designed' ? 'Theoretical invention · not built or tested' : programme.outcome ? 'Studio result' : 'Designing'}</p>
         <h2 id="studio-sheet-title">{reading.design?.title ?? programme.brief}</h2>
