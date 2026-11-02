@@ -69,6 +69,14 @@ export function useNotifier(): Notifier {
 const TERMINAL = new Set(['succeeded', 'failed', 'cancelled', 'interrupted'])
 const OUTCOME: Record<string, string> = { succeeded: 'Investigation finished', failed: 'Investigation stopped', cancelled: 'Investigation cancelled', interrupted: 'Investigation paused' }
 
+/** The first sentence of a goal, clipped: autopilot steps carry long prompts that would fill the screen as a toast. */
+export function brief(goal: string, limit = 140): string {
+  const text = goal.replace(/\s+/g, ' ').trim()
+  const sentence = text.match(/^.*?[.?!](\s|$)/)?.[0].trim() ?? text
+  const short = sentence.length <= limit ? sentence : text.slice(0, limit)
+  return short.length < text.length ? short.replace(/[\s.,;:]+$/, '') + '…' : short
+}
+
 /** Announce when the watched run finishes, and keep the tab title honest meanwhile. */
 export function useRunCompletion(run: { id: string; status: string; goal: string } | null, notifier: Notifier) {
   const previous = useRef<{ id: string; status: string } | null>(null)
@@ -78,7 +86,7 @@ export function useRunCompletion(run: { id: string; status: string; goal: string
     if (!run) return
     if (!TERMINAL.has(run.status)) { document.title = `● Researching · ${BASE_TITLE}`; return }
     if (document.title.startsWith('● ')) document.title = BASE_TITLE
-    if (before && before.id === run.id && !TERMINAL.has(before.status)) notifier.announce(OUTCOME[run.status] ?? 'Investigation finished', run.goal || 'An open discovery', run.id)
+    if (before && before.id === run.id && !TERMINAL.has(before.status)) notifier.announce(OUTCOME[run.status] ?? 'Investigation finished', brief(run.goal) || 'An open discovery', run.id)
   }, [run?.id, run?.status, run?.goal, notifier.announce])
 }
 
