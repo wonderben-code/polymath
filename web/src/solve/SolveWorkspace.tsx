@@ -8,6 +8,7 @@ import './solve.css'
 const POLL_MS = 6000
 const RETRY_HOLD_MS = 30000
 const MAX_HOLDS = 10
+const TRANSIENT = new Set(['unavailable', 'rate_limited', 'invalid_response', 'aborted'])
 const STAGE_WORDS = { find: 'Looking for an existing key anywhere in science', fit: 'Searching other fields for close fits', forge: 'Forging a new key from the close fits' }
 const OUTCOME_WORDS = {
   found: { title: 'A key already exists', line: 'This problem has an answer in the literature. Here it is, with the passages behind it.' },
@@ -99,6 +100,7 @@ export function SolveWorkspace({ enabled, csrfToken, canSubmit, refreshAccess, f
   // applies every approval and budget check. It advances while this page is open.
   const tick = useCallback(async () => {
     if (!programme || !csrfToken || busy.current) return
+    if (Date.now() < holdUntil.current) return
     busy.current = true
     try {
       const { next, programme: updated } = await nextSolveStep(programme.id, csrfToken)
@@ -128,7 +130,9 @@ export function SolveWorkspace({ enabled, csrfToken, canSubmit, refreshAccess, f
         setRunning(false); setStatus('')
         if (next.state === 'completed') void refreshList()
       }
-    } catch (failure) { setRunning(false); fail(failure) } finally { busy.current = false }
+    } catch (failure) { // A passing failure (the service restarting, a blip, a paced request) holds and tries again; a lost session or a persistent failure stops the programme.
+      if (failure instanceof SolveApiError && TRANSIENT.has(failure.code) && holds.current + 1 < MAX_HOLDS) { holds.current += 1; holdUntil.current = Date.now() + RETRY_HOLD_MS; setStatus('Polymath could not be reached. Trying again shortly.'); return }
+      setRunning(false); fail(failure) } finally { busy.current = false }
   }, [programme, csrfToken, fail, refreshList])
 
   const tickRef = useRef(tick)
