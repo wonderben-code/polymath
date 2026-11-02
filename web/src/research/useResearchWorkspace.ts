@@ -380,6 +380,25 @@ export function useResearchWorkspace(enabled: boolean, researchAvailable: boolea
     }
   }, [phase, csrf, activeRun, invalidate, remember])
 
+  // A programme that created an investigation but could not attach it (the programme
+  // was paused or stopped in between) cancels that investigation at once, so nothing
+  // keeps spending outside the programme or holds the visitor's one active slot.
+  const cancelRun = useCallback(async (runId: string) => {
+    if (phase !== 'ready' || !csrf) return
+    const current = generation.current
+    try {
+      const response = await cancelResearchRun(runId, csrf)
+      if (current !== generation.current) return
+      const run = remember(response)
+      setRuns((items) => updated(items, run))
+      setActiveRun((active) => active?.id === run.id ? latest(active, run) : active)
+    } catch (failure) {
+      if (current !== generation.current) return
+      const failureCode = code(failure)
+      if (failureCode === 'session_expired' || failureCode === 'session_changed') invalidate(failureCode)
+    }
+  }, [phase, csrf, invalidate, remember])
+
   // The stage-by-stage autopilots pass { collection: false }: their engines read one
   // plain bridge per Explore step, not a ranked collection.
   const submit = useCallback(async (mode: OwnedRun['mode'], goal: string, parentResultIds: readonly string[] = [], options: { collection?: boolean } = {}): Promise<OwnedRun | undefined> => {
@@ -430,6 +449,6 @@ export function useResearchWorkspace(enabled: boolean, researchAvailable: boolea
     canExplore: exploreSelectionReady(native),
     canSubmit: enabled && researchAvailable && native.canSubmit && !ownActiveResearch && !unconfirmedSubmission && phase === 'ready' && !!csrf && !submitting && !cancellingId,
     csrfToken: csrf, invalidateSession,
-    refresh, refreshRuns, selectRun, loadMore, cancel, submit, investigateBridges, native, discoveryIntent, ownActiveResearch,
+    refresh, refreshRuns, selectRun, loadMore, cancel, cancelRun, submit, investigateBridges, native, discoveryIntent, ownActiveResearch,
   }
 }

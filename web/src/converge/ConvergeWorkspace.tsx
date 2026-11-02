@@ -19,6 +19,8 @@ export interface ConvergeWorkspaceProps {
   canSubmit: boolean
   /** Present while the allowance poll has paused; a running programme calls it so live research is checked again. */
   refreshAccess?: () => void
+  /** Cancels an investigation this programme created but could not attach. */
+  cancelRun?: (runId: string) => Promise<void>
   focusId: string | null
   submit: (mode: 'explore', goal: string, parentResultIds: readonly string[], options?: { collection?: boolean }) => Promise<OwnedRun | undefined>
   /** The latest recorded activity of the investigation now running, if any. */
@@ -50,7 +52,7 @@ function fieldNames(step: ConvergeStep, programme: ConvergeProgramme): string[] 
   return step.field_indices.map((index) => programme.fields[index]?.name).filter((name): name is string => !!name)
 }
 
-export function ConvergeWorkspace({ enabled, csrfToken, canSubmit, refreshAccess, focusId, submit, liveActivity, onOpenRun, onGoDeeper, onSessionExpired, onFinished, notifyControl }: ConvergeWorkspaceProps) {
+export function ConvergeWorkspace({ enabled, csrfToken, canSubmit, refreshAccess, cancelRun, focusId, submit, liveActivity, onOpenRun, onGoDeeper, onSessionExpired, onFinished, notifyControl }: ConvergeWorkspaceProps) {
   const [circles, setCircles] = useState<ConvergeSummary[]>([])
   const [programme, setProgramme] = useState<ConvergeProgramme | null>(null)
   const [selected, setSelected] = useState<string | null>(null)
@@ -69,6 +71,8 @@ export function ConvergeWorkspace({ enabled, csrfToken, canSubmit, refreshAccess
   submitRef.current = submit
   const refreshAccessRef = useRef(refreshAccess)
   refreshAccessRef.current = refreshAccess
+  const cancelRunRef = useRef(cancelRun)
+  cancelRunRef.current = cancelRun
   const refreshedAt = useRef(0)
 
   const fail = useCallback((failure: unknown) => {
@@ -124,7 +128,13 @@ export function ConvergeWorkspace({ enabled, csrfToken, canSubmit, refreshAccess
           setStatus('The next step could not be queued yet. Trying again shortly; the circle is saved.'); return
         }
         holds.current = 0
-        setProgramme(await attachConvergeRun(programme.id, csrfToken, { kind: next.kind, parent_result_ids: next.parent_result_ids, run_id: run.id }))
+        let attached
+        try { attached = await attachConvergeRun(programme.id, csrfToken, { kind: next.kind, parent_result_ids: next.parent_result_ids, run_id: run.id }) } catch (failure) {
+          // The programme changed under the step (paused or stopped); the investigation it created must not run on alone.
+          void cancelRunRef.current?.(run.id)
+          throw failure
+        }
+        setProgramme(attached)
       } else if (next.state === 'waiting') {
         setStatus('')
       } else {

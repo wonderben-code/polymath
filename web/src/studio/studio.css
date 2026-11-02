@@ -141,3 +141,5 @@
 @media (max-width: 760px) { .studio-pair { grid-template-columns: 1fr; } .studio-figure.is-wide img { aspect-ratio: 3 / 2; } }
 @media (prefers-reduced-motion: reduce) { .studio-figure img { transition: none; } .studio-figure a:hover img { transform: none; } }
 .studio-paused { margin: 14px 0 0; padding: 10px 14px; border-radius: 12px; background: #fbf6ea; border: 1px solid #ecdcb4; color: #6f4e12; font-size: 14px; line-height: 1.55; }
+.studio-pipeline .is-failed { opacity: .6; }
+.studio-pipeline .is-failed .studio-pip { background: transparent; border: 1.5px solid #b45309; }
