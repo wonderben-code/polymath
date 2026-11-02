@@ -133,7 +133,7 @@ class MetaModel:
             async with asyncio.timeout(self._request_timeout_seconds):
                 async with httpx.AsyncClient(
                     transport=self._transport,
-                    timeout=httpx.Timeout(30.0, connect=10.0),
+                    timeout=httpx.Timeout(self._request_timeout_seconds, connect=10.0),
                     follow_redirects=False,
                 ) as client:
                     async with client.stream(
@@ -315,7 +315,7 @@ class MetaModel:
             async with asyncio.timeout(self._request_timeout_seconds):
                 async with httpx.AsyncClient(
                     transport=self._transport,
-                    timeout=httpx.Timeout(30.0, connect=10.0),
+                    timeout=httpx.Timeout(self._request_timeout_seconds, connect=10.0),
                     follow_redirects=False,
                 ) as client:
                     async with client.stream(

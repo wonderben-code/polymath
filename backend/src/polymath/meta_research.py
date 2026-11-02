@@ -48,6 +48,10 @@ from polymath.operator_models import OperatorSession
 from polymath.readiness_models import MetaReadinessProposalRecord
 from polymath.run_api import ACTIVE_STATES, QUEUE_LOCK_KEY, _PrivateHTTPException
 
+# How many unknown holds (each counted at its full reserved maximum) may stand before
+# admission closes for everyone until a person settles them.
+UNKNOWN_HOLD_ADMISSION_LIMIT = 3
+
 
 def _id(value):
     try:
@@ -621,14 +625,19 @@ class MetaResearchStore:
             or caps.hard_cap_microdollars > self.readiness_policy.max_hard_cap_microdollars
         ):
             raise MetaResearchError("meta_research_account_conflict")
+        # An unknown hold stays counted at its full reserved maximum against every
+        # cap until a person settles it, so one stray unknown (a timed-out or
+        # refused call) does not close admission for everyone else. A run of them
+        # means the provider is misbehaving: then nothing new starts until a
+        # person has looked.
         unknown = session.scalar(
-            select(BudgetReservation.id)
+            select(func.count())
+            .select_from(BudgetReservation)
             .where(
                 BudgetReservation.account_id == account.id, BudgetReservation.status == "unknown"
             )
-            .limit(1)
         )
-        if unknown is not None:
+        if unknown >= UNKNOWN_HOLD_ADMISSION_LIMIT:
             raise MetaResearchError("meta_research_prior_unresolved")
         prepared_marker = (
             select(ResearchExternalRequest.run_id)

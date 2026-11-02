@@ -215,6 +215,63 @@ def two_concurrent_slots(data):
     data["account"]["max_in_flight"] = 2
 
 
+def four_concurrent_slots(data):
+    data["account"]["max_in_flight"] = 4
+
+
+@pytest.mark.parametrize("native", [four_concurrent_slots], indirect=True)
+@pytest.mark.asyncio
+async def test_unknown_holds_stay_counted_and_close_admission_only_in_a_run(native):
+    from polymath.meta_research import UNKNOWN_HOLD_ADMISSION_LIMIT
+
+    dispatcher = MetaResearchDispatcher(
+        native.engine, native.policy, native.readiness_policy, native.operator_policy
+    )
+    account_id = native.policy.native_account_id
+    for index in range(UNKNOWN_HOLD_ADMISSION_LIMIT):
+        run_id, lease, value, request, step = native_call(native)
+        grant = dispatcher.prepare(lease, "model-0001", request, step)
+        # A reply that timed out: observed, no status, no usage; its hold becomes unknown.
+        dispatcher.complete(
+            grant,
+            research_observation(
+                value,
+                request,
+                http_status=None,
+                body_complete=False,
+                body_sha256=None,
+                content=None,
+                content_sha256=None,
+                finish_reason=None,
+                observed_model_id=None,
+                input_tokens=None,
+                output_tokens=None,
+                error_code="model_timeout_outcome_unknown",
+            ),
+        )
+        JobRepository(native.engine).interrupt(lease)
+        usage = BudgetService(native.engine).usage(account_id)
+        with Session(native.engine) as session:
+            unknown = session.scalar(
+                select(func.count())
+                .select_from(BudgetReservation)
+                .where(BudgetReservation.status == "unknown")
+            )
+        # Each unknown hold stays counted at its full reserved maximum.
+        assert unknown == index + 1 and usage.in_flight == index + 1
+        with Session(native.engine) as session:
+            held = session.get(BudgetReservation, grant.reservation_id).estimated_microdollars
+        assert held > 0 and usage.committed_microdollars >= (index + 1) * held
+        if index + 1 < UNKNOWN_HOLD_ADMISSION_LIMIT:
+            # One stray unknown stays counted at its reserved maximum; others continue.
+            other = enqueue_native(native, goal=f"Another question {index}")
+            assert JobRepository(native.engine).get(other).status == "queued"
+            JobRepository(native.engine).request_cancel(other)
+            JobRepository(native.engine).finalize_cancellation(other)
+    with pytest.raises(MetaResearchError, match="meta_research_prior_unresolved"):
+        enqueue_native(native, goal="A run of unknowns stops everything")
+
+
 @pytest.mark.parametrize("native", [two_concurrent_slots], indirect=True)
 @pytest.mark.asyncio
 async def test_interrupted_prepared_call_blocks_new_admission_even_with_an_unused_slot(native):
