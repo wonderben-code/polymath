@@ -189,6 +189,7 @@ class MetaModel:
 
         observed = finish = content = content_hash = None
         input_tokens = output_tokens = None
+        choices = refusal = None
         if complete:
             try:
 
@@ -204,6 +205,7 @@ class MetaModel:
                     raise ValueError
 
                 text = bytes(data).decode("utf-8", errors="strict")
+                refusal = text[:2000]
                 depth = 0
                 quoted = escaped = False
                 for character in text:
@@ -283,8 +285,21 @@ class MetaModel:
                             code = code or "model_content_invalid"
                 else:
                     code = code or "model_choices_invalid"
+                    choices = None
             except (ValueError, TypeError, UnicodeError, RecursionError):
                 code = code or "model_response_invalid_json"
+            if (
+                content is None
+                and status is not None
+                and 400 <= status < 500
+                and choices is None
+                and self._api_key.get_secret_value() not in refusal
+            ):
+                # A refusal's own words (bounded) are the only way to learn why the
+                # request was rejected; a reply that carries generated text is never
+                # journaled as content unless the provider answered 200.
+                content = refusal
+                content_hash = hashlib.sha256(refusal.encode("utf-8")).hexdigest()
         return MetaObservation(
             request_sha256=request_sha256,
             requested_model_id=self._model,
