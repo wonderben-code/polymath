@@ -90,7 +90,7 @@ export function SolveWorkspace({ enabled, csrfToken, canSubmit, refreshAccess, f
 
   const open = useCallback(async (id: string) => {
     setError('')
-    try { setProgramme(await loadSolve(id)) } catch (failure) { fail(failure) }
+    try { const loaded = await loadSolve(id); setProgramme(loaded); if (loaded.status === 'active' && loaded.steps.some((step) => step.status === 'running')) setRunning(true) } catch (failure) { fail(failure) }
   }, [fail])
 
   useEffect(() => { void refreshList() }, [refreshList])
