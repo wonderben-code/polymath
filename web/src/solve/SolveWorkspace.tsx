@@ -10,6 +10,7 @@ const RETRY_HOLD_MS = 30000
 const MAX_HOLDS = 10
 const TRANSIENT = new Set(['unavailable', 'rate_limited', 'invalid_response', 'aborted'])
 const STAGE_WORDS = { find: 'Looking for an existing key anywhere in science', fit: 'Searching other fields for close fits', forge: 'Forging a new key from the close fits' }
+const ANSWER_ONLY_WORDS = { title: 'An answer exists; no close fit was finished', line: 'The literature holds an answer with open gaps, shown below. No search for a close fit from another field could be finished, so nothing was forged.' }
 const OUTCOME_WORDS = {
   found: { title: 'A key already exists', line: 'This problem has an answer in the literature. Here it is, with the passages behind it.' },
   forged: { title: 'A new key was forged', line: 'No existing answer fitted, so Polymath combined the closest answers from different fields into a new one. It is a proposal built from the evidence, not yet independently verified.' },
@@ -163,7 +164,9 @@ export function SolveWorkspace({ enabled, csrfToken, canSubmit, refreshAccess, c
   const find = programme?.steps.find((step) => step.stage === 'find')
   const fits = programme?.steps.filter((step) => step.stage === 'fit') ?? []
   const forge = programme?.steps.find((step) => step.stage === 'forge')
-  const outcome = programme?.outcome ? OUTCOME_WORDS[programme.outcome] : null
+  // "Close fits" is honest only when a fit held; an answer with open gaps and no finished fit says so.
+  const fitsHeld = !!programme && programme.steps.some((step) => step.stage === 'fit' && step.outcome === 'bridge')
+  const outcome = !programme?.outcome ? null : programme.outcome === 'close' && !fitsHeld ? ANSWER_ONLY_WORDS : OUTCOME_WORDS[programme.outcome]
   return (
     <section className="solve" aria-labelledby="solve-title">
       <h2 id="solve-title" className="solve-heading">Solve</h2>

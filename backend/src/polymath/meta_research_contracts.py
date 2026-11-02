@@ -1271,6 +1271,13 @@ def model_reply_from_observation(
     if usage.status != "known" or usage.usage_within_bounds is not True:
         raise ModelError("native_usage_not_usable")
     if (
+        observation.http_status == 400
+        and observation.content is not None
+        and '"content_policy_violation"' in observation.content
+    ):
+        # Meta's own content filter declined the prompt before any generation.
+        raise ModelError("model_content_policy")
+    if (
         observation.http_status != 200
         or observation.finish_reason != "stop"
         or observation.content is None

@@ -356,6 +356,7 @@ SAFE_MODEL_ERRORS = {
     "model_transport_error",
     "model_output_limit_exceeded",
     "model_invalid_response",
+    "model_content_policy",
 }
 
 
@@ -910,7 +911,12 @@ class ResearchController:
                 return result("failed", error_code="model_timeout_outcome_unknown")
             except ModelError as exc:
                 code = str(exc) if str(exc) in SAFE_MODEL_ERRORS else "model_failed"
-                await event("model_failed", "The model request did not produce a usable response.")
+                await event(
+                    "model_failed",
+                    "Meta's content policy declined this prompt; nothing was generated."
+                    if code == "model_content_policy"
+                    else "The model request did not produce a usable response.",
+                )
                 return result("failed", error_code=code)
             except Exception:
                 await event("model_failed", "The model request did not produce a usable response.")

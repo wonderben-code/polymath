@@ -390,6 +390,18 @@ def test_usage_reuses_probe_accounting_without_parsing_scientific_actions(
     )
 
 
+def test_a_content_policy_refusal_is_named_and_counted_as_zero():
+    proposal, _, _, _, _, _ = research_fixture()
+    request = build_meta_research_request(proposal, MESSAGES, max_output_tokens=4096)
+    body = '{"error":{"code":"content_policy_violation","message":"filtered","param":"prompt"}}'
+    refused = research_observation(
+        request, **(REJECTED | {"http_status": 400, "content": body, "finish_reason": None})
+    )
+    assert assess_meta_usage(proposal, request, refused).actual_microdollars == 0
+    with pytest.raises(ModelError, match="model_content_policy"):
+        model_reply_from_observation(proposal, request, refused)
+
+
 def test_modelreply_adapter_preserves_action_for_existing_controller_repairs_only_after_counting():
     proposal, _, _, _, _, _ = research_fixture()
     request = build_meta_research_request(proposal, MESSAGES, max_output_tokens=4096)
