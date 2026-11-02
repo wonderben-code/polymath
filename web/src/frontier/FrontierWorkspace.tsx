@@ -11,6 +11,7 @@ const LEGEND: FrontierNodeStatus[] = ['supported', 'transferred', 'derived', 'co
 const POLL_MS = 6000
 const RETRY_HOLD_MS = 30000
 const MAX_HOLDS = 10
+const TRANSIENT = new Set(['unavailable', 'rate_limited', 'invalid_response', 'aborted'])
 
 export interface FrontierWorkspaceProps {
   enabled: boolean
@@ -80,6 +81,7 @@ export function FrontierWorkspace({ enabled, csrfToken, canSubmit, refreshAccess
   // budget check. The programme only advances while this page is open.
   const tick = useCallback(async () => {
     if (!programme || !csrfToken || busy.current) return
+    if (Date.now() < holdUntil.current) return
     busy.current = true
     try {
       const { next, programme: updated } = await nextFrontierAction(programme.id, csrfToken)
@@ -110,8 +112,9 @@ export function FrontierWorkspace({ enabled, csrfToken, canSubmit, refreshAccess
         if (next.state === 'completed') { onFinished?.(updated); void refreshList() }
       }
     } catch (failure) {
-      setRunning(false)
-      fail(failure)
+      // A passing failure (the service restarting, a blip, a paced request) holds and tries again; a lost session or a persistent failure stops the programme.
+      if (failure instanceof FrontierApiError && TRANSIENT.has(failure.code) && holds.current + 1 < MAX_HOLDS) { holds.current += 1; holdUntil.current = Date.now() + RETRY_HOLD_MS; setStatus('Polymath could not be reached. Trying again shortly.'); return }
+      setRunning(false); fail(failure)
     } finally { busy.current = false }
   }, [programme, csrfToken, fail, onFinished, refreshList])
 

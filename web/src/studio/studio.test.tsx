@@ -129,6 +129,24 @@ describe('Innovation Studio', () => {
     expect(props.submit).not.toHaveBeenCalled()
   })
 
+  it('holds and tries again when the service cannot be reached for the next step', async () => {
+    let failures = 0
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = input.toString()
+      if (url === '/api/v1/studio' && init?.method === 'POST') return Response.json(programme(), { status: 201 })
+      if (url === '/api/v1/studio') return Response.json({ programmes: [] })
+      if (url.endsWith('/next')) { failures++; return new Response('bad gateway', { status: 502 }) }
+      throw new Error(`Unexpected synthetic studio request: ${url}`)
+    }))
+    const props = workspace()
+    await userEvent.type(screen.getByLabelText('What would you like to create?'), BRIEF)
+    await userEvent.click(screen.getByRole('button', { name: 'Invent it' }))
+    expect(await screen.findByText('Polymath could not be reached. Trying again shortly.')).toBeVisible()
+    expect(failures).toBe(1)
+    expect(screen.queryByRole('button', { name: 'Continue inventing' })).toBeNull()
+    expect(props.submit).not.toHaveBeenCalled()
+  })
+
   it('presents the invention, its sources, engineering and stress test, and every way to take it further', async () => {
     server({ '/api/v1/studio': { programmes: [designed] }, [`/api/v1/studio/${PROGRAMME}`]: designed })
     const props = workspace()

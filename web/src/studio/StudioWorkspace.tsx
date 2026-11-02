@@ -12,6 +12,7 @@ import './studio.css'
 const POLL_MS = 6000
 const RETRY_HOLD_MS = 30000
 const MAX_HOLDS = 10
+const TRANSIENT = new Set(['unavailable', 'rate_limited', 'invalid_response', 'aborted'])
 const BRIEF_LIMIT = 1000
 const PIPELINE: { stage: StudioStage; name: string; doing: string }[] = [
   { stage: 'brief', name: 'Brief', doing: 'Understanding the brief and today’s best designs' },
@@ -171,6 +172,7 @@ export function StudioWorkspace({ enabled, csrfToken, canSubmit, refreshAccess, 
   // every approval and budget check. It advances while Polymath is open.
   const tick = useCallback(async () => {
     if (!programme || !csrfToken || busy.current) return
+    if (Date.now() < holdUntil.current) return
     busy.current = true
     try {
       const { next, programme: updated } = await nextStudioStep(programme.id, csrfToken)
@@ -201,7 +203,9 @@ export function StudioWorkspace({ enabled, csrfToken, canSubmit, refreshAccess, 
         setRunning(false); setStatus('')
         if (next.state === 'completed') void refreshList()
       }
-    } catch (failure) { setRunning(false); fail(failure) } finally { busy.current = false }
+    } catch (failure) { // A passing failure (the service restarting, a blip, a paced request) holds and tries again; a lost session or a persistent failure stops the programme.
+      if (failure instanceof StudioApiError && TRANSIENT.has(failure.code) && holds.current + 1 < MAX_HOLDS) { holds.current += 1; holdUntil.current = Date.now() + RETRY_HOLD_MS; setStatus('Polymath could not be reached. Trying again shortly.'); return }
+      setRunning(false); fail(failure) } finally { busy.current = false }
   }, [programme, csrfToken, fail, refreshList])
 
   const tickRef = useRef(tick)
