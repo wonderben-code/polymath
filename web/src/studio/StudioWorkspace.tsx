@@ -27,9 +27,9 @@ const OUTCOME_WORDS = {
   none: 'No working mechanism found yet',
 }
 export const STARTERS: { label: string; brief: string; specs: string[]; wildness: Wildness }[] = [
-  { label: 'A neural interface for the outdoors', brief: 'A bio-compatible neural interface that keeps working outdoors', specs: ['Safe in the body for ten years', 'Works in rain, heat and cold', 'Fully wireless'], wildness: 'strange' },
   { label: 'A submarine inspired by whales', brief: 'A submarine inspired by whales and the living ocean', specs: ['Dives to 1,000 metres', 'Nearly silent', 'Uses little energy'], wildness: 'far' },
-  { label: 'A hospital-quiet helicopter', brief: 'A city helicopter quiet enough to land beside a hospital at night', specs: ['Under 65 dB at 150 metres', 'Carries four passengers', 'Safe if power fails'], wildness: 'strange' },
+  { label: 'A kite that harvests the jet stream', brief: 'A tethered kite that harvests power from the jet stream for months at a time', specs: ['Flies at 10 km for a month', 'Lands itself before a storm', 'Sends power down the tether'], wildness: 'strange' },
+  { label: 'A bridge that heals like bone', brief: 'A road bridge whose structure senses and heals its own cracks the way bone does', specs: ['Seals a crack within a week', 'Lasts 200 years', 'Built from local materials'], wildness: 'far' },
   { label: 'A Dyson swarm', brief: 'A theoretical Dyson swarm to gather the Sun’s energy', specs: ['Repairs itself', 'Built from asteroid material', 'Orbits stay stable for centuries'], wildness: 'strange' },
 ]
 

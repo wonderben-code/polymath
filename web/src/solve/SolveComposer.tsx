@@ -5,6 +5,8 @@ import type { SolveProgramme } from './client'
 
 interface Props { csrfToken: string | null; ready: boolean; canSubmit: boolean; onCreated: (programme: SolveProgramme) => void; onSessionExpired: () => void }
 
+const SOLVE_EXAMPLES = ['How could a spacecraft shield its crew from cosmic rays without heavy metal?', 'How could a desert city make fresh water from air at night?', 'How could batteries be recycled without loss of capacity?']
+
 export function SolveComposer({ csrfToken, ready, canSubmit, onCreated, onSessionExpired }: Props) {
   const [problem, setProblem] = useState('')
   const [busy, setBusy] = useState(false)
@@ -28,6 +30,10 @@ export function SolveComposer({ csrfToken, ready, canSubmit, onCreated, onSessio
       <div className="prompt-box">
         <textarea id="solve-problem" value={problem} onChange={(event) => setProblem(event.target.value)} rows={3} maxLength={2000} placeholder="A problem, as precisely as you can: what you need, and what you have tried…" />
         <div className="prompt-footer"><span /><button type="submit" className="primary-button" disabled={!ready || !canSubmit || !csrfToken || !problem.trim() || busy}>{busy ? 'Starting…' : 'Find or forge a key'} <span aria-hidden="true">→</span></button></div>
+      </div>
+      <div className="example-row">
+        <span>Try</span>
+        {SOLVE_EXAMPLES.map((example) => <button type="button" key={example} onClick={() => setProblem(example)}>{example}</button>)}
       </div>
       {error && <p className="composer-alert" role="alert">{error}</p>}
     </form>

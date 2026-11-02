@@ -78,7 +78,7 @@ const copy = {
     placeholder: 'A concept, a phenomenon, an unexpected connection…',
     action: 'Explore connections',
     note: 'A good investigation can end with a connection—or a reason to reject one.',
-    examples: ['Self-organised criticality', 'Error-correcting codes', 'Phase transitions in learning'],
+    examples: ['Error-correcting codes', 'Murmurations and magnets', 'Phase transitions in how machines learn'],
   },
   ask: {
     description: 'Bring an open question. Polymath answers from the literature and labels every claim by how well it is supported.',
@@ -86,7 +86,7 @@ const copy = {
     placeholder: 'What is the truth about…?',
     action: 'Investigate question',
     note: 'Answers will distinguish known findings, postulated connections, and speculation.',
-    examples: ['Why is sleep necessary?', 'What limits how fast cities grow?'],
+    examples: ['Why does time only run forward?', 'Could life exist without water?', 'What limits how fast cities grow?'],
   },
   surprise: {
     description: 'Polymath picks distant disciplines, looks for a shared structure and keeps only what holds up.',
@@ -153,6 +153,8 @@ function AboutPlace({ remaining, daily }: { remaining?: number | null; daily?: n
     <Credits />
   </div>
 }
+
+const FRONTIER_EXAMPLES = ['How could we build a space elevator with materials we can make today?', 'How could batteries be recycled without loss of capacity?', 'How could a city cut its summer heat without more air conditioning?']
 
 export function App() {
   const [place, go] = usePlace()
@@ -396,6 +398,10 @@ export function App() {
               <div className="prompt-box">
                 <textarea id="frontier-prompt" value={frontierQuestion} onChange={(event) => setFrontierQuestion(event.target.value)} placeholder="An open problem, stated as precisely as you can…" rows={3} maxLength={2000} />
                 <div className="prompt-footer"><button className="primary-button" type="submit" disabled={!frontierReady || !frontierQuestion.trim()}>{creatingFrontier ? 'Starting…' : 'Start a frontier programme'}<Arrow /></button></div>
+              </div>
+              <div className="example-row">
+                <span>Try</span>
+                {FRONTIER_EXAMPLES.map((example) => <button type="button" key={example} onClick={() => setFrontierQuestion(example)}>{example}</button>)}
               </div>
               <p className="prompt-note">Each step runs as an ordinary investigation with its own evidence and budget. Keep this tab open while it works.</p>
             </form>
