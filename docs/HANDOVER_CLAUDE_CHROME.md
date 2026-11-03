@@ -64,6 +64,88 @@ Checkpoint 2: the run URL and result, and the 2 November figure.
 
 Checkpoint 3: the sandbox record URL, the finding's title, any failure with its exact message.
 
+## Task 4. Final judging delegation (console, two steps)
+
+The judging delegation of 3 November (USD 100 public total, USD 20 a day; USD 4 / USD 3 a visitor, 12 investigations a day) is active until 17 November 08:00 UTC. The final delegation replaces it with the owner's chosen limits: public total USD 125 (the ledger brake, below the real Meta credit), public daily USD 75 (the account's own daily ceiling, so no separate daily brake), each visitor USD 12 total and a day with 24 investigations a day, 200 a day overall, same deadline. The account caps (USD 145 total, USD 75 a day) are unchanged. The attestation timestamps below only need to be in the past; the server accepts the block any time before the deadline.
+
+Paste this whole block as one message to Claude in Chrome:
+
+```
+Activate Polymath's final judging delegation through the API from the page console (same method as this morning). Rules: never paste the operator code, cookies or tokens into chat; report the PREVIEW and ACTIVE lines verbatim; stop and report if a step errors.
+
+1. Open https://askpolymath.com/operator/budget, press "Unlock operator access" and let Eks enter the operator code (paste it, no spaces). Confirm "Signed in as Owner until …".
+2. In the page's JavaScript console run STEP A. It only previews; nothing is activated yet.
+3. Check the PREVIEW line says: deadline 2026-11-17T08:00:00Z | public total 125000000 daily 75000000 | visitor total 12000000 daily 12000000 | jobs/visitor/day 24 | jobs/day 200. If so, run STEP B. Otherwise report the line verbatim and stop.
+4. STEP B activates and prints "ACTIVE:". Report it.
+5. Press "Lock operator access".
+
+STEP A:
+
+(async () => {
+  const j = async (path, body, extra) => {
+    const r = await fetch(path, { credentials: 'same-origin', cache: 'no-store', method: body ? 'POST' : 'GET', headers: { Accept: 'application/json', ...(body ? { 'Content-Type': 'application/json' } : {}), ...(extra || {}) }, body: body ? JSON.stringify(body) : undefined });
+    const t = await r.text(); let v; try { v = JSON.parse(t) } catch { v = t }
+    if (!r.ok) throw new Error(path + ' -> HTTP ' + r.status + ' ' + JSON.stringify(v).slice(0, 300));
+    return v;
+  };
+  const browser = await j('/api/v1/session');
+  const op = await j('/api/v1/operator/session');
+  if (!op.authenticated || !op.csrf_token) throw new Error('Operator access is locked. Unlock first.');
+  const H = { 'X-CSRF-Token': browser.csrf_token, 'X-Operator-CSRF-Token': op.csrf_token };
+  const readiness = (await j('/api/v1/budget/readiness?limit=5')).proposals.find((p) => p.temporal_status === 'current');
+  if (!readiness) throw new Error('No current readiness proposal found.');
+  const jobs = (await j('/api/v1/budget/verification/jobs?limit=5')).jobs;
+  const canary = jobs.find((x) => x.receipt && x.native_status === 'passed') || jobs.find((x) => x.receipt);
+  if (!canary) throw new Error('No passed verification receipt found.');
+  const body = {
+    readiness_id: readiness.id,
+    canary_receipt_id: canary.receipt.id,
+    valid_until: '2026-11-17T08:00:00Z',
+    review: {
+      observed_at: '2026-11-03T13:40:00Z', valid_until: '2026-11-20T00:00:00Z',
+      evidence: [
+        { url: 'https://dev.meta.ai/docs/pricing-rate-limits', content_sha256: '607ad0b36382b69c02af48b210f22cb4e874ea167c2e0dd2e16504cafb9de5aa' },
+        { url: 'https://dev.meta.ai/docs/models', content_sha256: '88d55e1cca6434d72be3766c96edc6930f29e2d5183cb676307a3410fd1abe27' }
+      ],
+      funding_cap_confirmed: true, pricing_bounds_confirmed: true, model_wire_usage_confirmed: true
+    },
+    provider_account_attestation: {
+      provider_billing_account_id: '1610449200134358', model_id: 'muse-spark-1.3', currency: 'USD',
+      usage_contract: 'prompt_completion_inclusive_v1',
+      observed_at: '2026-11-03T13:40:00Z', valid_until: '2026-11-20T00:00:00Z',
+      available_credit_microdollars: 129170000, remaining_provider_allowance_microdollars: 129170000,
+      provider_hard_cap_microdollars: 150000000,
+      evidence: [{ url: 'https://dev.meta.ai/billing', content_sha256: 'dbead56f687c96d4790fe3de7fa241d68c5963718d10b7d7eb4b71de9bd88322' }]
+    },
+    public_limits: {
+      public_total_cap_microdollars: 125000000, public_daily_cap_microdollars: 75000000,
+      session_total_cap_microdollars: 12000000, session_daily_cap_microdollars: 12000000,
+      max_jobs_per_session_day: 24, max_jobs_per_day: 200
+    },
+    discovery: { protocol: 'polymath-surprise-ladder-v1', max_stages: 3, max_depth: 2 },
+    explore_collection: { protocol: 'polymath-explore-collection-v1', max_bridges: 3 },
+    scientific_context: { protocol: 'polymath-scientific-context-profiles-v1' }
+  };
+  const preview = await j('/api/v1/budget/research/public/preview', body, H);
+  window.__polymathPreview = preview; window.__polymathHeaders = H;
+  const m = preview.manifest, L = m.public_limits;
+  console.log('PREVIEW: deadline ' + m.valid_until + ' | public total ' + L.public_total_cap_microdollars + ' daily ' + L.public_daily_cap_microdollars + ' | visitor total ' + L.session_total_cap_microdollars + ' daily ' + L.session_daily_cap_microdollars + ' | jobs/visitor/day ' + L.max_jobs_per_session_day + ' | jobs/day ' + L.max_jobs_per_day + ' | sha ' + preview.manifest_sha256.slice(0, 12));
+})().catch((e) => console.log('ERROR: ' + e.message));
+
+STEP B (only after the PREVIEW line matched):
+
+(async () => {
+  const p = window.__polymathPreview, H = window.__polymathHeaders;
+  if (!p || !H) throw new Error('Run STEP A first.');
+  const r = await fetch('/api/v1/budget/research/public/activate', { credentials: 'same-origin', cache: 'no-store', method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'application/json', ...H }, body: JSON.stringify({ manifest: p.manifest, expected_manifest_sha256: p.manifest_sha256 }) });
+  const t = await r.text(); let v; try { v = JSON.parse(t) } catch { v = t }
+  if (!r.ok) throw new Error('activate -> HTTP ' + r.status + ' ' + JSON.stringify(v).slice(0, 300));
+  console.log('ACTIVE: id ' + v.id + ' | current ' + v.delegation_current + ' | deadline ' + v.manifest.valid_until + ' | sha ' + v.manifest_sha256.slice(0, 12));
+})().catch((e) => console.log('ERROR: ' + e.message));
+```
+
+Checkpoint 4: the ACTIVE line. A fresh private window then shows a USD 12 allowance.
+
 ## During judging
 
 Nothing to do. A model call that times out used to leave an "unknown" hold for a person to settle; since 3 Nov the research worker settles such holds itself at their full reserved amount within seconds, so the site never closes over them and no daily check is needed. The money protection is unchanged: the ledger counts the maximum the call could have cost.
