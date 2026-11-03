@@ -10,7 +10,14 @@ from test_memory import owner
 from test_studio_images import account, designed, meta, policy, reservation
 from test_worker import database as database_fixture
 
-from polymath.budget_holds import HoldError, list_holds, main, settle_hold
+from polymath.budget_holds import (
+    AUTO_SETTLE_EVIDENCE,
+    HoldError,
+    list_holds,
+    main,
+    settle_hold,
+    settle_unknown_holds_at_maximum,
+)
 from polymath.studio_images import StudioImages
 
 database = database_fixture
@@ -69,3 +76,28 @@ def test_an_unknown_research_call_is_settled_through_its_journal(dispatch):
 def test_the_command_refuses_to_change_anything_without_confirm(capsys):
     assert main(["settle", str(uuid.uuid4()), "--actual-microdollars", "0", "--evidence", "x"]) == 2
     assert "add --confirm" in capsys.readouterr().out
+
+
+def test_unknown_holds_settle_themselves_at_the_reserved_maximum(database):
+    # Nobody reads a billing dashboard during public use: an unknown hold is
+    # closed at the most it could have cost, so the caps hold as before and no
+    # visitor waits on a person. A hold younger than the threshold is left alone.
+    account(database)
+    token = owner(database)
+    programme = designed(database, token)
+
+    def timeout(request):
+        raise httpx.ReadTimeout("slow")
+
+    transport, _ = meta(timeout)
+    images = StudioImages(database, policy(), transport=transport)
+    image_id, reservation_id = images.request(token, programme)
+    assert images.execute(image_id, reservation_id) == "unknown"
+    assert settle_unknown_holds_at_maximum(database, older_than_seconds=3600) == []
+    assert [hold.status for hold in list_holds(database)] == ["unknown"]
+    reserved = reservation(database, image_id).estimated_microdollars
+    assert settle_unknown_holds_at_maximum(database) == [str(reservation_id)]
+    settled = reservation(database, image_id)
+    assert settled.status == "settled" and settled.actual_microdollars == reserved
+    assert settled.settlement_key == f"operator-reconciled:{AUTO_SETTLE_EVIDENCE}"
+    assert list_holds(database) == [] and settle_unknown_holds_at_maximum(database) == []

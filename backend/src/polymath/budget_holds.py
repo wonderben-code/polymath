@@ -18,9 +18,11 @@ in-flight marker; Studio pictures are settled on the ledger directly.
 from __future__ import annotations
 
 import argparse
+import logging
 import sys
 import uuid
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 from sqlalchemy import Engine, or_, select
 from sqlalchemy.orm import Session
@@ -33,6 +35,9 @@ from polymath.models import ResearchExternalRequest, ResearchRun
 
 class HoldError(Exception):
     """Static code; never echoes stored text."""
+
+
+_LOG = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -144,6 +149,48 @@ def settle_hold(
             )
         return "image"
     raise HoldError("unsupported_hold_kind")
+
+
+AUTO_SETTLE_EVIDENCE = "auto-settled-at-reserved-maximum"
+
+
+def settle_unknown_holds_at_maximum(engine: Engine, *, older_than_seconds: int = 0) -> list[str]:
+    """Settle every unknown hold at its full reserved maximum, without a person.
+
+    A timed-out or unanswered call keeps its money counted either way; what an
+    unsettled hold adds is a block on activation and, after a few of them, on
+    every visitor's next investigation. During public use nobody reads billing
+    dashboards, so the hold is closed at the most it could have cost. Settling
+    at the maximum never spends less than the ledger already assumed, so the
+    caps hold exactly as before; a person may still reconcile the journal later.
+    """
+    if type(older_than_seconds) is not int or older_than_seconds < 0:
+        raise HoldError("invalid_amount")
+    settled: list[str] = []
+    for hold in list_holds(engine):
+        if hold.status != "unknown":
+            continue
+        age = (datetime.now(UTC) - datetime.fromisoformat(hold.created_at)).total_seconds()
+        if age < older_than_seconds:
+            continue
+        try:
+            kind = settle_hold(
+                engine,
+                hold.reservation_id,
+                actual_microdollars=hold.estimated_microdollars,
+                evidence=AUTO_SETTLE_EVIDENCE,
+            )
+        except HoldError as error:
+            _LOG.warning("unknown hold %s not auto-settled: %s", hold.reservation_id, error)
+            continue
+        _LOG.info(
+            "unknown %s hold %s settled at its reserved maximum (%s)",
+            kind,
+            hold.reservation_id,
+            _dollars(hold.estimated_microdollars),
+        )
+        settled.append(str(hold.reservation_id))
+    return settled
 
 
 def _dollars(microdollars: int) -> str:

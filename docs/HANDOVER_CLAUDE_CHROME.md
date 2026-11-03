@@ -63,3 +63,7 @@ Checkpoint 2: the run URL and result, and the 2 November figure.
 6. Wait for the record link; open it on sandbox.zenodo.org.
 
 Checkpoint 3: the sandbox record URL, the finding's title, any failure with its exact message.
+
+## During judging
+
+Nothing to do. A model call that times out used to leave an "unknown" hold for a person to settle; since 3 Nov the research worker settles such holds itself at their full reserved amount within seconds, so the site never closes over them and no daily check is needed. The money protection is unchanged: the ledger counts the maximum the call could have cost.

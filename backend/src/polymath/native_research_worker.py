@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import logging
 import math
 import re
 import signal
@@ -417,6 +418,9 @@ def build_native_research_worker(
     )
 
 
+_LOG = logging.getLogger(__name__)
+
+
 async def run(
     settings: Settings | _FinalizeDatabaseSettings,
     *,
@@ -473,10 +477,39 @@ async def run(
         loop = asyncio.get_running_loop()
         for signum in (signal.SIGINT, signal.SIGTERM):
             loop.add_signal_handler(signum, stop.set)
-        await worker.run_until_stopped(worker_id, stop)
+        sweep = (
+            asyncio.create_task(
+                _auto_settle_unknown_holds(
+                    engine, stop, every_seconds=settings.unknown_hold_auto_settle_seconds
+                )
+            )
+            if getattr(settings, "unknown_hold_auto_settle_enabled", False)
+            else None
+        )
+        try:
+            await worker.run_until_stopped(worker_id, stop)
+        finally:
+            if sweep is not None:
+                stop.set()
+                await sweep
         return 0
     finally:
         engine.dispose()
+
+
+async def _auto_settle_unknown_holds(engine, stop: asyncio.Event, *, every_seconds: int) -> None:
+    """Close unknown holds at their reserved maximum so nobody waits on a person."""
+    from polymath.budget_holds import settle_unknown_holds_at_maximum
+
+    while not stop.is_set():
+        try:
+            await asyncio.to_thread(settle_unknown_holds_at_maximum, engine)
+        except Exception:
+            _LOG.exception("unknown-hold sweep failed; it runs again shortly")
+        try:
+            await asyncio.wait_for(stop.wait(), timeout=max(1, every_seconds))
+        except TimeoutError:
+            pass
 
 
 def main() -> int:

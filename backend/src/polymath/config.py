@@ -48,6 +48,11 @@ class Settings(BaseSettings):
     budget_max_hard_cap_microdollars: int = Field(default=150_000_000, ge=1, le=150_000_000)
     paid_meta_probe_enabled: bool = False
     paid_meta_research_enabled: bool = False
+    # Unknown holds (timed-out or unanswered calls) are settled at their reserved
+    # maximum by the research worker within this many seconds, so public use is
+    # never blocked waiting for a person to read a billing dashboard.
+    unknown_hold_auto_settle_seconds: int = Field(default=15, ge=0, le=86400)
+    unknown_hold_auto_settle_enabled: bool = True
     public_meta_research_enabled: bool = False
     # Studio concept art with Meta's image model (docs/STUDIO.md). Off by default;
     # each image is reserved on the same ledger at a flat price before it is sent.
