@@ -7,6 +7,7 @@ the live operator inside the transactions that grant or revoke authority.
 
 from __future__ import annotations
 
+import logging
 import uuid
 from typing import Annotated
 
@@ -53,6 +54,9 @@ class _ProbeHTTPException(HTTPException):
         super().__init__(status_code, detail, headers=dict(HEADERS))
 
 
+_LOG = logging.getLogger(__name__)
+
+
 class _ProbeRoute(APIRoute):
     def get_route_handler(self):
         original = super().get_route_handler()
@@ -74,6 +78,9 @@ class _ProbeRoute(APIRoute):
                 code = str(error) if isinstance(error, (MetaProbeError, ReadinessError)) else ""
                 if code in ERRORS:
                     raise _ProbeHTTPException(ERRORS[code], code) from None
+                _LOG.exception(
+                    "verification route %s failed: %s", request.url.path, type(error).__name__
+                )
                 raise _ProbeHTTPException(503, "meta_probe_storage_unavailable") from None
 
         return handle

@@ -7,6 +7,7 @@ spend. The store reauthorizes the live human role inside its own transactions.
 
 from __future__ import annotations
 
+import logging
 import uuid
 from typing import Annotated
 
@@ -20,6 +21,8 @@ from starlette.exceptions import HTTPException
 from polymath.meta_readiness import MetaReadinessStore, ReadinessError
 from polymath.meta_readiness_contracts import MetaReadinessProposal, ReadinessPolicy
 from polymath.operator_auth import OperatorPolicy
+
+_LOG = logging.getLogger(__name__)
 
 HEADERS = {
     "Cache-Control": "no-store",
@@ -71,7 +74,12 @@ class _BudgetAdminRoute(APIRoute):
             except HTTPException as error:
                 error.headers = {**(error.headers or {}), **HEADERS}
                 raise
-            except Exception:
+            except Exception as caught:
+                # The answer stays a plain 503, but the cause must reach the server log:
+                # a silent branch hid an operator desk failure on 3 Nov.
+                _LOG.exception(
+                    "budget admin route %s failed: %s", request.url.path, type(caught).__name__
+                )
                 raise _BudgetAdminHTTPException(503, "readiness_storage_unavailable") from None
 
         return handle
