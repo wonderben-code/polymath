@@ -457,7 +457,10 @@ class ZenodoClient:
                         "Accept-Encoding": "identity",
                     }
                     if content is not None:
-                        headers["Content-Type"] = "text/markdown; charset=utf-8"
+                        # Zenodo's file bucket accepts only application/octet-stream
+                        # (HTTP 415 otherwise, observed 3 Nov 2026); the file's own
+                        # type is carried by its name.
+                        headers["Content-Type"] = "application/octet-stream"
                     async with client.stream(
                         method,
                         url,

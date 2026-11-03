@@ -148,7 +148,7 @@ async def test_mock_complete_deposit_upload_verified_bytes_and_publish(destinati
             return httpx.Response(201, json=deposit_body(reviewed))
         if request.method == "PUT":
             assert request.content == CONTENT
-            assert request.headers["content-type"] == "text/markdown; charset=utf-8"
+            assert request.headers["content-type"] == "application/octet-stream"
             return httpx.Response(
                 201,
                 json={
