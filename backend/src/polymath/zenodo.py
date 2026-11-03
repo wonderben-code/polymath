@@ -78,6 +78,7 @@ class RemoteFile(StrictModel):
     filename: Annotated[str, Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,59}$")]
     size: Annotated[int, Field(ge=0, le=MAX_FILE_BYTES)]
     checksum: Annotated[str, Field(max_length=71)] | None = None
+    download_url: Annotated[str, Field(max_length=2000)] | None = None
 
 
 class ZenodoDeposit(StrictModel):
@@ -87,6 +88,7 @@ class ZenodoDeposit(StrictModel):
     state: Literal["unsubmitted", "done", "inprogress", "error"]
     metadata: dict
     bucket_url: str | None = None
+    files_url: str | None = None
     record_id: Annotated[int, Field(ge=1, le=MAX_DEPOSIT_ID)] | None = None
     record_url: str | None = None
     doi: str | None = None
@@ -158,7 +160,10 @@ def _plain(value: object, maximum: int) -> str:
 
 
 def _metadata(raw: object) -> dict:
-    if not isinstance(raw, dict) or set(raw) - REMOTE_METADATA_KEYS - SERVER_METADATA_KEYS:
+    # Zenodo adds fields of its own to a deposit's metadata (imprint_publisher,
+    # communities, dates and more); they are ignored, and the reviewed fields
+    # below are compared exactly.
+    if not isinstance(raw, dict):
         raise ValueError
     keywords = raw.get("keywords", [])
     if not isinstance(keywords, list) or len(keywords) > 21:
@@ -327,6 +332,11 @@ class ZenodoClient:
         if not isinstance(links, dict):
             raise ValueError
         bucket = self._bucket(links["bucket"]) if links.get("bucket") is not None else None
+        files_url = None
+        if links.get("files") is not None:
+            if self._url_path(links["files"]) != f"/api/deposit/depositions/{identifier}/files":
+                raise ValueError
+            files_url = self._origin + f"/api/deposit/depositions/{identifier}/files"
         if "self" in links:
             if self._url_path(links["self"]) != f"/api/deposit/depositions/{identifier}":
                 raise ValueError
@@ -349,7 +359,7 @@ class ZenodoClient:
         files = raw.get("files", [])
         if not isinstance(files, list) or len(files) > 20:
             raise ValueError
-        parsed_files = tuple(_remote_file(item) for item in files)
+        parsed_files = tuple(self._remote_file_with_link(item) for item in files)
         if len({item.filename for item in parsed_files}) != len(parsed_files):
             raise ValueError
         # Reserved draft DOI values are not published DOI evidence.
@@ -376,11 +386,23 @@ class ZenodoClient:
             state=state,
             metadata=metadata,
             bucket_url=bucket,
+            files_url=files_url,
             record_id=record_id,
             record_url=record_url,
             doi=doi,
             files=parsed_files,
         )
+
+    def _remote_file_with_link(self, raw: object) -> RemoteFile:
+        remote = _remote_file(raw)
+        links = raw.get("links") if isinstance(raw, dict) else None
+        download = links.get("download") if isinstance(links, dict) else None
+        if download is None:
+            return remote
+        path = self._url_path(download)
+        if not path.startswith("/api/"):
+            raise ValueError
+        return remote.model_copy(update={"download_url": self._origin + path})
 
     def _validated_deposit(self, deposit: ZenodoDeposit, *, writable=False) -> ZenodoDeposit:
         try:
@@ -391,6 +413,10 @@ class ZenodoClient:
                 raise ValueError
             if checked.bucket_url is not None:
                 self._bucket(checked.bucket_url)
+            if checked.files_url is not None and self._url_path(checked.files_url) != (
+                f"/api/deposit/depositions/{checked.id}/files"
+            ):
+                raise ValueError
             if writable and (
                 checked.submitted or checked.state not in ("unsubmitted", "inprogress")
             ):
@@ -409,6 +435,7 @@ class ZenodoClient:
         params: dict | None = None,
         body: dict | None = None,
         content: bytes | None = None,
+        form: tuple[str, bytes] | None = None,
         limit: int = MAX_JSON_BYTES,
     ) -> bytes:
         if not self._enabled:
@@ -437,6 +464,12 @@ class ZenodoClient:
                         params=params,
                         json=body,
                         content=content,
+                        data={"name": form[0]} if form is not None else None,
+                        files=(
+                            {"file": (form[0], form[1], "text/markdown; charset=utf-8")}
+                            if form is not None
+                            else None
+                        ),
                         headers=headers,
                     ) as response:
                         status = response.status_code
@@ -528,7 +561,7 @@ class ZenodoClient:
         if (
             deposit.submitted
             or deposit.state not in ("unsubmitted", "inprogress")
-            or deposit.bucket_url is None
+            or (deposit.bucket_url is None and deposit.files_url is None)
         ):
             raise ZenodoError("zenodo_unexpected_state", outcome_unknown=True)
         if not metadata_matches(deposit, manifest):
@@ -563,15 +596,26 @@ class ZenodoClient:
             content.decode("utf-8", errors="strict")
         except UnicodeError:
             raise ZenodoError("invalid_publication_file") from None
-        if deposit.bucket_url is None:
+        if deposit.bucket_url is not None:
+            payload = await self._request(
+                "PUT",
+                deposit.bucket_url + "/" + filename,
+                statuses=(200, 201),
+                mutation=True,
+                content=content,
+            )
+        elif deposit.files_url is not None:
+            # Zenodo's current legacy API offers no bucket link on a fresh
+            # draft; the documented deposition files endpoint takes a form.
+            payload = await self._request(
+                "POST",
+                deposit.files_url,
+                statuses=(200, 201),
+                mutation=True,
+                form=(filename, content),
+            )
+        else:
             raise ZenodoError("invalid_zenodo_deposit")
-        payload = await self._request(
-            "PUT",
-            deposit.bucket_url + "/" + filename,
-            statuses=(200, 201),
-            mutation=True,
-            content=content,
-        )
         try:
             remote = _remote_file(self._json(payload, mutation=True))
         except (ValueError, TypeError, ValidationError, ZenodoError):
@@ -595,11 +639,14 @@ class ZenodoClient:
         filename = _filename(filename)
         if type(maxbytes) is not int or not 1 <= maxbytes <= MAX_FILE_BYTES:
             raise ZenodoError("invalid_publication_file_limit")
-        if deposit.bucket_url is None:
-            raise ZenodoError("invalid_zenodo_deposit")
-        return await self._request(
-            "GET", deposit.bucket_url + "/" + filename, statuses=(200,), limit=maxbytes
-        )
+        if deposit.bucket_url is not None:
+            url = deposit.bucket_url + "/" + filename
+        else:
+            remote = next((item for item in deposit.files if item.filename == filename), None)
+            if remote is None or remote.download_url is None:
+                raise ZenodoError("invalid_zenodo_deposit")
+            url = remote.download_url
+        return await self._request("GET", url, statuses=(200,), limit=maxbytes)
 
     async def publish(self, deposit_id: int) -> ZenodoDeposit:
         deposit_id = _deposit_id(deposit_id)

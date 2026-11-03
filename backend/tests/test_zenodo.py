@@ -349,17 +349,13 @@ async def test_deposit_identifiers_cannot_change_the_endpoint_path(value):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(
-    "change", ["title", "marker", "extra_metadata", "submitted", "bucket_missing"]
-)
+@pytest.mark.parametrize("change", ["title", "marker", "submitted", "no_upload_route"])
 async def test_create_response_must_preserve_exact_reviewed_metadata_and_draft_state(change):
     response = deposit_body()
     if change == "title":
         response["metadata"]["title"] = "Different remote text"
     elif change == "marker":
         response["metadata"]["keywords"] = ["synthetic fixture"]
-    elif change == "extra_metadata":
-        response["metadata"]["related_identifiers"] = [{"identifier": "unapproved"}]
     elif change == "submitted":
         response["submitted"] = True
         response["state"] = "done"
@@ -772,3 +768,78 @@ def test_canonical_metadata_is_exact_reviewed_data_and_marker_without_callback_f
     broken = reviewed.model_copy(update={"remote_marker": "polymath-" + "0" * 64})
     with pytest.raises(ZenodoError, match="invalid_publication_manifest"):
         canonical_remote_metadata(broken)
+
+
+@pytest.mark.asyncio
+async def test_server_added_metadata_fields_are_ignored_and_reviewed_fields_stay_exact():
+    # Zenodo's current API adds fields of its own to a draft's metadata
+    # (imprint_publisher on a preprint, for one); they cannot make an exact
+    # reviewed deposit unrecognisable, while a changed reviewed field still does.
+    response = deposit_body()
+    response["metadata"]["imprint_publisher"] = "Zenodo"
+    response["metadata"]["related_identifiers"] = [{"identifier": "server-added"}]
+    deposit = await client(lambda request: httpx.Response(201, json=response)).create_draft(
+        manifest()
+    )
+    assert deposit.metadata == canonical_remote_metadata(manifest())
+    assert metadata_matches(deposit, manifest())
+    changed = deposit_body()
+    changed["metadata"]["imprint_publisher"] = "Zenodo"
+    changed["metadata"]["title"] = "Different remote text"
+    with pytest.raises(ZenodoError, match="zenodo_metadata_mismatch"):
+        await client(lambda request: httpx.Response(201, json=changed)).create_draft(manifest())
+
+
+@pytest.mark.asyncio
+async def test_legacy_files_endpoint_uploads_and_reads_back_when_no_bucket_link_is_offered():
+    host = origin()
+    reviewed = manifest()
+    body = deposit_body()
+    body["links"].pop("bucket")
+    body["links"]["files"] = f"{host}/api/deposit/depositions/123/files"
+    seen = {}
+
+    def handler(request):
+        path = request.url.path
+        if request.method == "POST" and path == "/api/deposit/depositions/123/files":
+            seen["content_type"] = request.headers["content-type"]
+            seen["body"] = request.read()
+            return httpx.Response(
+                201,
+                json={
+                    "id": "f1",
+                    "filename": reviewed.file_name,
+                    "filesize": str(len(CONTENT)),
+                    "checksum": CONTENT_MD5,
+                    "links": {
+                        "download": f"{host}/api/deposit/depositions/123/files/f1?download=1",
+                        "self": f"{host}/api/deposit/depositions/123/files/f1",
+                    },
+                },
+            )
+        if request.method == "GET" and path == "/api/deposit/depositions/123/files/f1":
+            return httpx.Response(200, content=CONTENT)
+        return httpx.Response(404, json={})
+
+    zenodo = client(handler)
+    draft = await client(lambda request: httpx.Response(201, json=body)).create_draft(reviewed)
+    assert draft.bucket_url is None and draft.files_url == body["links"]["files"]
+    remote = await zenodo.upload_file(
+        draft, reviewed.file_name, CONTENT, hashlib.sha256(CONTENT).hexdigest()
+    )
+    assert (remote.filename, remote.size) == (reviewed.file_name, len(CONTENT))
+    assert seen["content_type"].startswith("multipart/form-data")
+    assert CONTENT in seen["body"] and reviewed.file_name.encode() in seen["body"]
+    # The download link is rejected when it points outside the deposit API.
+    with_link = deposit_body(files=True)
+    with_link["links"].pop("bucket")
+    with_link["links"]["files"] = f"{host}/api/deposit/depositions/123/files"
+    with_link["files"][0]["links"] = {"download": f"{host}/api/deposit/depositions/123/files/f1"}
+    read_back = await client(lambda request: httpx.Response(200, json=with_link)).get_deposit(123)
+    assert await zenodo.get_file_bytes(read_back, reviewed.file_name) == CONTENT
+    foreign = deposit_body(files=True)
+    foreign["links"].pop("bucket")
+    foreign["links"]["files"] = f"{host}/api/deposit/depositions/123/files"
+    foreign["files"][0]["links"] = {"download": "https://attacker.invalid/api/file"}
+    with pytest.raises(ZenodoError, match="zenodo_invalid_response"):
+        await client(lambda request: httpx.Response(200, json=foreign)).get_deposit(123)
