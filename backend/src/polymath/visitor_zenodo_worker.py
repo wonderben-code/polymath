@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import hashlib
+import logging
 import signal
 import uuid
 from collections.abc import Callable
@@ -36,6 +37,9 @@ from polymath.visitor_zenodo_models import VisitorPublication
 from polymath.zenodo import ZenodoClient, ZenodoDeposit, ZenodoError, metadata_matches
 
 ClientFactory = Callable[[str, SecretStr], ZenodoClient]
+
+
+_LOG = logging.getLogger(__name__)
 
 
 class _Stop(Exception):
@@ -227,19 +231,30 @@ class VisitorZenodoWorker:
             return "published"
         except _Stop as stop:
             if stop.status != "lease_lost":
+                _LOG.info(
+                    "visitor publication %s stopped: %s (%s)", claim.id, stop.status, stop.code
+                )
                 self._finish(claim, worker_id, stop.status, stop.code)
             return stop.status
         except ZenodoError as error:
             code = str(error)
             status = "reconnect" if code == "zenodo_access_denied" else "failed"
+            _LOG.warning(
+                "visitor publication %s failed at Zenodo: %s (outcome unknown: %s)",
+                claim.id,
+                code,
+                error.outcome_unknown,
+            )
             self._finish(claim, worker_id, status, code)
             return status
         except VisitorZenodoError as error:
+            _LOG.warning("visitor publication %s failed: %s", claim.id, error)
             self._finish(claim, worker_id, "failed", str(error))
             return "failed"
         except Exception:
             # Never let one record stop the worker. Mid-creation, only a search
             # may follow; otherwise the visitor can choose to try again.
+            _LOG.exception("visitor publication %s hit an unexpected failure", claim.id)
             return self._unexpected(claim, worker_id)
 
     def _unexpected(self, claim: _Claim, worker_id: str) -> str:
