@@ -482,6 +482,16 @@ class ZenodoClient:
                         if status == 409:
                             raise ZenodoError("zenodo_state_conflict")
                         if 400 <= status < 500:
+                            # Zenodo's own error text names the rejected field; it is
+                            # the provider's message about our request, not visitor data.
+                            detail = (await response.aread())[:600]
+                            _LOG.warning(
+                                "Zenodo rejected %s %s: HTTP %s %s",
+                                method,
+                                self._url_path(url),
+                                status,
+                                detail.decode("utf-8", errors="replace"),
+                            )
                             raise ZenodoError("zenodo_request_rejected")
                         if status not in statuses:
                             raise ZenodoError("zenodo_request_failed", outcome_unknown=mutation)
