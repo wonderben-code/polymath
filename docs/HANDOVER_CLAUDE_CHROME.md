@@ -64,11 +64,6 @@ Checkpoint 2: the run URL and result, and the 2 November figure.
 
 Checkpoint 3: the sandbox record URL, the finding's title, any failure with its exact message.
 
-## During judging: a two-minute daily check (3 to 17 November)
+## During judging
 
-A model call that times out leaves an "unknown" hold: its money stays reserved at the maximum, and after three such holds the site closes new investigations until a person settles them (activation of a new delegation refuses while even one stands). Nobody settles automatically, by design. Once a day:
-
-1. GitHub Actions → Server task → Run workflow (main), task `holds`. The output is encrypted for Claude Code; paste it to Claude Code, or simply ask Claude Code "any unknown holds?".
-2. For each hold listed as `unknown`, check the Meta dashboard's daily usage for that day, then run the Server task `settle-hold` with the argument `<hold id> 0 meta-dashboard-daily-<YYYY-MM-DD>` (the id is the first field of the holds line).
-
-Claude Code also reads the holds at its own check-ins while its session is alive and will say when one needs settling.
+Nothing to do. A model call that times out used to leave an "unknown" hold for a person to settle; since 3 Nov the research worker settles such holds itself at their full reserved amount within seconds, so the site never closes over them and no daily check is needed. The money protection is unchanged: the ledger counts the maximum the call could have cost.

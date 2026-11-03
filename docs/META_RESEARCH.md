@@ -78,7 +78,7 @@ Both attested credit and remaining provider allowance conservatively cover the
 entire committed ledger plus each new reservation. Do not reuse an attestation
 as though settled charges disappeared when their holds cleared. Unknown work
 blocks new activation; it is never inferred free or silently reconciled by
-this feature. Each unknown hold stays counted at its full reserved maximum, so
+this feature. Each unknown hold stays counted at its full reserved maximum and, in production, the research worker settles it at that maximum within seconds (`UNKNOWN_HOLD_AUTO_SETTLE_ENABLED`, default on, `UNKNOWN_HOLD_AUTO_SETTLE_SECONDS`, default 15), so no person has to read a billing dashboard during public use; so
 a single stray unknown (a timed-out or refused call) does not close fresh
 native calls for everyone; once three stand unsettled, admission closes until
 a person has settled them.
