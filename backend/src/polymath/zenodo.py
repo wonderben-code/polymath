@@ -19,6 +19,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import logging
 import re
 from datetime import date
 from typing import Annotated, Literal
@@ -47,6 +48,8 @@ SHA256 = re.compile(r"[0-9a-f]{64}")
 DOI = re.compile(r"10\.[0-9]{4,9}/[A-Za-z0-9][A-Za-z0-9._;()/:+\-]{0,180}")
 BUCKET = re.compile(r"/api/files/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
 CHECKSUM = re.compile(r"(?:md5:)?[0-9a-f]{32}|sha256:[0-9a-f]{64}")
+_LOG = logging.getLogger(__name__)
+
 REMOTE_METADATA_KEYS = frozenset(
     {
         "title",
@@ -241,6 +244,25 @@ def _remote_file(raw: object) -> RemoteFile:
     ):
         raise ValueError
     return RemoteFile(filename=filename, size=size, checksum=checksum)
+
+
+def _shape(raw: object, caught: BaseException) -> str:
+    """Field names and plain states of a rejected reply, never its text values."""
+    try:
+        if not isinstance(raw, dict):
+            return f"{type(caught).__name__}; not an object ({type(raw).__name__})"
+        metadata = raw.get("metadata")
+        links = raw.get("links")
+        files = raw.get("files")
+        names = lambda value: sorted(value) if isinstance(value, dict) else type(value).__name__  # noqa: E731
+        return (
+            f"{type(caught).__name__}: {caught}; keys={sorted(raw)}; "
+            f"metadata_keys={names(metadata)}; link_keys={names(links)}; "
+            f"state={raw.get('state')!r}; submitted={raw.get('submitted')!r}; "
+            f"files={len(files) if isinstance(files, list) else type(files).__name__}"
+        )
+    except Exception:  # pragma: no cover - diagnostics never raise
+        return type(caught).__name__
 
 
 class ZenodoClient:
@@ -486,7 +508,8 @@ class ZenodoClient:
     def _parsed(self, raw: object, *, mutation=False, expected_id=None) -> ZenodoDeposit:
         try:
             return self._parse_deposit(raw, expected_id=expected_id)
-        except (ValueError, TypeError, KeyError, ValidationError, ZenodoError):
+        except (ValueError, TypeError, KeyError, ValidationError, ZenodoError) as caught:
+            _LOG.warning("Zenodo deposit reply rejected: %s", _shape(raw, caught))
             raise ZenodoError("zenodo_invalid_response", outcome_unknown=mutation) from None
 
     async def create_draft(self, manifest: PublicationManifest) -> ZenodoDeposit:
