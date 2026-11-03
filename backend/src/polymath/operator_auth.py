@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import logging
 import re
 import secrets
 from dataclasses import dataclass, field
@@ -31,6 +32,8 @@ from polymath.run_api import (
     _PrivateHTTPException,
     _PrivateRoute,
 )
+
+_LOG = logging.getLogger(__name__)
 
 OPERATOR_COOKIE_NAME = "polymath_operator"
 OPERATOR_CSRF_HEADER = "x-operator-csrf-token"
@@ -208,7 +211,8 @@ def create_operator_router(engine: Engine, policy: OperatorPolicy | None = None)
                         _clear_cookie(request, response)
                     return _snapshot(policy, None)
                 return _snapshot(policy, operator, _cookie(request))
-        except SQLAlchemyError:
+        except SQLAlchemyError as caught:
+            _LOG.exception("operator session read failed: %s", type(caught).__name__)
             raise _PrivateHTTPException(503, "operator_storage_unavailable") from None
 
     @router.post("/session")
