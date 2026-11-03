@@ -115,7 +115,7 @@ levels and autopilot in Your library are unchanged.
 
 **Live on askpolymath.com (1 November 2026):** Connect completed against both
 zenodo.org and sandbox.zenodo.org (scopes `deposit:write deposit:actions`), with
-the worker healthy. Nothing has been published live yet.
+the worker healthy. First live visitor publish to Zenodo sandbox on 3 Nov 2026: https://sandbox.zenodo.org/record/632392 (DOI 10.5072/zenodo.632392), after three client fixes for Zenodo's current replies (docs/PROGRESS.md).
 
 Locally, against mock HTTP. That covers the token
 exchange, encryption binding, ownership, the full publish path, the

@@ -160,6 +160,6 @@ Engineering (evidence in [PROGRESS.md](PROGRESS.md)):
 - [x] Probe receipt passed; research activated 1 Nov ([KEY_DAY.md](KEY_DAY.md))
 - [x] Live QA: every feature run end to end as a visitor on 1 and 2 Nov, defects fixed and redeployed the same day ([PROGRESS.md](PROGRESS.md), Live operations)
 - [x] Rigour filters checked live against OpenAlex with the server's key
-- [ ] Public free-use funding reviewed with an exact deadline covering judging (the testing delegation's total was spent on 2 Nov; the judging delegation is the owner's next action)
+- [x] Public free-use funding reviewed with an exact deadline covering judging (judging delegation active 3 Nov until 2026-11-17T08:00Z: public USD 100 total, USD 20 a day; each visitor USD 4 total, USD 3 a day, 12 investigations a day)
 - [x] Full regression green on main (Application checks on 50b0ce1, 3 Nov)
 - [ ] Release commit, schema and public URL recorded at submission
