@@ -66,6 +66,8 @@ Checkpoint 3: the sandbox record URL, the finding's title, any failure with its 
 
 ## Task 4. Final judging delegation (console, two steps)
 
+**Done 3 Nov 14:36Z:** delegation `0123bf2c-962a-41ac-8807-6c8f5bc1041d` is current until 17 Nov 08:00Z. Kept below for the record. Note: activation needs a moment with no Meta call in flight (a visitor's investigation mid-call makes it answer `meta_research_prior_unresolved`); the preview does not check that, so if STEP B is refused, wait a minute and run STEP A and B again.
+
 The judging delegation of 3 November (USD 100 public total, USD 20 a day; USD 4 / USD 3 a visitor, 12 investigations a day) is active until 17 November 08:00 UTC. The final delegation replaces it with the owner's chosen limits: public total USD 125 (the ledger brake, below the real Meta credit), public daily USD 75 (the account's own daily ceiling, so no separate daily brake), each visitor USD 12 total and a day with 24 investigations a day, 200 a day overall, same deadline. The account caps (USD 145 total, USD 75 a day) are unchanged. The attestation timestamps below only need to be in the past; the server accepts the block any time before the deadline.
 
 Paste this whole block as one message to Claude in Chrome:
