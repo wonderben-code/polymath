@@ -17,7 +17,7 @@ support (for example, if live research has not been switched on).
 5. **X post link:** ⟨optional⟩
 6. **Project description:** the short description below
 7. **Public GitHub repository:** https://github.com/wonderben-code/polymath
-8. **Demo video:** ⟨YouTube link, 3 minutes or less⟩
+8. **Demo video:** ⟨YouTube link, 3 minutes or less; the film and its narration are in demo/VIDEO_SCRIPT.md⟩
 9. **How you used Meta products:** see "How Polymath uses Meta AI"
 10. **Why Meta's models matter:** see the section of that name
 11. **Feedback on Meta products:** ⟨owner's own words after live testing⟩
@@ -115,8 +115,8 @@ and budgets; the model decides what to do.
 8. **Safe at public scale.** Every call is reserved against a hard USD ledger
    before it is sent, so one $150 credit pool can fund visitors without surprises.
 
-Model: `⟨muse-spark-1.3⟩` through `https://api.meta.ai/v1/chat/completions`.
-Verified behaviour: `⟨probe receipt and first live investigations⟩`.
+Model: `muse-spark-1.3` through `https://api.meta.ai/v1/chat/completions`; pictures by Meta Muse Image.
+Verified behaviour: probe receipt passed and live research activated on 1 Nov; every feature then run end to end by fresh visitors on askpolymath.com with real Meta intelligence on 1 and 2 Nov (Ask, Explore, Surprise, Solve with a forged key, Converge to a level-2 synthesis, Frontier to a six-step plan, Studio through all five stages with Muse Image galleries, exports, sharing, literature watches, leave-and-return), recorded in [PROGRESS.md](PROGRESS.md) and on film in [demo/README.md](demo/README.md).
 
 ## Why Meta's models matter
 
@@ -131,22 +131,9 @@ visitors. Meta's Muse Spark does that today, and because the model is a server
 setting, Polymath can move to Muse Wonder or any stronger Meta model as it
 arrives.
 
-## Demo video script (3:00 maximum)
+## Demo video (3:00 maximum)
 
-| Time | Show | Say |
-|---|---|---|
-| 0:00–0:12 | Home: "Discoveries hide between fields of science." | "Science is split into thousands of specialties. Polymath fuses Meta's frontier intelligence with an engine that reads across all of them, to solve and to invent." |
-| 0:12–0:55 | **Studio**: tap *A submarine inspired by whales*; the idea map lights up field by field; the Muse Image gallery fills in, picture by picture; the invention, its engineering and calculations, the stress test | "Ask it to invent anything. Meta's frontier model turns the brief into the functions it needs; Polymath hunts the strangest corners of the world's science for mechanisms that already work; together they invent a new design, engineered with calculations and tested against the brief." |
-| 0:55–1:10 | *Download the design dossier*; *Continue in Meta AI* | "Take the design with you as a full dossier, or keep refining it with Meta AI." |
-| 1:10–1:40 | **Solve**: a real problem; close fits from two fields; the forged key in their colours | "Or describe a problem. Polymath looks for an answer anywhere in science, and if none fits, forges one from the closest answers in other fields." |
-| 1:40–2:00 | Open one investigation: the live timeline, a quoted passage, the strongest objection | "Every search is Muse Spark's choice, every claim links to its exact passage, and it argues against itself before showing you anything." |
-| 2:00–2:25 | **Explore**, **Converge** circle, **Frontier** map with *Solve this step*; Evidence bar | "Explore any idea across fields, converge dozens at once, or take on an open problem step by step, at the evidence bar you choose." |
-| 2:25–2:45 | Sign in; Your library; publish to your own Zenodo | "Sign in with ORCID, GitHub or Google, and publish under your own name on Zenodo." |
-| 2:45–3:00 | askpolymath.com, credits strip, GitHub | "Polymath. Discoveries hide between fields. Now anyone can find them, and build with them." |
-
-Recording notes: record against https://askpolymath.com with real live runs.
-Label any recorded or sped-up segment on screen. Never show operator codes,
-cookies or settings files.
+The film is cut from live screen recordings made on 2 Nov by fresh visitors (every feature, real Meta intelligence, the live ledger). The narration, timings and shot list are in [demo/VIDEO_SCRIPT.md](demo/VIDEO_SCRIPT.md); the clips and frames are in [demo/](demo/README.md). Sped-up passages are visible as such; no operator codes, cookies or settings appear.
 
 ## Release checklist
 
@@ -154,7 +141,7 @@ Owner:
 
 - [x] Meta credits claimed and key on the server (spend alert at £100; Polymath's own cap enforces the limit)
 - [x] Host and domain: askpolymath.com on DigitalOcean (deployed 1 Nov)
-- [ ] Paid testing authorised in your own words, with the cap (USD 120 suggested)
+- [x] Paid testing authorised (caps USD 145 total, USD 75 a day; about USD 39 counted by 2 Nov)
 - [ ] OpenAlex logo file (openalex.org blocks automated downloads; Claude in Chrome can fetch it)
 - [x] Sign-in (ORCID, GitHub, Google) and Zenodo (production, sandbox) apps registered, saved and tested live on 1 Nov ([SIGN_IN_SETUP.md](SIGN_IN_SETUP.md))
 - [x] Privacy policy and terms live; Google sign-in app published (In production)
@@ -170,9 +157,9 @@ Engineering (evidence in [PROGRESS.md](PROGRESS.md)):
 
 - [x] Free preflight: 11 passed, 0 failed (model `muse-spark-1.3`)
 - [x] Production deployed with HTTPS, Secure cookies and redirects verified
-- [ ] Probe receipt passed; research activated ([KEY_DAY.md](KEY_DAY.md))
-- [ ] Live QA: three seed investigations, one weak input, one Solve
-- [ ] Rigour filters checked live against OpenAlex with the server's key
-- [ ] Public free-use funding reviewed with an exact deadline covering judging
-- [ ] Full regression green on the release commit
-- [ ] Release commit, schema and public URL recorded
+- [x] Probe receipt passed; research activated 1 Nov ([KEY_DAY.md](KEY_DAY.md))
+- [x] Live QA: every feature run end to end as a visitor on 1 and 2 Nov, defects fixed and redeployed the same day ([PROGRESS.md](PROGRESS.md), Live operations)
+- [x] Rigour filters checked live against OpenAlex with the server's key
+- [ ] Public free-use funding reviewed with an exact deadline covering judging (the testing delegation's total was spent on 2 Nov; the judging delegation is the owner's next action)
+- [x] Full regression green on main (Application checks on 50b0ce1, 3 Nov)
+- [ ] Release commit, schema and public URL recorded at submission
