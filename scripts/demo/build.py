@@ -86,8 +86,8 @@ END = [('askpolymath.com', 'headline'), ('Meta Muse Spark  ×  Polymath', 'sub')
 def plan(cut):
     """(kind, key, src, start, end, speed, pill, caption). Times are seconds into the source."""
     A = cut == 'A'
-    p = [('card', 'title', 6, TITLE)]
-    p += [('seg', 'home', 'solve', 2, 8, 1, None, 'askpolymath.com, live, as any visitor sees it', True)]
+    p = [('card', 'title', 8, TITLE)]
+    p += [('seg', 'home', 'solve', 1, 9, 1, None, 'askpolymath.com, live, as any visitor sees it', True)]
     # Ask
     p += [('seg', 'ask-type', 'ask', 6.5, 10.5, 1, 'ASK', 'Ask an open question', True),
           ('seg', 'ask-run', 'ask', 10.5, 114, 25, 'ASK', 'Meta plans searches, reads papers from arXiv and OpenAlex', False),
@@ -95,8 +95,8 @@ def plan(cut):
     # Solve
     p += [('seg', 'solve-type', 'solve', 7, 11, 1, 'SOLVE', 'Describe a problem', True),
           ('seg', 'solve-run', 'solve', 11, 684, 90, 'SOLVE', 'An answer is found, fits from other fields are tried, a new key is forged', False),
-          ('seg', 'solve-result', 'solve', 684, 703, 1.5, 'SOLVE', 'The lock, the key, and where each fit falls short', False)]
-    if A: p += [('still', 'solve-hold', 'solve', 686, 3, 'SOLVE', 'A new key was forged', False)]
+          ('seg', 'solve-result', 'solve', 686, 700, 1.5, 'SOLVE', 'The lock, the key, and where each fit falls short', False)]
+    if A: p += [('still', 'solve-hold', 'solve', 688, 3, 'SOLVE', 'A new key was forged', False)]
     # Converge
     if not A: p += [('seg', 'conv-type', 'converge', 3, 10, 1.5, 'CONVERGE', 'One theme, twelve distant fields', True)]
     p += [('seg', 'conv-unfold', 'converge', 10, 700, 40, 'CONVERGE', 'Each connection is tested against the literature; what holds is drawn inward', A),
@@ -110,9 +110,9 @@ def plan(cut):
     p += [('seg', 'studio-brief', 'whale', 4, 12, 1.5, 'STUDIO', 'A brief and its requirements', True),
           ('seg', 'studio-stages', 'whale', 12, 860, 70, 'STUDIO', 'Brief, inspirations from far fields, invention, engineering, stress test', False),
           ('seg', 'studio-art', 'whale', 860, 882, 2, 'STUDIO', 'HSSG-1000, painted by Meta Muse Image', False),
-          ('seg', 'studio-sheet', 'whale', 2425, 2484, 3, 'STUDIO', 'Engineering with cited numbers, a stress test, and what is still to invent', A),
+          ('seg', 'studio-sheet', 'whale', 2437, 2482, 2.5 if A else 3, 'STUDIO', 'Engineering with cited numbers, a stress test, and what is still to invent', A),
           ('seg', 'dyson', 'dyson', 1118, 1122, 1, 'STUDIO', 'A Dyson swarm of phyllotactic sail-statites', True)]
-    p += [('card', 'end', 10, END)]
+    p += [('card', 'end', 12, END)]
     return p
 
 def build(cut):
