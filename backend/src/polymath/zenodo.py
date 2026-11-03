@@ -332,13 +332,23 @@ class ZenodoClient:
         if not isinstance(links, dict):
             raise ValueError
         bucket = self._bucket(links["bucket"]) if links.get("bucket") is not None else None
+        # A draft's links point at the deposit API; once published, Zenodo points
+        # the same reply's self and files links at the record API instead.
         files_url = None
         if links.get("files") is not None:
-            if self._url_path(links["files"]) != f"/api/deposit/depositions/{identifier}/files":
+            files_path = self._url_path(links["files"])
+            if files_path not in (
+                f"/api/deposit/depositions/{identifier}/files",
+                f"/api/records/{identifier}/files",
+            ):
                 raise ValueError
-            files_url = self._origin + f"/api/deposit/depositions/{identifier}/files"
+            if files_path.startswith("/api/deposit/"):
+                files_url = self._origin + files_path
         if "self" in links:
-            if self._url_path(links["self"]) != f"/api/deposit/depositions/{identifier}":
+            if self._url_path(links["self"]) not in (
+                f"/api/deposit/depositions/{identifier}",
+                f"/api/records/{identifier}",
+            ):
                 raise ValueError
         record_id = _deposit_id(raw["record_id"]) if raw.get("record_id") is not None else None
         record_url = raw.get("record_url") or links.get("record_html")
@@ -652,14 +662,25 @@ class ZenodoClient:
         filename = _filename(filename)
         if type(maxbytes) is not int or not 1 <= maxbytes <= MAX_FILE_BYTES:
             raise ZenodoError("invalid_publication_file_limit")
+        remote = next((item for item in deposit.files if item.filename == filename), None)
+        download = remote.download_url if remote is not None else None
+        if deposit.bucket_url is None and download is None:
+            raise ZenodoError("invalid_zenodo_deposit")
         if deposit.bucket_url is not None:
-            url = deposit.bucket_url + "/" + filename
-        else:
-            remote = next((item for item in deposit.files if item.filename == filename), None)
-            if remote is None or remote.download_url is None:
-                raise ZenodoError("invalid_zenodo_deposit")
-            url = remote.download_url
-        return await self._request("GET", url, statuses=(200,), limit=maxbytes)
+            try:
+                return await self._request(
+                    "GET", deposit.bucket_url + "/" + filename, statuses=(200,), limit=maxbytes
+                )
+            except ZenodoError as error:
+                # A published record may no longer serve its draft bucket; the
+                # file's own link is the documented way to read it back.
+                if download is None or str(error) not in (
+                    "zenodo_deposit_not_found",
+                    "zenodo_request_rejected",
+                    "zenodo_access_denied",
+                ):
+                    raise
+        return await self._request("GET", download, statuses=(200,), limit=maxbytes)
 
     async def publish(self, deposit_id: int) -> ZenodoDeposit:
         deposit_id = _deposit_id(deposit_id)
