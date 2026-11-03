@@ -843,3 +843,51 @@ async def test_legacy_files_endpoint_uploads_and_reads_back_when_no_bucket_link_
     foreign["files"][0]["links"] = {"download": "https://attacker.invalid/api/file"}
     with pytest.raises(ZenodoError, match="zenodo_invalid_response"):
         await client(lambda request: httpx.Response(200, json=foreign)).get_deposit(123)
+
+
+@pytest.mark.asyncio
+async def test_published_reply_with_record_api_links_is_read_back_and_verified():
+    # The exact link shape Zenodo sandbox returned for a published legacy
+    # deposit on 3 Nov 2026: self and files point at the record API, record_html
+    # uses the singular path, and the file carries its own download link.
+    host = origin()
+    reviewed = manifest()
+    body = deposit_body(published=True, files=True)
+    body["links"]["self"] = f"{host}/api/records/123"
+    body["links"]["files"] = f"{host}/api/records/123/files"
+    body["links"]["record_html"] = f"{host}/record/123"
+    body["links"]["html"] = f"{host}/records/123"
+    body["links"]["doi"] = "https://doi.org/10.5072/zenodo.123"
+    body["links"]["latest"] = f"{host}/api/records/123/versions/latest"
+    body["conceptrecid"] = "122"
+    body["conceptdoi"] = "10.5072/zenodo.122"
+    body["doi"] = "10.5072/zenodo.123"
+    body["doi_url"] = "https://doi.org/10.5072/zenodo.123"
+    body["metadata"]["imprint_publisher"] = "Zenodo"
+    body["metadata"]["prereserve_doi"] = {"doi": "10.5281/zenodo.123", "recid": 123}
+    body["metadata"]["publication_date"] = "2026-11-03"
+    body["files"][0]["id"] = "f1"
+    body["files"][0]["links"] = {
+        "self": f"{host}/api/records/123/files/f1",
+        "download": f"{host}/api/records/123/draft/files/{reviewed.file_name}/content",
+    }
+
+    def handler(request):
+        path = request.url.path
+        if request.method == "GET" and path == "/api/deposit/depositions/123":
+            return httpx.Response(200, json=body)
+        if request.method == "GET" and path.startswith("/api/files/"):
+            return httpx.Response(404, json={"message": "no bucket after publish"})
+        if (
+            request.method == "GET"
+            and path == f"/api/records/123/draft/files/{reviewed.file_name}/content"
+        ):
+            return httpx.Response(200, content=CONTENT)
+        return httpx.Response(404, json={})
+
+    zenodo = client(handler)
+    deposit = await zenodo.get_deposit(123)
+    assert deposit.published and deposit.doi == "10.5072/zenodo.123"
+    assert deposit.record_url == f"{host}/record/123" and deposit.files_url is None
+    assert metadata_matches(deposit, reviewed)
+    assert await zenodo.get_file_bytes(deposit, reviewed.file_name) == CONTENT
