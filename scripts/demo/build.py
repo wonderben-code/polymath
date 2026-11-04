@@ -2,10 +2,15 @@
 """Build the Polymath demo film from the seekable sources in film/src.
 
 Two cuts from one shot list: A (best bits, with holds and jumps) and B (unfold,
-each feature continuous with speed ramps). Silent; the voiceover is laid over
-afterwards. Usage: build.py [A|B|both]
+each feature continuous with speed ramps). Silent unless --voice DIR is given:
+then the seven narration clips in DIR (named 1..7 in any audio format; clip 1
+covers the title card and the home page, then Ask, Solve, Converge, Frontier,
+Studio, end card) are laid at each block's start, silence fills the rest, and a
+clip longer than its block lengthens that block (a card holds longer; a feature's
+fastest unfold segment runs a little slower), never a cut.
+Usage: build.py [A|B|both] [--voice DIR]
 """
-import os, subprocess, sys, tempfile, shutil
+import glob, os, subprocess, sys, tempfile, shutil
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SRC = os.path.join(HERE, 'src')
@@ -115,22 +120,123 @@ def plan(cut):
     p += [('card', 'end', 12, END)]
     return p
 
-def build(cut):
+BLOCKS = [('intro', ('title', 'home')), ('ask', ('ask-type', 'ask-run', 'ask-result')),
+          ('solve', ('solve-type', 'solve-run', 'solve-result', 'solve-hold')),
+          ('converge', ('conv-type', 'conv-unfold', 'conv-finish')),
+          ('frontier', ('front-type', 'front-unfold', 'front-result', 'front-hold')),
+          ('studio', ('studio-brief', 'studio-stages', 'studio-art', 'studio-sheet', 'dyson')), ('end', ('end',))]
+TAIL = 0.6  # seconds of quiet after a clip before the next block
+MAX_SECONDS = 179.5  # the competition's three-minute ceiling, with a little margin
+
+def item_seconds(item):
+    kind = item[0]
+    if kind == 'card': return item[2]
+    if kind == 'still': return item[4]
+    _, key, src, start, end, speed = item[:6]
+    return (end - start) / speed
+
+def probe_seconds(path):
+    out = subprocess.run(['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', path], capture_output=True, text=True).stdout.strip()
+    return float(out)
+
+def voice_clips(voice_dir):
+    """Seven clips named 1..7 (any extension), in block order."""
+    clips = []
+    for n in range(1, 8):
+        found = sorted(glob.glob(os.path.join(voice_dir, f'{n}.*')) + glob.glob(os.path.join(voice_dir, f'{n}-*')) + glob.glob(os.path.join(voice_dir, f'{n} *')))
+        if not found: raise SystemExit(f'voice clip {n} missing in {voice_dir}')
+        clips.append(found[0])
+    return clips
+
+def fit_plan(items, clips):
+    """Lengthen any block whose clip overruns it. Returns (items, block_seconds)."""
+    items = [list(i) for i in items]
+    by_key = {i[1]: i for i in items}
+    block_seconds = []
+    for (name, keys), clip in zip(BLOCKS, clips):
+        present = [by_key[k] for k in keys if k in by_key]
+        have = sum(item_seconds(i) for i in present)
+        need = probe_seconds(clip) + TAIL
+        extra = max(0.0, need - have)
+        if extra > 0:
+            cards = [i for i in present if i[0] == 'card']
+            if cards:
+                cards[-1][2] = cards[-1][2] + extra
+            else:
+                seg = max((i for i in present if i[0] == 'seg'), key=lambda i: i[5])
+                span = seg[4] - seg[3]
+                seg[5] = span / (span / seg[5] + extra)
+            print(f'{name}: clip {need - TAIL:.1f}s, picture {have:.1f}s, block lengthened by {extra:.1f}s', flush=True)
+        block_seconds.append(sum(item_seconds(i) for i in present))
+    total = sum(block_seconds)
+    if total > MAX_SECONDS:
+        # Take the overrun back from blocks whose clip finishes early: their fastest
+        # unfold segment runs a little faster. Cards and the intro are left alone.
+        over = total - MAX_SECONDS
+        slack = []
+        for n, ((name, keys), clip) in enumerate(zip(BLOCKS, clips)):
+            present = [by_key[k] for k in keys if k in by_key]
+            segs = [i for i in present if i[0] == 'seg']
+            if not segs: continue
+            spare = block_seconds[n] - (probe_seconds(clip) + TAIL)
+            if spare > 0.2: slack.append((spare, n, max(segs, key=lambda i: i[5])))
+        for spare, n, seg in sorted(slack, reverse=True):
+            if over <= 0: break
+            take = min(spare - 0.2, over)
+            span = seg[4] - seg[3]
+            seg[5] = span / max(1.0, span / seg[5] - take)
+            block_seconds[n] -= take; over -= take
+            print(f'{BLOCKS[n][0]}: {take:.1f}s taken back to stay under three minutes', flush=True)
+        if over > 0.05:
+            raise SystemExit(f'the narration does not fit in three minutes: {over:.1f}s too long; trim the longest clips')
+    print(f'film {sum(block_seconds):.1f}s', flush=True)
+    return [tuple(i) for i in items], block_seconds
+
+def voice_track(tmp, clips, block_seconds):
+    """One WAV: each clip at its block start, padded with silence to the block length, then loudness-normalised."""
+    parts = []
+    for n, (clip, seconds) in enumerate(zip(clips, block_seconds), 1):
+        out = os.path.join(tmp, f'voice-{n}.wav')
+        run(['-i', clip, '-af', f'apad,atrim=0:{seconds:.3f}', '-ar', '48000', '-ac', '2', out])
+        parts.append(out)
+    lst = os.path.join(tmp, 'voice.txt')
+    with open(lst, 'w') as f:
+        for p in parts: f.write(f"file '{p}'\n")
+    joined = os.path.join(tmp, 'voice.wav')
+    run(['-f', 'concat', '-safe', '0', '-i', lst, '-af', 'loudnorm=I=-16:TP=-1.5:LRA=11', '-ar', '48000', joined])
+    return joined
+
+def build(cut, voice_dir=None):
     os.makedirs(OUT, exist_ok=True)
     tmp = tempfile.mkdtemp(prefix=f'film-{cut}-')
+    items = plan(cut)
+    clips = block_seconds = None
+    if voice_dir:
+        clips = voice_clips(voice_dir)
+        items, block_seconds = fit_plan(items, clips)
     parts = []
-    for item in plan(cut):
+    for item in items:
         kind = item[0]
         if kind == 'card': parts.append(card(tmp, item[1], item[2], item[3]))
         elif kind == 'seg': parts.append(segment(tmp, *item[1:]))
         elif kind == 'still': parts.append(still(tmp, *item[1:]))
         print(cut, item[1], flush=True)
-    out = os.path.join(OUT, f'polymath-demo-{cut}.mp4')
-    concat(parts, out)
+    out = os.path.join(OUT, f'polymath-demo-{cut}{"-voiced" if voice_dir else ""}.mp4')
+    if voice_dir:
+        silent = os.path.join(tmp, 'silent.mp4')
+        concat(parts, silent)
+        voice = voice_track(tmp, clips, block_seconds)
+        run(['-i', silent, '-i', voice, '-c:v', 'copy', '-c:a', 'aac', '-b:a', '160k', '-shortest', '-movflags', '+faststart', out])
+    else:
+        concat(parts, out)
     shutil.rmtree(tmp)
     dur = subprocess.run(['ffprobe', '-v', 'error', '-show_entries', 'format=duration:format=size', '-of', 'csv=p=0', out], capture_output=True, text=True).stdout.strip()
     print(cut, 'done', dur, flush=True)
 
 if __name__ == '__main__':
-    which = sys.argv[1] if len(sys.argv) > 1 else 'both'
-    for cut in (['A', 'B'] if which == 'both' else [which]): build(cut)
+    args = sys.argv[1:]
+    voice_dir = None
+    if '--voice' in args:
+        at = args.index('--voice'); voice_dir = args[at + 1]; del args[at:at + 2]
+    which = args[0] if args else 'both'
+    for cut in (['A', 'B'] if which == 'both' else [which]): build(cut, voice_dir)
