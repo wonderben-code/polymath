@@ -199,7 +199,7 @@ Owner:
 - [x] Privacy policy and terms live; Google sign-in app published (In production)
 - [x] Demo video rendered (`demo/film/polymath-demo-B-voiced.mp4`, 4 Nov)
 - [x] Demo video uploaded to YouTube: https://youtu.be/RSdVl98prVA (4 Nov)
-- [ ] Submission form completed and confirmation saved
+- [x] Submission form completed and submitted (4 Nov 2026, before the 5 Nov 09:00 Bangkok deadline)
 
 Known external windows: Zenodo scheduled maintenance Tue 3 Nov, 08:00 to 08:15 UTC
 (Connect and publishing briefly unavailable). ORCID sign-in uses the free Public
