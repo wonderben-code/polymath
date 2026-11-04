@@ -48,3 +48,4 @@ Cut A holds a still of the finished map and of the forged key for a beat and dro
 1. The narration is generated as seven clips (blocks 1+2 together, then 3 to 8) with ElevenLabs, a calm mid-pace voice at normal speed.
 2. The clips are laid over cut B at each block's start; silence fills the rest of the block. A clip longer than its block lengthens that block (a card holds longer; a feature's sped-up unfold runs a little slower), never a cut.
 3. `scripts/demo/build.py B --voice <dir>` renders `polymath-demo-B-voiced.mp4` from the clips in that folder (named 1 to 7, any audio format).
+4. Rendered 4 Nov 05:05Z from `docs/demo/voiceover`: `film/polymath-demo-B-voiced.mp4`, 2 min 56.8 s, every clip shorter than its block except the end card (held 1.3 s longer); speech starts measured at 0.0, 16.1, 38.2, 59.0, 91.0, 116.2 and 163.6 s, matching the block starts.
