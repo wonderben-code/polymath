@@ -8,7 +8,7 @@ Created, designed and built by Ekram Alam, as a solo personal project, for the *
 
 **Live at https://askpolymath.com** (deployed 1 November 2026). Live Meta research is switched on for visitors under the owner's spending caps; Explore, Ask, Surprise, Solve, Converge, Formalise, Write paper and public sharing have each completed end to end on the live site with Muse Spark (see `docs/PROGRESS.md`, Live operations).
 
-Created 27 October 2026. Every push to `main` is Bitcoin-timestamped through OpenTimestamps (`.github/workflows/bitcoin-timestamp.yml`, proofs in `timestamps/`).
+Submitted to the Meta Global AI Developer Hackathon on 4 November 2026 (demo video: https://youtu.be/RSdVl98prVA). Created 27 October 2026. Every push to `main` is Bitcoin-timestamped through OpenTimestamps (`.github/workflows/bitcoin-timestamp.yml`, proofs in `timestamps/`).
 
 ## What it lets you do
 - **Invent something new.** Innovation Studio turns a brief into a new design built from mechanisms that already work across science, engineered with calculations and stress-tested against your requirements.
