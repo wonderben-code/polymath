@@ -8,7 +8,8 @@ export const PUBLIC_ID = 'A'.repeat(43)
 export const SECOND_PUBLIC_ID = 'Q'.repeat(43)
 export const CSRF = 'a'.repeat(64)
 export const CREATED_AT = '2026-10-28T00:00:00Z'
-export const EXPIRES_AT = '2026-11-04T00:00:00Z'
+// Seven days from the test run, not a fixed date: the pages treat a past expiry as missing, and timers past 24.8 days overflow.
+export const EXPIRES_AT = new Date(Date.now() + 7 * 86_400_000).toISOString().replace(/\.\d{3}Z$/, 'Z')
 export const QUOTE_A = '🌱 Synthetic saved quotation with an unavailable equation marker.'
 export const QUOTE_B = 'Synthetic second saved quotation, not scientific evidence.'
 export const SOURCE_WINDOW = 'Prefix ' + QUOTE_A + 'x'.repeat(400 - 7 - Array.from(QUOTE_A).length)

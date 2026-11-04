@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import type { BudgetAccount, BudgetCapabilities, MetaReadinessProposal, ReadinessPreview, ReadinessRecord } from './types'
 import { canonicalProposal } from './client'
 export const BROWSER_CSRF = 'a'.repeat(64), OPERATOR_CSRF = 'b'.repeat(64), ACCOUNT_ID = 'synthetic-budget-fixture', RECORD_ID = '11111111-1111-4111-8111-111111111111'
-export const DATE = '2026-10-28T00:00:00Z', VALID_UNTIL = '2026-11-04T00:00:00Z'
+export const DATE = '2026-10-28T00:00:00Z', VALID_UNTIL = new Date(Date.now() + 7 * 86_400_000).toISOString().replace(/\.\d{3}Z$/, 'Z')
 export function sha256(value: string) { return createHash('sha256').update(value).digest('hex') }
 export function proposal(): MetaReadinessProposal {
   const evidence = (kind: string) => [{ url: `https://fixtures.example.test/${kind}`, content_sha256: sha256(`Synthetic ${kind} evidence only; no provider facts are verified.`) }]
