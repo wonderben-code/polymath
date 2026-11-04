@@ -112,7 +112,7 @@ STEP A:
       funding_cap_confirmed: true, pricing_bounds_confirmed: true, model_wire_usage_confirmed: true
     },
     provider_account_attestation: {
-      provider_billing_account_id: '1610449200134358', model_id: 'muse-spark-1.3', currency: 'USD',
+      provider_billing_account_id: '<the billing account id shown on the Meta billing page>', model_id: 'muse-spark-1.3', currency: 'USD',
       usage_contract: 'prompt_completion_inclusive_v1',
       observed_at: '2026-11-03T13:40:00Z', valid_until: '2026-11-20T00:00:00Z',
       available_credit_microdollars: 129170000, remaining_provider_allowance_microdollars: 129170000,

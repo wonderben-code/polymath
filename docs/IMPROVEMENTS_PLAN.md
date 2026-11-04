@@ -31,8 +31,7 @@ page, before anything is built:
   field colours) that appears only where fields connect. The colour *is* the
   connection.
 - **Observatory:** deep night-blue ground, starlight cream text, one bright
-  signal colour for live discovery. (Must stay clearly apart from
-  Infinitography's indigo and gold.)
+  signal colour for live discovery.
 - **Laboratory:** crisp white, graphite, and one confident accent (for example
   a vivid cobalt or vermilion), like a scientific instrument.
 
