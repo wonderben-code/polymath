@@ -39,7 +39,7 @@ The questions are captured word for word in [SUBMISSION_QUESTIONS.md](SUBMISSION
 
 **7. Public GitHub Repository:** https://github.com/wonderben-code/polymath
 
-**8. 3-Minute Demo Video:** ⟨YouTube link to demo/film/polymath-demo-B-voiced.mp4, 2 min 57 s⟩
+**8. 3-Minute Demo Video:** https://youtu.be/RSdVl98prVA (public; demo/film/polymath-demo-B-voiced.mp4, 2 min 57 s)
 
 **9. Describe your use of Meta products to build the submitted project:**
 
@@ -198,7 +198,7 @@ Owner:
 - [x] Sign-in (ORCID, GitHub, Google) and Zenodo (production, sandbox) apps registered, saved and tested live on 1 Nov ([SIGN_IN_SETUP.md](SIGN_IN_SETUP.md))
 - [x] Privacy policy and terms live; Google sign-in app published (In production)
 - [x] Demo video rendered (`demo/film/polymath-demo-B-voiced.mp4`, 4 Nov)
-- [ ] Demo video uploaded to YouTube and the link pasted into item 8
+- [x] Demo video uploaded to YouTube: https://youtu.be/RSdVl98prVA (4 Nov)
 - [ ] Submission form completed and confirmation saved
 
 Known external windows: Zenodo scheduled maintenance Tue 3 Nov, 08:00 to 08:15 UTC
