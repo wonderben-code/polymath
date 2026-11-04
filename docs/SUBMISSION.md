@@ -133,6 +133,8 @@ arrives.
 
 ## Demo video (3:00 maximum)
 
+**The submission video is `demo/film/polymath-demo-B-voiced.mp4`** (cut B with the narration, 2 min 57 s; `demo/film/README.md` marks it final and cut A as the unused backup). Upload it to YouTube and paste the link into item 8 above.
+
 The film is cut from live screen recordings made on 2 Nov by fresh visitors (every feature, real Meta intelligence, the live ledger). The narration, timings and shot list are in [demo/VIDEO_SCRIPT.md](demo/VIDEO_SCRIPT.md); the clips and frames are in [demo/](demo/README.md). Sped-up passages are visible as such; no operator codes, cookies or settings appear.
 
 ## Release checklist
@@ -145,7 +147,8 @@ Owner:
 - [ ] OpenAlex logo file (openalex.org blocks automated downloads; Claude in Chrome can fetch it)
 - [x] Sign-in (ORCID, GitHub, Google) and Zenodo (production, sandbox) apps registered, saved and tested live on 1 Nov ([SIGN_IN_SETUP.md](SIGN_IN_SETUP.md))
 - [x] Privacy policy and terms live; Google sign-in app published (In production)
-- [ ] Demo video recorded and uploaded
+- [x] Demo video rendered (`demo/film/polymath-demo-B-voiced.mp4`, 4 Nov)
+- [ ] Demo video uploaded to YouTube and the link pasted into item 8
 - [ ] Submission form completed and confirmation saved
 
 Known external windows: Zenodo scheduled maintenance Tue 3 Nov, 08:00 to 08:15 UTC
