@@ -8,3 +8,5 @@
 | `polymath-demo-A.mp4` | Silent draft | Cut A before the voiceover. |
 
 Both voiced films are under three minutes. The shot list, narration and timing check are in `../VIDEO_SCRIPT.md`; the films are rendered by `scripts/demo/build.py` (`B --voice docs/demo/voiceover` for the final).
+
+**Published on YouTube (public, 4 Nov 2026):** https://youtu.be/RSdVl98prVA (the final cut above, `polymath-demo-B-voiced.mp4`). Use this link in the submission form's "3-Minute Demo Video" field.
