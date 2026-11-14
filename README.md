@@ -6,7 +6,7 @@
 
 Created, designed and built by Ekram Alam, as a solo personal project, for the **Meta Global AI Developer Hackathon 2026** (Indie Developer track). Polymath is **Meta × the world’s science**: Meta’s frontier Muse models (Muse Spark today, configurable to any stronger Meta model) bring the reasoning and creativity; Polymath brings the literature engine, evidence checks, memory and budget control. Native access and billing remain unverified, and paid execution is disabled.
 
-**Live at https://askpolymath.com** (deployed 1 November 2026). Live Meta research is switched on for visitors under the owner's spending caps; Explore, Ask, Surprise, Solve, Converge, Formalise, Write paper and public sharing have each completed end to end on the live site with Muse Spark (see `docs/PROGRESS.md`, Live operations).
+**askpolymath.com** is now a free static showcase on GitHub Pages (`site/`, since 14 November 2026): the film, every tool and feature, real results, and a step-by-step guide to running your own copy with your own Meta key. The live app ran there from 1 to 14 November 2026 for the hackathon; its server was retired to bring running costs to zero, and the whole app redeploys from this repository with `scripts/setup-server.sh`.
 
 Submitted to the Meta Global AI Developer Hackathon on 4 November 2026 (demo video: https://youtu.be/RSdVl98prVA). Created 27 October 2026. Every push to `main` is Bitcoin-timestamped through OpenTimestamps (`.github/workflows/bitcoin-timestamp.yml`, proofs in `timestamps/`).
 
