@@ -29,7 +29,7 @@
       <p class="eyebrow">Guide</p>
       <h1>Run your own Polymath.</h1>
       <p class="lede">Your own copy has every tool: Ask, Solve, Converge, Frontier and Studio, with concept art, your library and map, writing, and publishing to your own Zenodo. It runs on your own small server with your own Meta key, which never leaves that server.</p>
-      <p>No programming needed: you'll copy a few commands. Expect about an hour the first time.</p>
+      <p>No programming needed: you'll copy three commands and answer a few questions. Expect about half an hour the first time, most of it waiting for the install.</p>
       <nav class="toc" aria-label="Steps">
         <b>The steps</b>
         <ol>
@@ -37,11 +37,9 @@
           <li><a href="#server">Create a server</a></li>
           <li><a href="#domain">Point your web address at it</a></li>
           <li><a href="#install">Install Polymath</a></li>
-          <li><a href="#key">Add your Meta key and your limits</a></li>
-          <li><a href="#research">Switch research on</a></li>
-          <li><a href="#art">Concept art (optional)</a></li>
+          <li><a href="#key">Connect your Meta key (one command)</a></li>
           <li><a href="#zenodo">Zenodo publishing and sign-in (optional)</a></li>
-          <li><a href="#everyday">Updating, stopping and backups</a></li>
+          <li><a href="#everyday">Everyday: status, stopping, updating and backups</a></li>
         </ol>
       </nav>
     </div>
@@ -83,48 +81,27 @@
 <pre><code>curl -fsSL https://raw.githubusercontent.com/wonderben-code/polymath/main/scripts/setup-server.sh | bash -s -- research.yourname.com</code></pre>
       <p>It installs Docker, downloads Polymath, makes every secret on the server itself and starts the site. The first time takes about ten minutes. It finishes with <b>"Polymath is live at https://…"</b>.</p>
       <p>Open your address in a browser: Polymath is running. Every spending switch is off, so nothing can spend yet. You can read and explore the interface safely.</p>
-      <p>Your private <b>operator code</b>, used for the operator desk in step 6, is shown by:</p>
+      <p>Your private <b>operator code</b>, for the operator desk at <code>https://your-address/operator/budget</code>, is shown by:</p>
 <pre><code>grep OPERATOR_BOOTSTRAP_TOKEN /opt/polymath/deploy/production.env</code></pre>
 
-      <h2 id="key">5. Add your Meta key and your limits</h2>
-      <p>Open your private settings file in the server's editor:</p>
-<pre><code>nano /opt/polymath/deploy/production.env</code></pre>
-      <p>Find each line below and change it to read as shown. Add any line that is missing. Put your real key after <code>MODEL_API_KEY=</code>.</p>
-<pre><code>MODEL_API_KEY=your-meta-key
-META_MODEL=muse-spark-1.3
-OPERATOR_ACTOR_ID=owner
-OPERATOR_DISPLAY_NAME=Owner
-BUDGET_READINESS_ENABLED=true
-BUDGET_ADMIN_ACTOR_IDS=["owner"]
-BUDGET_MAX_HARD_CAP_MICRODOLLARS=50000000
-NATIVE_BUDGET_ACCOUNT_ID=my-polymath</code></pre>
-      <ul>
-        <li><code>BUDGET_MAX_HARD_CAP_MICRODOLLARS</code> is the most your copy may ever spend, in millionths of a dollar: <code>50000000</code> is USD 50. Choose your own.</li>
-        <li><code>META_MODEL</code> can be any Meta model, for example <code>muse-wonder-1.0</code>, Meta's most capable model at about five times the price.</li>
-      </ul>
-      <p>Save with <b>Ctrl+O</b>, <b>Enter</b>, then leave with <b>Ctrl+X</b>. Check your key works (free, no model call is charged):</p>
-<pre><code>python3 /opt/polymath/scripts/meta-preflight.py --env-file /opt/polymath/deploy/production.env --check-key</code></pre>
-      <p>Expect a summary ending in <b>0 failed</b>, with your model in the list. Then restart Polymath with your settings by running the setup command from step 4 again; it keeps your settings.</p>
-      <div class="callout warn">Never paste your key into a chat, an email or a document: only into this file on your server.</div>
-
-      <h2 id="research">6. Switch research on</h2>
-      <p>Open <code>https://your-address/operator/budget</code> and press <b>Unlock operator access</b> with your operator code. The operator desk then takes you through four steps:</p>
+      <h2 id="key">5. Connect your Meta key (one command)</h2>
+      <p>Have Meta's developer dashboard open at <a href="https://dev.meta.ai">dev.meta.ai</a>: you'll need your <b>API key</b>, and from the <b>Billing</b> page your <b>billing account ID</b> and the <b>spending limit</b> you set. Then, on the server, run:</p>
+<pre><code>bash /opt/polymath/scripts/connect-meta.sh</code></pre>
+      <p>It asks a few plain questions, with sensible answers already filled in, so you can mostly press Enter:</p>
       <ol>
-        <li><b>A free check</b> that your model, prices and limits are what you expect.</li>
-        <li><b>Your limits:</b> a total cap, a daily cap and a per-investigation cap, saved as a reviewed proposal.</li>
-        <li><b>One verification call</b> to Meta, costing a few cents, to prove the connection works end to end. For this step only, set <code>PAID_META_PROBE_ENABLED=true</code> in the settings file and restart; set it back to <code>false</code> afterwards.</li>
-        <li><b>Switch research on</b>: set <code>PAID_META_RESEARCH_ENABLED=true</code>, restart, and activate research on the desk for your own browser.</li>
+        <li><b>Your Meta key</b>, pasted while hidden. It is saved only in your server's private settings file and never shown.</li>
+        <li><b>Which Meta model</b>: Muse Spark by default, or any newer Meta model such as Muse Wonder. It shows the prices it will use; you confirm they match Meta's pricing page.</li>
+        <li><b>Your Meta account:</b> the billing account ID, your spending limit and the credit left.</li>
+        <li><b>Polymath's own limits:</b> the most it may ever spend, and the most per day. Polymath reserves the most a call could cost before sending it, so it can never go past these.</li>
+        <li><b>Each visitor's daily allowance.</b> Research on your copy runs for anyone who opens your address, within your limits. Keep the address to yourself, or give visitors a smaller allowance.</li>
+        <li><b>Concept art</b> in Studio with Meta Muse Image, yes or no.</li>
+        <li><b>Keep it on automatically</b>, yes or no (explained below).</li>
       </ol>
-      <p>Then open your address and start: Ask, Solve, Converge, Frontier and Studio all run on your key. Research runs from the browser you activated; other people who visit your address cannot spend your money unless you choose to fund public use from the desk.</p>
-      <div class="callout"><b>The detailed walkthrough</b>, with every field to fill in, is in the repository: <a href="https://github.com/wonderben-code/polymath/blob/main/docs/KEY_DAY.md">KEY_DAY.md</a> and <a href="https://github.com/wonderben-code/polymath/blob/main/docs/HANDOVER_CLAUDE_CHAT.md">the activation handover</a> (part B). Tip: you can hand that walkthrough to an AI assistant and let it guide you field by field.</div>
+      <p>Then it does the rest: a free check that Meta accepts your key, <b>one verification call</b> to Meta costing a few cents, and research switched on. It finishes with <b>"Research is on at https://…"</b>. Open your address and start: Ask, Solve, Converge, Frontier and Studio all run on your key.</p>
+      <div class="callout"><b>Staying on.</b> For safety, research is switched on in two-week windows. If you said yes to "keep it on automatically", a small daily check renews the window for you, with no model call. Every 90 days the helper asks you to confirm prices and limits again: just run the same command.</div>
+      <div class="callout warn">Never paste your key into a chat, an email or a document: only into the helper's hidden prompt on your server.</div>
 
-      <h2 id="art">7. Concept art in Studio (optional)</h2>
-      <p>Studio paints each invention with Meta Muse Image. To switch it on, set these lines and restart:</p>
-<pre><code>PAID_META_IMAGE_ENABLED=true
-META_IMAGE_MODEL=muse-image-1.0</code></pre>
-      <p class="note">Each picture is reserved on the same spending ledger before it is sent.</p>
-
-      <h2 id="zenodo">8. Zenodo publishing and sign-in (optional)</h2>
+      <h2 id="zenodo">6. Zenodo publishing and sign-in (optional)</h2>
       <p>To publish findings to your own Zenodo account, and to let people sign in with ORCID, GitHub or Google, register Polymath once with each service as a free "app". Each gives you a <b>client ID</b> and a <b>client secret</b>.</p>
       <h3>Zenodo (about 3 minutes per site)</h3>
       <p>Zenodo has a real site, <a href="https://zenodo.org">zenodo.org</a>, with permanent DOIs, and a practice site, <a href="https://sandbox.zenodo.org">sandbox.zenodo.org</a>. Register on both; start on the sandbox.</p>
@@ -145,10 +122,12 @@ META_IMAGE_MODEL=muse-image-1.0</code></pre>
       <p>For each service it asks <b>"Add or replace it now? [y/N]"</b>. Type <code>y</code>, paste the client ID, then the client secret (hidden as you paste). Press Enter to skip a service. It saves them only on your server, switches the features on and restarts. Then open a written finding and choose <b>Publish to your Zenodo → Connect</b>.</p>
       <p class="note">Full details with screenshots of each provider's form: <a href="https://github.com/wonderben-code/polymath/blob/main/docs/SIGN_IN_SETUP.md">SIGN_IN_SETUP.md</a>.</p>
 
-      <h2 id="everyday">9. Updating, stopping and backups</h2>
+      <h2 id="everyday">7. Everyday: status, stopping, updating and backups</h2>
       <ul>
+        <li><b>See what's on and what's been spent:</b> <code>bash /opt/polymath/scripts/connect-meta.sh status</code></li>
+        <li><b>Stop all spending at once:</b> <code>bash /opt/polymath/scripts/connect-meta.sh stop</code>. Switch back on with <code>… connect-meta.sh renew</code>.</li>
+        <li><b>Change your limits, model or key:</b> run <code>bash /opt/polymath/scripts/connect-meta.sh</code> again.</li>
         <li><b>Update to the newest Polymath:</b> run the setup command from step 4 again. Your settings and research stay.</li>
-        <li><b>Stop all spending at once:</b> press Stop on the operator desk, or set <code>PAID_META_RESEARCH_ENABLED=false</code> and restart.</li>
         <li><b>Back up your research:</b> <code>bash /opt/polymath/scripts/production-backup.sh</code> writes a checksummed copy of the database into <code>/opt/polymath/backups</code>; copy it somewhere safe.</li>
         <li><b>Stop paying for the server:</b> back up first, then destroy the droplet in your host's dashboard. Switching it off alone still bills on most hosts.</li>
       </ul>
