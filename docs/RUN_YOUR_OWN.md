@@ -4,8 +4,8 @@ Polymath is open source (Apache 2.0). Running your own copy gives you
 unlimited research on **your own Meta key**. The key stays on your own server
 and is never shared with anyone, including the Polymath website.
 
-This is the best option for heavy use or for a lab. Expect about an hour, and
-no programming. You will follow the steps and copy a few commands.
+This is the best option for heavy use or for a lab. Expect about half an hour,
+and no programming: three commands and a few questions.
 
 ## What you need
 
@@ -18,47 +18,43 @@ no programming. You will follow the steps and copy a few commands.
 
 ## Steps
 
-1. **Install Docker** on the server. Most hosts offer a one-click "Docker"
-   image; choose that.
-2. **Download Polymath:**
+1. **Create the server** (Ubuntu 24.04, 2 GB) and point your web address's
+   `A` records (`@` and `www`) at it.
+2. **Install Polymath** with one command on the server, as root:
 
    ```bash
-   git clone https://github.com/wonderben-code/polymath.git && cd polymath
+   curl -fsSL https://raw.githubusercontent.com/wonderben-code/polymath/main/scripts/setup-server.sh | bash -s -- your.domain
    ```
 
-3. **Create your private settings file:**
+   It installs Docker, makes every secret on the server and starts the site
+   with every spending switch off.
+3. **Connect your Meta key** with one more command:
 
    ```bash
-   cp deploy/production.env.example deploy/production.env && chmod 600 deploy/production.env
+   bash /opt/polymath/scripts/connect-meta.sh
    ```
 
-   Open `deploy/production.env` and fill in:
-
-   - your web address
-   - a database password
-   - an operator code (make one with `openssl rand -hex 32`)
-   - the Meta section: your key as `MODEL_API_KEY`, `META_MODEL` and the budget settings, as [KEY_DAY.md](KEY_DAY.md) explains
-
-   Your key is written only to this file on your own server.
-
-4. **Start Polymath:**
-
-   ```bash
-   docker compose -f deploy/compose.production.yaml --env-file deploy/production.env up -d --wait
-   ```
-
-5. **Set your spending limits.** Open `https://your-address/operator/budget`,
-   sign in with your operator code, and follow
-   [KEY_DAY.md](KEY_DAY.md):
-   1. A free check.
-   2. Your limits.
-   3. One verification call costing a few cents.
-   4. Switch research on.
-
-   Nothing spends until you do this.
-
-6. **Research.** Open your address and start. Everything is saved on your
+   It asks for your key (hidden), your model and its prices, your Meta billing
+   account ID and spending limit, Polymath's own total and daily limits, each
+   visitor's daily allowance, concept art yes or no, and whether to keep
+   research on automatically. It then runs a free key check, ONE verification
+   call to Meta (a few cents) and switches research on for your site. It drives
+   the operator desk's own reviewed steps (`scripts/operator-desk.sh`), so every
+   server-side cap and check still applies.
+4. **Optional: Zenodo publishing and sign-in.** Register the free apps
+   ([SIGN_IN_SETUP.md](SIGN_IN_SETUP.md), with your own domain in each callback
+   address), then run `bash /opt/polymath/scripts/connect-sign-in.sh`.
+5. **Research.** Open your address and start. Everything is saved on your
    server.
+
+Everyday commands: `connect-meta.sh status` (what is on and what is spent),
+`connect-meta.sh stop` (all research spending off at once), `connect-meta.sh
+renew` (back on, or two more weeks), and rerunning `connect-meta.sh` to change
+the key, model or limits. Public funding windows last at most 14 days; with
+automatic renewal a daily cron check (`/etc/cron.d/polymath-renew`) renews them
+without a model call. Reviewed prices and limits stay valid for 90 days, then
+the helper asks again. One setup's total limit is at most USD 150 (the
+server's ceiling); running the helper again starts a fresh budget account.
 
 ## Choosing your Meta model
 
