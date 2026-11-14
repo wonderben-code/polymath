@@ -157,3 +157,16 @@ footer { border-top: 1px solid var(--line); padding: 36px 0 48px; font-size: 14.
 footer .wrap { display: grid; gap: 14px; }
 footer a { color: var(--ink); }
 .foot-links { display: flex; flex-wrap: wrap; gap: 8px 20px; }
+
+/* Credits strip: built with, reads from, publishes to */
+.credits-band { padding: 0 0 40px; }
+.credits { display: grid; gap: 22px; padding-top: 26px; border-top: 1px solid var(--line); }
+@media (min-width: 760px) { .credits { grid-template-columns: 1.3fr 1fr 1fr; gap: 28px; } }
+.credits h2 { font-family: var(--sans); margin: 0 0 12px; font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.credits ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.credits li { display: grid; gap: 2px; }
+.credits strong { font-size: 16px; font-weight: 600; color: var(--ink); letter-spacing: -.1px; }
+.credits strong:not(:has(.credits-mark))::before { content: ''; display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 8px; vertical-align: 2px; background: var(--spectrum); }
+.credits span { font-size: 13px; color: var(--muted); }
+.credits-logo { display: block; width: auto; max-width: 160px; margin: 2px 0 4px; }
+.credits-mark { display: inline-block; vertical-align: -3px; margin-right: 8px; }
