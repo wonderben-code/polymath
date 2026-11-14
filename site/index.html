@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Polymath</title>
+<meta name="description" content="Polymath finds discoveries hiding between fields of science. Meta's Muse models reason across the open record of science, and every claim cites the exact passage it came from. Open source: run your own copy with your own Meta key.">
+<meta property="og:title" content="Polymath: discoveries between fields of science">
+<meta property="og:description" content="Ask, Solve, Converge, Frontier and Studio: research and invention across all of open science, powered by Meta. Open source, run it with your own Meta key.">
+<meta property="og:image" content="https://askpolymath.com/media/converge.jpg">
+<meta property="og:type" content="website">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ctext x='14' y='50' font-family='Georgia,serif' font-style='italic' font-size='54' fill='%2316181d'%3Ep%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="./" aria-label="Polymath home"><i>p</i>polymath</a>
+    <nav class="nav" aria-label="Main">
+      <a href="#tools">Tools</a>
+      <a class="hide-sm" href="#everything">Features</a>
+      <a class="hide-sm" href="#examples">Examples</a>
+      <a href="guide.html">Run your own</a>
+      <a href="https://github.com/wonderben-code/polymath">GitHub</a>
+    </nav>
+  </div>
+  <div class="spectrum" aria-hidden="true"></div>
+</header>
+
+<main id="main">
+  <section class="hero">
+    <div class="wrap">
+      <p class="eyebrow">Open-source research partner · powered by Meta</p>
+      <h1>Discoveries hide between fields of science. Polymath finds them.</h1>
+      <p class="lede">Science is split into thousands of specialties, so an answer found in one field often stays unknown in the field that needs it. Polymath gives Meta's Muse Spark the open record of world science to read, lets it decide where to look, and checks every claim against the actual papers.</p>
+      <p class="pair"><span>Meta frontier intelligence</span><span class="x" aria-hidden="true">×</span><span>Polymath's engine across the world's science</span></p>
+      <div class="actions">
+        <a class="btn solid" href="guide.html">Run your own Polymath</a>
+        <a class="btn ghost" href="#film">Watch the 3-minute film</a>
+      </div>
+    </div>
+  </section>
+
+  <section id="film" style="padding-top:0">
+    <div class="wrap">
+      <figure class="film">
+        <div class="frame">
+          <iframe src="https://www.youtube-nocookie.com/embed/RSdVl98prVA" title="Polymath: AI that finds discoveries between fields of science (3-minute film)" loading="lazy" allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>
+        </div>
+        <figcaption class="caption">Every scene is a real, live run by a first-time visitor, with real Meta intelligence and real papers. Built for the Meta Global AI Developer Hackathon 2026.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="band">
+    <div class="wrap problem">
+      <div>
+        <h2>The answer you need may already exist, in a field you never read.</h2>
+        <p>Far more is published every year than anyone could read. The great leaps that joined fields depended on rare people who happened to know both. Polymath makes that search systematic: Meta's model chooses which fields to look in, what to read next, and what to believe; Polymath's engine supplies the literature, checks every quotation, and remembers.</p>
+        <p class="note">It reads arXiv and OpenAlex, opens the full text of arXiv papers where it matters, and only cites text it actually retrieved and saved.</p>
+      </div>
+      <div class="bridges" aria-label="Famous connections between fields">
+        <div class="bridge"><b>Heat flow → Option pricing</b><span class="arc"></span><small>The same equation describes heat spreading through metal and the price of a stock option.</small></div>
+        <div class="bridge"><b>Ant colonies → Internet routing</b><span class="arc"></span><small>How ants find the shortest path inspired how data finds its way across networks.</small></div>
+        <div class="bridge"><b>Epidemics → Rumours</b><span class="arc"></span><small>The mathematics of infection also describes how ideas spread.</small></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="tools">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">Five tools</p>
+        <h2>For any question, problem or invention.</h2>
+        <p>Each one is a long, live investigation that Meta's model directs step by step. You watch it think: every search, reading, hypothesis and setback streams as it happens.</p>
+      </div>
+
+      <article class="tool" id="ask">
+        <div>
+          <span class="tag blue">Ask</span>
+          <h3>A question, answered with the exact evidence.</h3>
+          <p>Type any open question. Muse Spark plans the searches, reads real papers and answers with numbered claims.</p>
+          <ul>
+            <li>Every claim is labelled <b>Known</b>, <b>Postulated</b> or <b>Speculative</b>.</li>
+            <li>Each one shows the exact passage it came from, matched against the saved source.</li>
+            <li>It says plainly what remains unanswered.</li>
+          </ul>
+          <p class="example"><b>Real run:</b> "Why does time only run forward?" answered in under two minutes, with every claim tied to its passage.</p>
+        </div>
+        <div class="media"><figure><video muted loop playsinline preload="none" poster="media/ask.jpg" aria-label="Ask: a question being investigated live and answered with cited claims"><source src="media/ask.mp4" type="video/mp4"></video><figcaption>Ask, live and sped up.</figcaption></figure></div>
+      </article>
+
+      <article class="tool flip" id="solve">
+        <div>
+          <span class="tag violet">Solve</span>
+          <h3>A problem, solved with answers from other fields.</h3>
+          <p>Describe a problem: the lock. Polymath first looks for a key anywhere in science.</p>
+          <ul>
+            <li>If none fits, it finds the closest fits in other fields and says exactly where each one falls short.</li>
+            <li>Then it <b>forges a new key</b> by combining the fits that held, tested against the original evidence.</li>
+            <li>It tells you honestly where the new proposal is still weak.</li>
+          </ul>
+          <p class="example"><b>Real run:</b> "How could a spacecraft shield its crew from cosmic rays without heavy metal?" A key was forged from hydrogen-rich materials used in energy storage, in eleven minutes.</p>
+        </div>
+        <div class="media"><figure><video muted loop playsinline preload="none" poster="media/solve.jpg" aria-label="Solve: the lock, the fits from other fields and the forged key"><source src="media/solve.mp4" type="video/mp4"></video><figcaption>Solve: the lock, the fits, and the forged key.</figcaption></figure></div>
+      </article>
+
+      <article class="tool" id="converge">
+        <div>
+          <span class="tag teal">Converge</span>
+          <h3>One theme, a circle of distant fields.</h3>
+          <p>Give it any topic you're curious about. Muse Spark picks far-apart fields, from twelve up to two hundred, and asks what each one knows.</p>
+          <ul>
+            <li>It tests every connection against the literature and tries hard to break it.</li>
+            <li>Only connections that survive their strongest objection are drawn inward.</li>
+            <li>What survives forms a deeper idea in the centre, level after level.</li>
+          </ul>
+          <p class="example"><b>Real run:</b> "How systems remember" across twelve fields converged on <i>memory as hidden-state history</i>, linking statistical mechanics, ecology, machine learning and climate science.</p>
+        </div>
+        <div class="media"><figure><video muted loop playsinline preload="none" poster="media/converge.jpg" aria-label="Converge: a circle of twelve fields filling with tested connections"><source src="media/converge.mp4" type="video/mp4"></video><figcaption>Converge: the circle fills as connections hold.</figcaption></figure></div>
+      </article>
+
+      <article class="tool flip" id="frontier">
+        <div>
+          <span class="tag green">Frontier</span>
+          <h3>An unsolved problem, mapped into a research programme.</h3>
+          <p>Give it a problem nobody has solved, however sci-fi.</p>
+          <ul>
+            <li>It surveys the literature and names the gaps between today and the goal.</li>
+            <li>It hunts other sciences for answers to each gap.</li>
+            <li>It breaks the hardest gaps into steps, each labelled by its evidence; any step can be sent to Solve.</li>
+          </ul>
+          <p class="example"><b>Real run:</b> "How could we build a space elevator with materials we can make today?" grew a six-step plan in nineteen minutes.</p>
+        </div>
+        <div class="media"><figure><video muted loop playsinline preload="none" poster="media/frontier.jpg" aria-label="Frontier: a map of gaps and steps growing from one question"><source src="media/frontier.mp4" type="video/mp4"></video><figcaption>Frontier: the map grows from one question.</figcaption></figure></div>
+      </article>
+
+      <article class="tool" id="studio">
+        <div>
+          <span class="tag amber">Studio</span>
+          <h3>A brief, turned into an invention.</h3>
+          <p>Describe anything you want to create, and your requirements.</p>
+          <ul>
+            <li>Muse Spark turns the brief into the functions it needs and hunts far fields for mechanisms that already achieve each one.</li>
+            <li>It invents a design from them, engineers it with worked calculations and cited numbers, and stress-tests it against your requirements.</li>
+            <li><b>Meta Muse Image</b> paints the concept art: the design in its world, a cutaway, the key mechanism up close.</li>
+            <li>It lists what is still to invent, each gap one click from Solve.</li>
+          </ul>
+          <p class="example"><b>Real run:</b> "A submarine inspired by whales" combined humpback fin bumps, owl feather serrations and seal swimming economy into a submarine that glides on a sawtooth path.</p>
+        </div>
+        <div class="media"><figure><video muted loop playsinline preload="none" poster="media/studio-whale-hssg-1000.jpg" aria-label="Studio: the whale-inspired submarine being invented, engineered and stress-tested"><source src="media/studio-whale.mp4" type="video/mp4"></video><figcaption>Studio: brief, inspirations, invention, engineering, stress test.</figcaption></figure></div>
+      </article>
+    </div>
+  </section>
+
+  <section class="band" id="everything">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">And everything around them</p>
+        <h2>A complete research workspace.</h2>
+      </div>
+      <div class="grid">
+        <div class="card"><h3>Explore</h3><p>Start from one concept and find bridges to other fields, each with papers on both sides, a structural mapping, the open question it could answer, and its strongest objection.</p></div>
+        <div class="card"><h3>Surprise me</h3><p>Muse Spark chooses distant fields itself, goes hunting for convergences, and can climb to connections between connections.</p></div>
+        <div class="card"><h3>Watch it think</h3><p>Every search, reading, hypothesis and setback streams live, so you see exactly how a conclusion was reached.</p></div>
+        <div class="card"><h3>Evidence bar</h3><p>Choose how vetted the literature must be: Frontier, Standard, Peer reviewed or Established. Preprints are always labelled as such.</p></div>
+        <div class="card"><h3>Your library and map</h3><p>Every finding is saved with its sources, and a map shows how your findings connect. Combine any of them to find the structure they share.</p></div>
+        <div class="card"><h3>Formalise</h3><p>Turn a finding into a mathematical conjecture, with every definition labelled and finite checks where they can be run.</p></div>
+        <div class="card"><h3>Write and export</h3><p>Turn findings into a plain summary or a formal paper with exact citations, and export them.</p></div>
+        <div class="card"><h3>Publish to Zenodo</h3><p>Connect your own Zenodo account and publish under your own name, by hand after reviewing the exact record, or at the level of automation you choose. Practise first on the Zenodo sandbox.</p></div>
+        <div class="card"><h3>Literature watches</h3><p>Keep reading new research on your topics, and reassess saved findings against new papers.</p></div>
+        <div class="card"><h3>Share publicly</h3><p>Share a finding as a public snapshot with short cited excerpts; revoke it any time.</p></div>
+        <div class="card"><h3>Sign in, or stay a guest</h3><p>Sign in with ORCID, GitHub or Google to keep your work on every device, or simply carry on as a guest.</p></div>
+        <div class="card"><h3>Hard spending caps</h3><p>Every model call is reserved against a hard ledger before it is sent, with total and daily limits you set. Nothing can overspend.</p></div>
+        <div class="card"><h3>API and Python client</h3><p>A documented HTTP API and a standalone client let you run investigations from your own code.</p></div>
+        <div class="card"><h3>Choose your Meta model</h3><p>Runs on Muse Spark by default; switch to Muse Wonder or any newer Meta model with one setting.</p></div>
+        <div class="card"><h3>Open and verifiable</h3><p>Open source under Apache 2.0. Every change to the code is Bitcoin-timestamped, so the whole history is verifiable.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap narrow">
+      <p class="eyebrow">Truth over plausibility</p>
+      <h2>Nothing is surfaced without real evidence and a serious attempt to break it.</h2>
+      <ul>
+        <li>A finding can only quote text Polymath actually retrieved and saved, and every quotation is matched against the saved source.</li>
+        <li>Every connection carries the strongest objection the model could find, its verdict on it, and a search for prior work.</li>
+        <li>Claims are labelled by how well they are supported, and the limits of each search are stated.</li>
+        <li>An honest "not supported" is a valid result. Polymath never invents papers or sources.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="band" id="examples">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">Real results</p>
+        <h2>From live runs.</h2>
+        <p>Full pages from real investigations. Open any to read it at full length.</p>
+      </div>
+      <div class="gallery">
+        <a href="media/studio-whale-submarine-page.jpg"><img src="media/studio-whale-hssg-1000.jpg" alt="Concept art of the whale-inspired sawtooth glider submarine, painted by Meta Muse Image" loading="lazy"><span>Studio: the whale-inspired submarine, full design sheet</span></a>
+        <a href="media/solve-battery-problem.jpg"><img src="media/solve-battery-problem.jpg" alt="A Solve result for recycling batteries, with fits from other fields" loading="lazy"><span>Solve: recycling batteries without losing capacity</span></a>
+        <a href="media/converge-how-systems-remember.jpg"><img src="media/converge-circle-finished.jpg" alt="A finished Converge circle with a synthesis in the centre" loading="lazy"><span>Converge: how systems remember</span></a>
+        <a href="media/frontier-battery-recycling-map.jpg"><img src="media/frontier-space-elevator-map.jpg" alt="A Frontier research map of gaps and steps" loading="lazy"><span>Frontier: a research map of gaps and steps</span></a>
+        <a href="media/ask-arrow-of-time-claims.jpg"><img src="media/ask-arrow-of-time-claims.jpg" alt="Ask answer with labelled claims about the arrow of time" loading="lazy"><span>Ask: why time only runs forward</span></a>
+        <a href="media/studio-dyson-phet-swarm.jpg"><img src="media/studio-dyson-phet-swarm.jpg" alt="Engineering drawing of a Dyson swarm of sail satellites" loading="lazy"><span>Studio: a Dyson swarm of sail satellites</span></a>
+        <a href="media/studio-whale-still-to-invent.jpg"><img src="media/studio-whale-still-to-invent.jpg" alt="Studio's list of what is still to invent" loading="lazy"><span>Studio: what is still to invent, each gap one click from Solve</span></a>
+        <a href="media/shared-public-finding.jpg"><img src="media/shared-public-finding.jpg" alt="A publicly shared finding with cited excerpts" loading="lazy"><span>A shared public finding with cited excerpts</span></a>
+        <a href="media/studio-dyson.mp4"><img src="media/studio-dyson.jpg" alt="Studio inventing a Dyson swarm, a still from the live run" loading="lazy"><span>Studio: the Dyson swarm run (video)</span></a>
+      </div>
+    </div>
+  </section>
+
+  <section id="own">
+    <div class="wrap own">
+      <div>
+        <p class="eyebrow">Use Polymath</p>
+        <h2>Run your own Polymath, on your own Meta key.</h2>
+        <p>Polymath is open source. Your own copy has every tool and feature on this page, including concept art and Zenodo publishing. Your Meta key stays on your own server and is never shared with anyone, including us.</p>
+        <ol class="steps">
+          <li><b>Get a Meta Model API key</b> from Meta's developer dashboard and set a spending limit there.</li>
+          <li><b>Get a small server</b> (2 GB is enough) and point a web address at it.</li>
+          <li><b>Run one setup command.</b> It installs everything and makes every secret on the server itself.</li>
+          <li><b>Add your key and switch research on</b> from your own operator desk, with your own spending caps.</li>
+          <li><b>Optional:</b> switch on Zenodo publishing and sign-in with one more command.</li>
+        </ol>
+        <div class="actions"><a class="btn solid" href="guide.html">Read the step-by-step guide</a><a class="btn ghost" href="https://github.com/wonderben-code/polymath">Get the code</a></div>
+      </div>
+      <div>
+        <h3>What it costs you</h3>
+        <table>
+          <thead><tr><th>Item</th><th>Cost</th></tr></thead>
+          <tbody>
+            <tr><td>Polymath</td><td>Free, open source</td></tr>
+            <tr><td>A small server</td><td>About USD 12 a month (for example a 2 GB DigitalOcean droplet)</td></tr>
+            <tr><td>Meta model usage</td><td>Pay as you go on your own Meta account, inside the caps you set</td></tr>
+            <tr><td>Zenodo, arXiv, OpenAlex, sign-in apps</td><td>Free</td></tr>
+          </tbody>
+        </table>
+        <p class="note">As a guide from live runs: an Ask or Surprise costs cents, a Solve or Converge around a dollar, a full Studio invention a few dollars. Polymath's ledger always reserves the most a call could cost before sending it.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="band">
+    <div class="wrap narrow">
+      <h2>Questions</h2>
+      <details><summary>Why can't I paste my Meta key into this website?</summary><p>Meta's terms don't allow sharing your Model API key with another service. Running your own copy keeps your key on your own server, which is ordinary use of your own key.</p></details>
+      <details><summary>Do I need to be a programmer?</summary><p>No. The guide is written for non-programmers: you copy a few commands into your server. Expect about an hour the first time.</p></details>
+      <details><summary>Which Meta models does it use?</summary><p>Muse Spark for research and reasoning by default, and Muse Image for Studio's concept art. You can switch to Muse Wonder or any newer Meta model with one setting.</p></details>
+      <details><summary>Can I control what it spends?</summary><p>Yes. You set a total and a daily cap; every call is reserved against them before it is sent, and there is a Stop button on your operator desk. Set a spending limit on your Meta account too.</p></details>
+      <details><summary>Where do my findings go?</summary><p>Everything is saved on your own server. You choose what to share publicly and what to publish to your own Zenodo account.</p></details>
+      <details><summary>Is the science reliable?</summary><p>Polymath labels every claim by its support, quotes only text it retrieved, and attaches the strongest objection to every connection. It is a research partner, not a replacement for expert review: treat findings as well-sourced leads.</p></details>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="foot-links">
+      <a href="guide.html">Run your own</a>
+      <a href="https://github.com/wonderben-code/polymath">GitHub</a>
+      <a href="https://youtu.be/RSdVl98prVA">The film on YouTube</a>
+    </div>
+    <p>Built for the Meta Global AI Developer Hackathon 2026 with Cerebral Valley. Intelligence by Meta's frontier Muse models. Literature from arXiv and OpenAlex; publishing through Zenodo.</p>
+    <p>Created, designed and built by Ekram Alam · Apache 2.0 · © 2026</p>
+  </div>
+</footer>
+
+<script>
+(function () {
+  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var videos = document.querySelectorAll('.media video');
+  if (reduce || !('IntersectionObserver' in window)) {
+    videos.forEach(function (v) { v.setAttribute('controls', ''); });
+    return;
+  }
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (e) {
+      var v = e.target;
+      if (e.isIntersecting) { v.play().catch(function () { v.setAttribute('controls', ''); }); }
+      else { v.pause(); }
+    });
+  }, { threshold: 0.35 });
+  videos.forEach(function (v) { io.observe(v); });
+})();
+</script>
+</body>
+</html>

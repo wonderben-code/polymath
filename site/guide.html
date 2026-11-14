@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Run your own Polymath</title>
+<meta name="description" content="Step-by-step guide to running your own Polymath with your own Meta Model API key: every tool, concept art and Zenodo publishing, on your own server.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ctext x='14' y='50' font-family='Georgia,serif' font-style='italic' font-size='54' fill='%2316181d'%3Ep%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="./" aria-label="Polymath home"><i>p</i>polymath</a>
+    <nav class="nav" aria-label="Main">
+      <a href="./#tools">Tools</a>
+      <a class="hide-sm" href="./#everything">Features</a>
+      <a href="guide.html" aria-current="page">Run your own</a>
+      <a href="https://github.com/wonderben-code/polymath">GitHub</a>
+    </nav>
+  </div>
+  <div class="spectrum" aria-hidden="true"></div>
+</header>
+
+<main id="main" class="guide">
+  <section class="hero" style="padding-bottom:0">
+    <div class="wrap narrow">
+      <p class="eyebrow">Guide</p>
+      <h1>Run your own Polymath.</h1>
+      <p class="lede">Your own copy has every tool: Ask, Solve, Converge, Frontier and Studio, with concept art, your library and map, writing, and publishing to your own Zenodo. It runs on your own small server with your own Meta key, which never leaves that server.</p>
+      <p>No programming needed: you'll copy a few commands. Expect about an hour the first time.</p>
+      <nav class="toc" aria-label="Steps">
+        <b>The steps</b>
+        <ol>
+          <li><a href="#need">What you need</a></li>
+          <li><a href="#server">Create a server</a></li>
+          <li><a href="#domain">Point your web address at it</a></li>
+          <li><a href="#install">Install Polymath</a></li>
+          <li><a href="#key">Add your Meta key and your limits</a></li>
+          <li><a href="#research">Switch research on</a></li>
+          <li><a href="#art">Concept art (optional)</a></li>
+          <li><a href="#zenodo">Zenodo publishing and sign-in (optional)</a></li>
+          <li><a href="#everyday">Updating, stopping and backups</a></li>
+        </ol>
+      </nav>
+    </div>
+  </section>
+
+  <section style="padding-top:16px">
+    <div class="wrap narrow">
+
+      <h2 id="need">1. What you need</h2>
+      <ul>
+        <li><b>A Meta Model API key.</b> Create one in Meta's developer dashboard at <a href="https://dev.meta.ai">dev.meta.ai</a>. On its billing page, set a spending limit first.</li>
+        <li><b>A small server</b> running Ubuntu 24.04 with 2 GB of memory. For example a Basic 2 GB DigitalOcean droplet, about USD 12 a month.</li>
+        <li><b>A web address</b> you own, such as <code>research.yourname.com</code>. Polymath gets a free secure certificate for it automatically.</li>
+      </ul>
+      <div class="callout"><b>Why your own copy?</b> Meta's terms don't allow sharing your Model API key with another service. On your own server, your key is used only by your own copy, inside your own Meta account and limits.</div>
+
+      <h2 id="server">2. Create a server</h2>
+      <p>On DigitalOcean (other hosts are similar):</p>
+      <ol>
+        <li>Choose <b>Create → Droplets</b>.</li>
+        <li>Image: <b>Ubuntu 24.04 (LTS)</b>. Size: <b>Basic, Regular, 2 GB</b>. Pick the region nearest you.</li>
+        <li>Choose a root password (or an SSH key) and press <b>Create Droplet</b>.</li>
+        <li>Note the droplet's <b>IPv4 address</b>.</li>
+      </ol>
+
+      <h2 id="domain">3. Point your web address at it</h2>
+      <p>Where you bought your domain, open its DNS settings and add two records pointing at the server's address:</p>
+      <table>
+        <thead><tr><th>Type</th><th>Host</th><th>Value</th></tr></thead>
+        <tbody>
+          <tr><td>A</td><td><code>@</code> (or your subdomain, such as <code>research</code>)</td><td>your server's IPv4 address</td></tr>
+          <tr><td>A</td><td><code>www</code> (or <code>www.research</code>)</td><td>your server's IPv4 address</td></tr>
+        </tbody>
+      </table>
+      <p class="note">These usually take effect within minutes.</p>
+
+      <h2 id="install">4. Install Polymath</h2>
+      <p>Open a terminal on the server. On DigitalOcean, open the droplet and choose <b>Access → Launch Droplet Console</b>. Then run this one command, with your own web address at the end:</p>
+<pre><code>curl -fsSL https://raw.githubusercontent.com/wonderben-code/polymath/main/scripts/setup-server.sh | bash -s -- research.yourname.com</code></pre>
+      <p>It installs Docker, downloads Polymath, makes every secret on the server itself and starts the site. The first time takes about ten minutes. It finishes with <b>"Polymath is live at https://…"</b>.</p>
+      <p>Open your address in a browser: Polymath is running. Every spending switch is off, so nothing can spend yet. You can read and explore the interface safely.</p>
+      <p>Your private <b>operator code</b>, used for the operator desk in step 6, is shown by:</p>
+<pre><code>grep OPERATOR_BOOTSTRAP_TOKEN /opt/polymath/deploy/production.env</code></pre>
+
+      <h2 id="key">5. Add your Meta key and your limits</h2>
+      <p>Open your private settings file in the server's editor:</p>
+<pre><code>nano /opt/polymath/deploy/production.env</code></pre>
+      <p>Find each line below and change it to read as shown. Add any line that is missing. Put your real key after <code>MODEL_API_KEY=</code>.</p>
+<pre><code>MODEL_API_KEY=your-meta-key
+META_MODEL=muse-spark-1.3
+OPERATOR_ACTOR_ID=owner
+OPERATOR_DISPLAY_NAME=Owner
+BUDGET_READINESS_ENABLED=true
+BUDGET_ADMIN_ACTOR_IDS=["owner"]
+BUDGET_MAX_HARD_CAP_MICRODOLLARS=50000000
+NATIVE_BUDGET_ACCOUNT_ID=my-polymath</code></pre>
+      <ul>
+        <li><code>BUDGET_MAX_HARD_CAP_MICRODOLLARS</code> is the most your copy may ever spend, in millionths of a dollar: <code>50000000</code> is USD 50. Choose your own.</li>
+        <li><code>META_MODEL</code> can be any Meta model, for example <code>muse-wonder-1.0</code>, Meta's most capable model at about five times the price.</li>
+      </ul>
+      <p>Save with <b>Ctrl+O</b>, <b>Enter</b>, then leave with <b>Ctrl+X</b>. Check your key works (free, no model call is charged):</p>
+<pre><code>python3 /opt/polymath/scripts/meta-preflight.py --env-file /opt/polymath/deploy/production.env --check-key</code></pre>
+      <p>Expect a summary ending in <b>0 failed</b>, with your model in the list. Then restart Polymath with your settings by running the setup command from step 4 again; it keeps your settings.</p>
+      <div class="callout warn">Never paste your key into a chat, an email or a document: only into this file on your server.</div>
+
+      <h2 id="research">6. Switch research on</h2>
+      <p>Open <code>https://your-address/operator/budget</code> and press <b>Unlock operator access</b> with your operator code. The operator desk then takes you through four steps:</p>
+      <ol>
+        <li><b>A free check</b> that your model, prices and limits are what you expect.</li>
+        <li><b>Your limits:</b> a total cap, a daily cap and a per-investigation cap, saved as a reviewed proposal.</li>
+        <li><b>One verification call</b> to Meta, costing a few cents, to prove the connection works end to end. For this step only, set <code>PAID_META_PROBE_ENABLED=true</code> in the settings file and restart; set it back to <code>false</code> afterwards.</li>
+        <li><b>Switch research on</b>: set <code>PAID_META_RESEARCH_ENABLED=true</code>, restart, and activate research on the desk for your own browser.</li>
+      </ol>
+      <p>Then open your address and start: Ask, Solve, Converge, Frontier and Studio all run on your key. Research runs from the browser you activated; other people who visit your address cannot spend your money unless you choose to fund public use from the desk.</p>
+      <div class="callout"><b>The detailed walkthrough</b>, with every field to fill in, is in the repository: <a href="https://github.com/wonderben-code/polymath/blob/main/docs/KEY_DAY.md">KEY_DAY.md</a> and <a href="https://github.com/wonderben-code/polymath/blob/main/docs/HANDOVER_CLAUDE_CHAT.md">the activation handover</a> (part B). Tip: you can hand that walkthrough to an AI assistant and let it guide you field by field.</div>
+
+      <h2 id="art">7. Concept art in Studio (optional)</h2>
+      <p>Studio paints each invention with Meta Muse Image. To switch it on, set these lines and restart:</p>
+<pre><code>PAID_META_IMAGE_ENABLED=true
+META_IMAGE_MODEL=muse-image-1.0</code></pre>
+      <p class="note">Each picture is reserved on the same spending ledger before it is sent.</p>
+
+      <h2 id="zenodo">8. Zenodo publishing and sign-in (optional)</h2>
+      <p>To publish findings to your own Zenodo account, and to let people sign in with ORCID, GitHub or Google, register Polymath once with each service as a free "app". Each gives you a <b>client ID</b> and a <b>client secret</b>.</p>
+      <h3>Zenodo (about 3 minutes per site)</h3>
+      <p>Zenodo has a real site, <a href="https://zenodo.org">zenodo.org</a>, with permanent DOIs, and a practice site, <a href="https://sandbox.zenodo.org">sandbox.zenodo.org</a>. Register on both; start on the sandbox.</p>
+      <ol>
+        <li>Sign in and open <b>Account → Applications</b> (<a href="https://zenodo.org/account/settings/applications/">zenodo.org/account/settings/applications</a>, and the same page on the sandbox).</li>
+        <li>Under <b>Developer applications</b>, choose <b>New application</b>: name <b>Polymath</b>, website <code>https://your-address</code>, redirect URI <code>https://your-address/zenodo/callback</code>, client type <b>Confidential</b>.</li>
+        <li>Copy the client ID and client secret.</li>
+      </ol>
+      <h3>Sign-in (optional, about 2 to 5 minutes each)</h3>
+      <p>For a personal copy you can skip this: as a guest, your work stays tied to your own browser. To add sign-in, register with each provider using the callback address <code>https://your-address/account/callback</code>:</p>
+      <ul>
+        <li><b>GitHub:</b> <a href="https://github.com/settings/developers">github.com/settings/developers</a> → OAuth Apps → New OAuth App.</li>
+        <li><b>Google:</b> <a href="https://console.cloud.google.com">console.cloud.google.com</a> → a project → Google Auth Platform → Clients → Web application.</li>
+        <li><b>ORCID:</b> <a href="https://orcid.org/developer-tools">orcid.org/developer-tools</a> → the free Public API.</li>
+      </ul>
+      <h3>Put them on your server (one command)</h3>
+<pre><code>bash /opt/polymath/scripts/connect-sign-in.sh</code></pre>
+      <p>For each service it asks <b>"Add or replace it now? [y/N]"</b>. Type <code>y</code>, paste the client ID, then the client secret (hidden as you paste). Press Enter to skip a service. It saves them only on your server, switches the features on and restarts. Then open a written finding and choose <b>Publish to your Zenodo → Connect</b>.</p>
+      <p class="note">Full details with screenshots of each provider's form: <a href="https://github.com/wonderben-code/polymath/blob/main/docs/SIGN_IN_SETUP.md">SIGN_IN_SETUP.md</a>.</p>
+
+      <h2 id="everyday">9. Updating, stopping and backups</h2>
+      <ul>
+        <li><b>Update to the newest Polymath:</b> run the setup command from step 4 again. Your settings and research stay.</li>
+        <li><b>Stop all spending at once:</b> press Stop on the operator desk, or set <code>PAID_META_RESEARCH_ENABLED=false</code> and restart.</li>
+        <li><b>Back up your research:</b> <code>bash /opt/polymath/scripts/production-backup.sh</code> writes a checksummed copy of the database into <code>/opt/polymath/backups</code>; copy it somewhere safe.</li>
+        <li><b>Stop paying for the server:</b> back up first, then destroy the droplet in your host's dashboard. Switching it off alone still bills on most hosts.</li>
+      </ul>
+      <p>The full production guide, with backups, restore and HTTPS details, is <a href="https://github.com/wonderben-code/polymath/blob/main/docs/DEPLOYMENT.md">DEPLOYMENT.md</a>.</p>
+      <p style="margin-top:36px"><a class="btn solid" href="https://github.com/wonderben-code/polymath">Get the code on GitHub</a></p>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="foot-links">
+      <a href="./">Polymath</a>
+      <a href="https://github.com/wonderben-code/polymath">GitHub</a>
+      <a href="https://youtu.be/RSdVl98prVA">The film on YouTube</a>
+    </div>
+    <p>Created, designed and built by Ekram Alam · Apache 2.0 · © 2026</p>
+  </div>
+</footer>
+</body>
+</html>
